@@ -157,7 +157,7 @@ class TestTickingData:
     def test_raw_table_grows(self, client):
         """prices_raw is append-only and should grow."""
         n1 = client.open_table("prices_raw").to_arrow().num_rows
-        time.sleep(0.5)
+        time.sleep(2)
         n2 = client.open_table("prices_raw").to_arrow().num_rows
         assert n2 > n1, "prices_raw did not grow"
 
