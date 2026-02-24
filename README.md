@@ -1,6 +1,6 @@
-# Deephaven Real-Time Trading Platform
+# py-flow
 
-A governance-first real-time trading platform built on [Deephaven.io](https://deephaven.io), featuring a **bi-temporal event-sourced object store**, a **reactive expression language** that compiles to Python, SQL, and Legend Pure, and **durable workflow orchestration** — all backed by embedded PostgreSQL with zero external infrastructure.
+A governance-first reactive platform backed by **PostgreSQL** with **[Deephaven.io](https://deephaven.io)** for real-time streaming — featuring a **bi-temporal event-sourced object store**, a **reactive expression language** that compiles to Python, SQL, and Legend Pure, and **durable workflow orchestration** with zero external infrastructure.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -620,7 +620,7 @@ Clients connect via `pydeephaven` (lightweight — **no Java needed** on client 
 ## Project Structure
 
 ```
-windsurf-project/
+py-flow/
 ├── server/
 │   ├── app.py              # Deephaven server + data engine
 │   ├── market_data.py      # Market data simulation
@@ -711,4 +711,4 @@ python3 demo_three_tiers.py
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE)
