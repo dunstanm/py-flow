@@ -74,6 +74,19 @@ class MemoryBackend(TSDBBackend):
     async def flush(self) -> None:
         pass  # No buffering needed — writes are immediate
 
+    def get_all_ticks(
+        self,
+        msg_type: str,
+        since: Optional[datetime] = None,
+    ) -> list[dict]:
+        rows = self._ticks.get(msg_type, [])
+        if since:
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+            rows = [(ts, row) for ts, row in rows if ts > since]
+        rows.sort(key=lambda x: x[0])
+        return [row for _ts, row in rows]
+
     def get_ticks(
         self,
         msg_type: str,

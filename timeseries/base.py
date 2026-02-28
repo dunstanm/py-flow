@@ -43,6 +43,22 @@ class TSDBBackend(ABC):
     # ── Read ───────────────────────────────────────────────────────────────────
 
     @abstractmethod
+    def get_all_ticks(
+        self,
+        msg_type: str,
+        since: Optional[datetime] = None,
+    ) -> list[dict]:
+        """All ticks of a type since a timestamp (for sync/ETL).
+
+        Args:
+            msg_type: "equity", "fx", or "curve".
+            since: Only return ticks after this timestamp. None = all.
+
+        Returns:
+            List of tick dicts ordered by timestamp ascending.
+        """
+
+    @abstractmethod
     def get_ticks(
         self,
         msg_type: str,

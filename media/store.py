@@ -62,6 +62,7 @@ class MediaStore:
         s3_secret_key: str = "minioadmin",
         s3_bucket: str = "media",
         s3_secure: bool = False,
+        ai=None,
         embedding_provider=None,
     ):
         self._s3 = S3Client(
@@ -73,7 +74,11 @@ class MediaStore:
         )
         self._s3.ensure_bucket()
         self._bucket = s3_bucket
-        self._embedder = embedding_provider
+        # ai= is the public API; embedding_provider= is internal/backward-compat
+        if ai is not None:
+            self._embedder = ai.embedder
+        else:
+            self._embedder = embedding_provider
 
     # ── Upload ────────────────────────────────────────────────────────────
 

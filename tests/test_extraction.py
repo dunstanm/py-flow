@@ -8,7 +8,8 @@ import os
 import pytest
 from dataclasses import dataclass
 
-from ai.extraction import extract, ExtractionResult
+from ai._extraction import extract
+from ai._types import ExtractionResult
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -18,7 +19,7 @@ requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY 
 def llm():
     if not GEMINI_API_KEY:
         pytest.skip("GEMINI_API_KEY not set")
-    from ai import GeminiLLM
+    from ai._llm import GeminiLLM
     return GeminiLLM(api_key=GEMINI_API_KEY)
 
 

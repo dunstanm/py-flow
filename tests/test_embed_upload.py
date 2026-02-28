@@ -91,7 +91,7 @@ def media_store_with_embed(minio_manager, store_conn):
         pytest.skip("GEMINI_API_KEY not set")
 
     from media import MediaStore
-    from ai import GeminiEmbeddings
+    from ai._embeddings import GeminiEmbeddings
 
     embedder = GeminiEmbeddings(api_key=GEMINI_API_KEY, dimension=768)
     ms = MediaStore(
@@ -214,7 +214,7 @@ class TestUploadWithEmbedder:
 
     def test_cosine_search_finds_document(self, media_store_with_embed, admin_db):
         """Cosine similarity query on chunks finds the uploaded document."""
-        from ai import GeminiEmbeddings
+        from ai._embeddings import GeminiEmbeddings
 
         doc = media_store_with_embed.upload(
             b"Black-Scholes option pricing model for European call and put options.",

@@ -29,41 +29,11 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from typing import Generator, Optional
 
+from ai._types import Message, ToolCall, LLMResponse
+
 logger = logging.getLogger(__name__)
-
-
-# ── Data models ───────────────────────────────────────────────────────────
-
-
-@dataclass
-class Message:
-    """A message in a conversation."""
-    role: str               # "user", "assistant", "system", "tool"
-    content: str = ""       # Text content
-    tool_calls: list = field(default_factory=list)  # ToolCalls from assistant
-    tool_call_id: str = ""  # For tool response messages
-    name: str = ""          # Tool name for tool responses
-
-
-@dataclass
-class ToolCall:
-    """A tool/function call requested by the model."""
-    id: str             # Call ID
-    name: str           # Function name
-    arguments: dict     # Parsed arguments
-
-
-@dataclass
-class LLMResponse:
-    """Response from an LLM generation call."""
-    content: str = ""                           # Generated text
-    tool_calls: list[ToolCall] = field(default_factory=list)  # Tool calls
-    usage: dict = field(default_factory=dict)   # Token usage stats
-    model: str = ""                             # Model used
-    _raw_content: object = field(default=None, repr=False)  # Provider-specific raw content
 
 
 # ── Abstract base class ──────────────────────────────────────────────────
@@ -118,6 +88,61 @@ class LLMClient(ABC):
     def model_name(self) -> str:
         """The model identifier."""
         ...
+
+    def run_tool_loop(
+        self,
+        messages: list[Message],
+        tools: Optional[list[dict]] = None,
+        execute_tool: Optional[callable] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        max_iterations: int = 5,
+    ) -> LLMResponse:
+        """
+        Run a generate → tool call → execute → respond loop until the model
+        returns a text response (no more tool calls) or max_iterations is reached.
+
+        This handles all the plumbing for tool-calling conversations, including
+        preserving provider-specific metadata (thought signatures, etc).
+
+        Args:
+            messages: Initial conversation history.
+            tools: Tool declarations.
+            execute_tool: Callable(name, arguments) → str. Called for each tool call.
+                If None, tool calls are returned without execution.
+            temperature: Sampling temperature.
+            max_tokens: Max tokens per generation.
+            max_iterations: Safety limit on tool-call rounds (default: 5).
+
+        Returns:
+            Final LLMResponse (the one with text content, or last response if
+            max_iterations reached).
+        """
+        if execute_tool is None:
+            return self.generate(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+        msgs = list(messages)  # Don't mutate caller's list
+
+        for _ in range(max_iterations):
+            response = self.generate(msgs, tools=tools, temperature=temperature, max_tokens=max_tokens)
+
+            if not response.tool_calls:
+                return response
+
+            # Append assistant message (preserves thought signatures)
+            msgs.append(response.to_message())
+
+            # Execute each tool call and append results
+            for tc in response.tool_calls:
+                result = execute_tool(tc.name, tc.arguments)
+                msgs.append(Message(
+                    role="tool",
+                    content=result,
+                    name=tc.name,
+                    tool_call_id=tc.id,
+                ))
+
+        return response
 
 
 # ── Gemini implementation ────────────────────────────────────────────────

@@ -78,27 +78,31 @@ class QuestDBManager:
         bin_path = self._ensure_binary()
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build command
-        java_path = shutil.which("java")
-        if java_path is None:
-            raise RuntimeError(
-                "Java not found. QuestDB requires a JVM. "
-                "Install Java 11+ or set JAVA_HOME."
-            )
-
+        # Build command — QuestDB requires Java 17-21 (not 25+)
+        java_path = self._find_java()
         questdb_jar = self._find_jar(bin_path)
 
         cmd = [
             java_path,
+            "--enable-native-access=io.questdb",
             "-p", str(questdb_jar),
             "-m", "io.questdb/io.questdb.ServerMain",
             "-d", str(self._data_dir),
         ]
 
+        # Write server.conf to control all ports
+        conf_dir = self._data_dir / "conf"
+        conf_dir.mkdir(parents=True, exist_ok=True)
+        conf_file = conf_dir / "server.conf"
+        conf_file.write_text(
+            f"http.net.bind.to=0.0.0.0:{self._http_port}\n"
+            f"http.min.net.bind.to=0.0.0.0:{self._http_port + 3}\n"
+            f"line.tcp.net.bind.to=0.0.0.0:{self._ilp_port}\n"
+            f"pg.net.bind.to=0.0.0.0:{self._pg_port}\n"
+            f"metrics.enabled=false\n"
+        )
+
         env = os.environ.copy()
-        env["QDB_HTTP_PORT"] = str(self._http_port)
-        env["QDB_LINE_TCP_NET_BIND_TO"] = f"0.0.0.0:{self._ilp_port}"
-        env["QDB_PG_NET_BIND_TO"] = f"0.0.0.0:{self._pg_port}"
 
         logger.info("Starting QuestDB: %s", " ".join(cmd))
         self._process = subprocess.Popen(
@@ -195,6 +199,76 @@ class QuestDBManager:
 
         logger.info("QuestDB v%s installed to %s", QUESTDB_VERSION, bin_dir)
         return bin_dir
+
+    def _find_java(self) -> str:
+        """Find a compatible Java (17-21) for QuestDB.
+
+        QuestDB 8.x uses sun.misc.Unsafe which was removed in Java 22+.
+        Priority: QUESTDB_JAVA_HOME → /usr/libexec/java_home -v 21 → -v 17.
+        JAVA_HOME is only used if it points to Java 17-21.
+        """
+        import subprocess as _sp
+
+        def _java_major(java_bin: str) -> int | None:
+            """Get the major version of a java binary."""
+            try:
+                r = _sp.run([java_bin, "-version"], capture_output=True, text=True, timeout=5)
+                # Version string is on stderr, e.g. 'openjdk version "21.0.7"'
+                for line in (r.stderr + r.stdout).splitlines():
+                    if "version" in line:
+                        import re
+                        m = re.search(r'"(\d+)', line)
+                        if m:
+                            return int(m.group(1))
+            except Exception:
+                pass
+            return None
+
+        def _is_compatible(java_bin: str) -> bool:
+            major = _java_major(java_bin)
+            return major is not None and 17 <= major <= 21
+
+        # 1. Explicit QUESTDB_JAVA_HOME (trusted — no version check)
+        qjh = os.environ.get("QUESTDB_JAVA_HOME")
+        if qjh:
+            candidate = os.path.join(qjh, "bin", "java")
+            if os.path.isfile(candidate):
+                logger.info("Using Java from QUESTDB_JAVA_HOME: %s", candidate)
+                return candidate
+
+        # 2. macOS java_home utility — try 21, then 17
+        for version in ("21", "17"):
+            try:
+                result = _sp.run(
+                    ["/usr/libexec/java_home", "-v", version],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    java_home = result.stdout.strip()
+                    candidate = os.path.join(java_home, "bin", "java")
+                    if os.path.isfile(candidate) and _is_compatible(candidate):
+                        logger.info("Using Java %s: %s", version, candidate)
+                        return candidate
+            except (FileNotFoundError, _sp.TimeoutExpired):
+                pass
+
+        # 3. JAVA_HOME — only if compatible
+        jh = os.environ.get("JAVA_HOME")
+        if jh:
+            candidate = os.path.join(jh, "bin", "java")
+            if os.path.isfile(candidate) and _is_compatible(candidate):
+                logger.info("Using Java from JAVA_HOME: %s", candidate)
+                return candidate
+
+        # 4. PATH — only if compatible
+        java_path = shutil.which("java")
+        if java_path and _is_compatible(java_path):
+            return java_path
+
+        raise RuntimeError(
+            "Java 17-21 not found. QuestDB 8.x is incompatible with Java 22+. "
+            "Install Java 21 or set QUESTDB_JAVA_HOME."
+        )
 
     def _find_jar(self, bin_dir: Path) -> Path:
         """Find the QuestDB JAR in the bin directory."""

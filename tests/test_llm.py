@@ -8,7 +8,8 @@ import os
 import json
 import pytest
 
-from ai.llm import LLMClient, GeminiLLM, Message, LLMResponse, ToolCall
+from ai._llm import LLMClient, GeminiLLM
+from ai._types import Message, LLMResponse, ToolCall
 
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -169,6 +170,41 @@ class TestGeminiToolCalling:
 
 
 # ── Errors ───────────────────────────────────────────────────────────────
+
+
+@requires_gemini
+class TestRunToolLoop:
+
+    def test_run_tool_loop(self, llm):
+        """run_tool_loop handles the full tool → execute → respond cycle."""
+        def execute_tool(name, arguments):
+            if name == "get_weather":
+                return json.dumps({"temperature": "22°C", "condition": "sunny"})
+            return json.dumps({"error": f"unknown tool: {name}"})
+
+        messages = [Message(role="user", content="What's the weather in Tokyo?")]
+        response = llm.run_tool_loop(
+            messages,
+            tools=[WEATHER_TOOL],
+            execute_tool=execute_tool,
+            temperature=0.0,
+        )
+
+        # Should get a final text response (not tool calls)
+        assert response.content
+        assert not response.tool_calls
+        assert "22" in response.content or "sunny" in response.content.lower()
+
+    def test_to_message(self, llm):
+        """LLMResponse.to_message() creates a properly wired Message."""
+        response = llm.generate(
+            [Message(role="user", content="Hello")],
+            temperature=0.0,
+        )
+        msg = response.to_message()
+        assert msg.role == "assistant"
+        assert msg.content == response.content
+        assert hasattr(msg, '_raw_content')
 
 
 @requires_gemini

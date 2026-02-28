@@ -8,7 +8,7 @@ import os
 import math
 import pytest
 
-from ai.embeddings import EmbeddingProvider, GeminiEmbeddings
+from ai._embeddings import EmbeddingProvider, GeminiEmbeddings
 
 
 # ── Skip if no API key ───────────────────────────────────────────────────

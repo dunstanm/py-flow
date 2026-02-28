@@ -9,7 +9,8 @@ import json
 import pytest
 import asyncio
 
-from ai.tools import Tool, ToolRegistry, create_search_tools
+from ai._tools import ToolRegistry, create_search_tools
+from ai._types import Tool
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -70,7 +71,7 @@ def media_store(minio_manager, store_conn):
         pytest.skip("GEMINI_API_KEY not set")
 
     from media import MediaStore
-    from ai import GeminiEmbeddings
+    from ai._embeddings import GeminiEmbeddings
 
     embedder = GeminiEmbeddings(api_key=GEMINI_API_KEY, dimension=768)
     ms = MediaStore(
@@ -175,7 +176,8 @@ class TestLLMToolIntegration:
 
     def test_llm_uses_tool(self, registry):
         """LLM generates a tool call, registry executes, LLM responds."""
-        from ai import GeminiLLM, Message
+        from ai._llm import GeminiLLM
+        from ai._types import Message
 
         llm = GeminiLLM(api_key=GEMINI_API_KEY)
         messages = [

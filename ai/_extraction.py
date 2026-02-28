@@ -30,10 +30,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
 from typing import Optional, Type
 
-from ai.llm import LLMClient, Message
+from ai._types import Message, ExtractionResult
+from ai._llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +53,6 @@ EXTRACTION_PROMPT = """Extract structured data from the following text according
 - Do not include any explanation, markdown formatting, or code fences.
 - If a field cannot be determined from the text, use null.
 - For array fields, return an empty array if no items found."""
-
-
-@dataclass
-class ExtractionResult:
-    """Result from structured extraction."""
-    data: dict                                       # Extracted structured data
-    raw_response: str = ""                           # Raw LLM response
-    usage: dict = field(default_factory=dict)        # Token usage
 
 
 def extract(

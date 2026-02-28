@@ -25,19 +25,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
+
+from ai._types import Tool
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Tool:
-    """A callable tool with JSON schema declaration."""
-    name: str
-    description: str
-    parameters: dict            # JSON Schema for arguments
-    fn: Callable[..., str]      # Execute function → returns JSON string
 
 
 class ToolRegistry:

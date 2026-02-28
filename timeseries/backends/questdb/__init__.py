@@ -85,6 +85,13 @@ class QuestDBBackend(TSDBBackend):
 
     # ── Read ───────────────────────────────────────────────────────────────────
 
+    def get_all_ticks(
+        self,
+        msg_type: str,
+        since: Optional[datetime] = None,
+    ) -> list[dict]:
+        return self._reader.get_all_ticks(msg_type, since)
+
     def get_ticks(
         self,
         msg_type: str,

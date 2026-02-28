@@ -22,10 +22,10 @@ Usage::
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Optional
 
-from ai.llm import LLMClient, Message, LLMResponse
+from ai._types import Message, RAGResult
+from ai._llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +45,6 @@ CONTEXT_TEMPLATE = """## Retrieved Documents
 
 ## Question
 {question}"""
-
-
-@dataclass
-class RAGResult:
-    """Result from a RAG pipeline query."""
-    answer: str                                     # LLM's answer
-    sources: list[dict] = field(default_factory=list)  # Retrieved chunks used as context
-    usage: dict = field(default_factory=dict)        # Token usage
 
 
 class RAGPipeline:

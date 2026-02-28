@@ -2,47 +2,25 @@
 Real QuestDB Integration Tests
 ===============================
 These tests hit a live QuestDB instance — ILP writes and PGWire reads.
-No mocks. No memory backend. The real thing.
+No mocks. No memory backend. No skips. The real thing.
 
-Requires:
-  - QuestDB running on localhost (ports 9000, 9009, 8812)
-  - ``questdb`` pip package installed
-  - ``psycopg2`` pip package installed
-
-Skipped automatically if QuestDB is not reachable.
+QuestDB is auto-started via create_backend('questdb'). Requires Java 17-21.
+Hard fails if QuestDB cannot start.
 
 Run:
-  pytest tests/test_questdb_integration.py -v
+  pytest tests/test_questdb_integration.py -v -s
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timezone, timedelta
 
-import psycopg2
 import pytest
 
 from marketdata.models import Tick, FXTick, CurveTick
-
-
-# ── Skip if QuestDB not running ──────────────────────────────────────────────
-
-def _questdb_reachable() -> bool:
-    try:
-        conn = psycopg2.connect(
-            host="localhost", port=8812, user="admin", password="quest", database="qdb"
-        )
-        conn.close()
-        return True
-    except Exception:
-        return False
-
-
-pytestmark = pytest.mark.skipif(
-    not _questdb_reachable(),
-    reason="QuestDB not running on localhost:8812",
-)
+from timeseries import create_backend
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,20 +39,21 @@ def _unique_symbol(prefix: str) -> str:
 class TestQuestDBBackendRoundTrip:
     """Write ticks via ILP, read them back via PGWire. The real pipeline."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def backend(self):
-        from timeseries.backends.questdb import QuestDBBackend
-        import asyncio
-
-        b = QuestDBBackend()
+        b = create_backend(
+            "questdb",
+            data_dir="data/test_questdb",
+            http_port=19100,
+            ilp_port=19109,
+            pg_port=18912,
+        )
         asyncio.run(b.start())
         yield b
         asyncio.run(b.stop())
 
     def test_write_and_read_equity_tick(self, backend):
         """Write an equity tick via ILP, read it back via PGWire."""
-        import asyncio
-
         sym = _unique_symbol("TEST_EQ")
         now = _now()
         tick = Tick(
@@ -96,8 +75,6 @@ class TestQuestDBBackendRoundTrip:
 
     def test_write_and_read_fx_tick(self, backend):
         """Write an FX tick via ILP, read it back via PGWire."""
-        import asyncio
-
         pair = _unique_symbol("TEST/FX")
         now = _now()
         tick = FXTick(
@@ -115,8 +92,6 @@ class TestQuestDBBackendRoundTrip:
 
     def test_write_and_read_curve_tick(self, backend):
         """Write a curve tick via ILP, read it back via PGWire."""
-        import asyncio
-
         label = _unique_symbol("TEST_CRV")
         now = _now()
         tick = CurveTick(
@@ -134,8 +109,6 @@ class TestQuestDBBackendRoundTrip:
 
     def test_bars_from_real_ticks(self, backend):
         """Write multiple equity ticks, then query SAMPLE BY bars."""
-        import asyncio
-
         sym = _unique_symbol("TEST_BAR")
         base_time = _now()
         prices = [100.0, 105.0, 95.0, 102.0, 110.0, 98.0, 103.0, 107.0]
@@ -158,18 +131,18 @@ class TestQuestDBBackendRoundTrip:
         )
         assert len(bars) >= 1, f"Expected at least 1 bar for {sym}, got {len(bars)}"
 
-        # First bar should have correct OHLC
-        bar = bars[0]
-        assert bar.symbol == sym
-        assert bar.open == 100.0
-        assert bar.high == 110.0
-        assert bar.low == 95.0
-        assert bar.trade_count >= 5
+        # Verify OHLC invariants across all bars
+        all_highs = [b.high for b in bars]
+        all_lows = [b.low for b in bars]
+        total_trades = sum(b.trade_count for b in bars)
+        assert bars[0].symbol == sym
+        assert bars[0].open == 100.0  # first tick price
+        assert max(all_highs) == 110.0  # global max across bars
+        assert min(all_lows) == 95.0  # global min across bars
+        assert total_trades == len(prices)
 
     def test_latest_returns_most_recent(self, backend):
         """Write two ticks for same symbol, latest returns the newer one."""
-        import asyncio
-
         sym = _unique_symbol("TEST_LAT")
         now = _now()
 

@@ -8,7 +8,8 @@ import os
 import pytest
 import asyncio
 
-from ai.rag import RAGPipeline, RAGResult
+from ai._rag import RAGPipeline
+from ai._types import RAGResult
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -69,7 +70,7 @@ def media_store(minio_manager, store_conn):
         pytest.skip("GEMINI_API_KEY not set")
 
     from media import MediaStore
-    from ai import GeminiEmbeddings
+    from ai._embeddings import GeminiEmbeddings
 
     embedder = GeminiEmbeddings(api_key=GEMINI_API_KEY, dimension=768)
     ms = MediaStore(
@@ -115,7 +116,7 @@ def media_store(minio_manager, store_conn):
 
 @pytest.fixture(scope="module")
 def rag(media_store):
-    from ai import GeminiLLM
+    from ai._llm import GeminiLLM
     llm = GeminiLLM(api_key=GEMINI_API_KEY)
     return RAGPipeline(llm=llm, media_store=media_store, search_mode="hybrid")
 
@@ -171,7 +172,7 @@ class TestRAGPipeline:
 
     def test_rag_semantic_mode(self, media_store):
         """RAG with semantic-only search mode."""
-        from ai import GeminiLLM
+        from ai._llm import GeminiLLM
         llm = GeminiLLM(api_key=GEMINI_API_KEY)
         rag = RAGPipeline(llm=llm, media_store=media_store, search_mode="semantic")
         result = rag.ask("How do derivatives transfer risk?")

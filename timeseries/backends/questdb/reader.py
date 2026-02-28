@@ -93,6 +93,23 @@ class QuestDBReader:
             self._conn = None
             logger.info("QuestDBReader closed")
 
+    def get_all_ticks(
+        self,
+        msg_type: str,
+        since: Optional[datetime] = None,
+    ) -> list[dict]:
+        """All ticks of a type since a timestamp, ordered by timestamp ASC."""
+        table = _TABLE_MAP.get(msg_type)
+        if table is None:
+            raise ValueError(f"Unknown message type: {msg_type!r}")
+
+        if since:
+            query = f"SELECT * FROM {table} WHERE timestamp > %s ORDER BY timestamp ASC"
+            return self._execute_dict(query, (_to_naive_utc(since),))
+        else:
+            query = f"SELECT * FROM {table} ORDER BY timestamp ASC"
+            return self._execute_dict(query)
+
     def get_ticks(
         self,
         msg_type: str,

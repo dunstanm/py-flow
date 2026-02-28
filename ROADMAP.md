@@ -16,8 +16,9 @@ A governance-first data+AI platform in pure Python. This roadmap tracks what's b
 | **timeseries** | QuestDB time-series backend, tick storage, OHLCV bars, backtest engine | ✅ Done |
 | **marketdata** | FastAPI market data hub, WebSocket streaming, multi-asset (equity/FX/curve), TickBus | ✅ Done |
 | **media** | Unstructured data store, S3 + PG full-text search, PDF/text/markdown/HTML extraction | ✅ Done |
+| **ai** | Embeddings (Gemini), LLM client (Gemini 3 Flash), RAG pipeline, tool calling, structured extraction | ✅ Done |
 
-**Current totals:** ~24 public symbols across 8 packages, 7 demos, 300+ tests.
+**Current totals:** ~36 public symbols across 9 packages, 7 demos, 350+ tests.
 
 ---
 
@@ -28,15 +29,15 @@ A governance-first data+AI platform in pure Python. This roadmap tracks what's b
 
 | # | Step | Status |
 |---|------|--------|
-| 1 | pgvector extension + HNSW index on `document_search` | 🔲 |
-| 2 | Text chunking (`media/chunking.py`) — overlapping ~512-token chunks | 🔲 |
-| 3 | Embedding providers (`ai/embeddings.py`) — OpenAI + local sentence-transformers | 🔲 |
-| 4 | Embed-on-upload — `MediaStore.upload(..., embed=True)` | 🔲 |
-| 5 | Semantic search — `MediaStore.semantic_search(query)` with RLS | 🔲 |
-| 6 | Hybrid search — RRF fusion of tsvector rank + vector distance | 🔲 |
+| 1 | pgvector extension + HNSW index on `document_search` | ✅ |
+| 2 | Text chunking (`media/chunking.py`) — overlapping ~512-token chunks | ✅ |
+| 3 | Embedding providers (`ai/embeddings.py`) — Gemini primary | ✅ |
+| 4 | Embed-on-upload — `MediaStore(embedding_provider=...)` | ✅ |
+| 5 | Semantic search — `MediaStore.semantic_search(query)` | ✅ |
+| 6 | Hybrid search — RRF fusion of tsvector rank + vector distance | ✅ |
 
 **New package:** `ai/`  
-**Dependencies:** `pgvector`, `openai` (opt), `sentence-transformers` (opt)
+**Dependencies:** `pgvector`, `google-genai`
 
 ---
 
@@ -45,12 +46,12 @@ A governance-first data+AI platform in pure Python. This roadmap tracks what's b
 
 | # | Step | Status |
 |---|------|--------|
-| 7 | LLM client ABC — OpenAI + Anthropic backends | 🔲 |
-| 8 | Platform tools — `search_documents`, `query_lakehouse`, `get_entity` | 🔲 |
-| 9 | RAG pipeline — embed → retrieve → prompt → answer | 🔲 |
-| 10 | Structured extraction — LLM → typed Storable | 🔲 |
+| 7 | LLM client ABC — GeminiLLM (gemini-3-flash-preview) | ✅ |
+| 8 | Platform tools — `search_documents`, `semantic_search`, `hybrid_search`, `list_documents` | ✅ |
+| 9 | RAG pipeline — retrieve → augment → generate with citations | ✅ |
+| 10 | Structured extraction — LLM → typed Python objects | ✅ |
 
-**Dependencies:** `openai` (opt), `anthropic` (opt)
+**Dependencies:** `google-genai`
 
 ---
 
