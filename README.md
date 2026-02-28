@@ -50,8 +50,11 @@ A governance-first reactive platform backed by **PostgreSQL** with **[Deephaven.
 8. [Event Subscriptions](#event-subscriptions) — in-process bus + cross-process PG NOTIFY
 9. [Deephaven Bridge](#deephaven-bridge) — stream store events into ticking tables
 10. [Deephaven Server & Clients](#deephaven-server--clients) — real-time market data
-11. [Project Structure](#project-structure)
-12. [Demos](#demos)
+11. [Market Data Server](#market-data-server) — real-time WebSocket + REST
+12. [Historical Time-Series](#historical-time-series) — QuestDB tick archive
+13. [Lakehouse](#lakehouse) — Iceberg analytical store
+14. [Project Structure](#project-structure)
+15. [Demos](#demos)
 
 ---
 
@@ -633,6 +636,62 @@ Clients connect via `pydeephaven` (lightweight — **no Java needed** on client 
 
 ---
 
+## Market Data Server
+
+Real-time market data hub — WebSocket streaming + REST snapshots via FastAPI. See [MARKETDATA.md](MARKETDATA.md) for full docs.
+
+```bash
+pip install -e ".[marketdata]"
+python -m marketdata.server
+# REST: http://localhost:8000/md/snapshot
+# WS:   ws://localhost:8000/md/subscribe
+```
+
+---
+
+## Historical Time-Series
+
+Persists every tick from the TickBus into QuestDB. Backend-agnostic via `TSDBBackend` ABC. See [TIMESERIES.md](TIMESERIES.md) for full docs.
+
+```bash
+pip install -e ".[timeseries]"
+# Ticks auto-stored when market data server runs with TSDB_ENABLED=1
+# REST: GET /md/history/{type}/{symbol}, GET /md/bars/{type}/{symbol}
+```
+
+---
+
+## Lakehouse
+
+Iceberg analytical store — all reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeeper + MinIO S3 storage. See [LAKEHOUSE.md](LAKEHOUSE.md) for full docs.
+
+```bash
+pip install -e ".[lakehouse]"
+python3 demo_lakehouse.py   # auto-starts MinIO + Lakekeeper
+```
+
+```python
+from lakehouse import Lakehouse
+
+lh = Lakehouse()
+
+# Query existing tables
+lh.query("SELECT type_name, count(*) FROM lakehouse.default.events GROUP BY type_name")
+
+# Ingest data (4 write modes)
+lh.ingest("my_signals", df, mode="append")
+lh.ingest("daily_snapshot", df, mode="snapshot")
+lh.ingest("trades", df, mode="incremental", primary_key="trade_id")
+lh.ingest("positions", df, mode="bitemporal", primary_key="entity_id")
+
+# Transform: SQL → new Iceberg table
+lh.transform("daily_pnl", "SELECT ... GROUP BY ...", mode="snapshot")
+```
+
+All write modes include `_batch_id` and `_batch_ts` for audit. Modes with versioning add `_is_current` for querying latest state.
+
+---
+
 ## Project Structure
 
 ```
@@ -673,28 +732,42 @@ py-flow/
 ├── bridge/
 │   ├── store_bridge.py     # StoreBridge: PG NOTIFY → DH ticking tables
 │   └── type_mapping.py     # @dataclass → DH schema + row extraction
-├── tests/                  # 614 tests
+├── marketdata/
+│   ├── server.py           # FastAPI — REST + WebSocket + TSDB endpoints
+│   ├── bus.py              # TickBus — async pub/sub for market data
+│   ├── models.py           # Tick, FXTick, CurveTick, Subscription
+│   └── feeds/simulator.py  # SimulatorFeed — GBM equities + FX
+├── timeseries/
+│   ├── base.py             # TSDBBackend ABC
+│   ├── factory.py          # create_backend() — selects backend by env
+│   ├── consumer.py         # TSDBConsumer — TickBus → TSDB writer
+│   ├── models.py           # Bar, HistoryQuery, BarQuery
+│   └── backends/questdb/   # QuestDB: manager, writer (ILP), reader (PGWire)
+├── lakehouse/
+│   ├── catalog.py          # PyIceberg REST catalog via Lakekeeper
+│   ├── tables.py           # Iceberg table defs: events, ticks, bars_daily, positions
+│   ├── sync.py             # Incremental ETL: PG + QuestDB → Iceberg
+│   ├── query.py            # Lakehouse class: query, ingest, transform (DuckDB SQL)
+│   ├── services.py         # Lakekeeper + MinIO binary lifecycle
+│   └── models.py           # SyncState, TableInfo
+├── tests/
 │   ├── test_store.py       # Bi-temporal + state machine + RLS + 3-tier (134)
-│   ├── test_reactive.py    # Expr + @computed + @effect + overrides + cross-entity (159)
-│   ├── test_reactive_finance.py  # Finance domain @computed tests (49)
-│   ├── test_reactive_irs.py     # IRS / yield curve / swap portfolio (52)
-│   ├── test_connection.py  # Connection management + active connection (24)
-│   ├── test_workflow.py    # Workflow engine + durable transitions (16)
-│   ├── test_bridge.py      # DH ↔ Store bridge, real DH + PG (17)
-│   ├── test_registry.py    # Column registry enforcement (56)
-│   ├── test_client_ops.py  # Deephaven client operations (20)
-│   ├── test_multi_client.py # Multi-client DH table sharing (10)
-│   ├── test_server_tables.py # Server-side DH table verification (21)
-│   ├── test_market_data.py # Market data simulation (21)
-│   └── test_risk_engine.py # Black-Scholes risk engine (35)
+│   ├── test_reactive.py    # Expr + @computed + @effect + overrides (159)
+│   ├── test_marketdata.py  # Multi-asset bus, WS, REST snapshots (59)
+│   ├── test_timeseries.py  # TSDB ABC, factory, consumer routing (unit)
+│   ├── test_timeseries_integration.py  # MemoryBackend round-trip (integration)
+│   ├── test_questdb_integration.py     # QuestDB ILP+PGWire (real DB)
+│   ├── test_lakehouse.py   # Schemas, Arrow conversion, sync state (34)
+│   └── ...                 # 13+ test suites total
 ├── demo_irs.py             # IRS reactive grid → DH ticking tables
 ├── demo_bridge.py          # Store + @computed → DH ticking tables
+├── demo_backtest.py        # TSDB tick collection + MA crossover backtest
+├── demo_lakehouse.py       # Iceberg lakehouse end-to-end demo
 ├── demo_three_tiers.py     # Three-tier state machine side-effects
-├── API.md                  # Functional API reference (15 public symbols)
+├── API.md                  # REST API reference
 ├── REACTIVE.md             # Reactive properties design document
-├── requirements-server.txt
-├── requirements-client.txt
-├── requirements-store.txt  # reaktiv, psycopg2-binary, pgserver, dbos
+├── TIMESERIES.md           # Time-series architecture docs
+├── LAKEHOUSE.md            # Lakehouse architecture docs
 └── README.md
 ```
 

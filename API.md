@@ -1,6 +1,6 @@
 # Functional API Reference
 
-Complete public API organized by feature area — **15 symbols** across 4 packages.
+Complete public API organized by feature area — **22 symbols** across 6 packages.
 
 ---
 
@@ -295,7 +295,92 @@ from bridge import StoreBridge
 
 ---
 
-## 8. Time-Series Database
+## 8. Lakehouse
+
+**Query, ingest, and transform data in Apache Iceberg tables via DuckDB SQL.**
+
+```python
+from lakehouse import Lakehouse
+```
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `Lakehouse` | class | User-facing Iceberg interface: query, ingest, and transform. |
+
+### Constructor
+
+```python
+lh = Lakehouse(
+    catalog_uri=None,      # Lakekeeper REST URL (default: env or http://localhost:8181/catalog)
+    warehouse=None,        # Iceberg warehouse name (default: "lakehouse")
+    s3_endpoint=None,      # MinIO endpoint (default: env or http://localhost:9002)
+    s3_access_key=None,    # MinIO access key (default: "minioadmin")
+    s3_secret_key=None,    # MinIO secret key (default: "minioadmin")
+    s3_region=None,        # S3 region (default: "us-east-1")
+    namespace="default",   # Iceberg namespace
+)
+```
+
+### Query methods
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `.query()` | `query(sql, params=None)` | `list[dict]` | Execute SQL, return rows as dicts. |
+| `.query_arrow()` | `query_arrow(sql, params=None)` | `pa.Table` | Execute SQL, return PyArrow Table. |
+| `.query_df()` | `query_df(sql, params=None)` | `pd.DataFrame` | Execute SQL, return pandas DataFrame. |
+
+### Write methods
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `.ingest()` | `ingest(table_name, data, mode="append", primary_key=None)` | `int` | Write data to Iceberg table. Returns row count. |
+| `.transform()` | `transform(table_name, sql, mode="append", primary_key=None)` | `int` | Run SQL query, write results to Iceberg table. Returns row count. |
+
+**`data`** accepts: `pa.Table`, `pd.DataFrame`, or `list[dict]`.
+
+**`mode`** options:
+
+| Mode | Metadata added | Requires `primary_key` |
+|------|---------------|----------------------|
+| `"append"` | `_batch_id`, `_batch_ts` | No |
+| `"snapshot"` | `_batch_id`, `_batch_ts`, `_is_current` | No |
+| `"incremental"` | `_batch_id`, `_batch_ts`, `_is_current`, `_updated_at` | Yes |
+| `"bitemporal"` | `_batch_id`, `_batch_ts`, `_is_current`, `_tx_time`, `_valid_from`, `_valid_to` | Yes |
+
+### Metadata methods
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `.tables()` | `tables()` | `list[str]` | List all tables in the catalog. |
+| `.table_info()` | `table_info(table_name)` | `list[dict]` | Column info for a table. |
+| `.row_count()` | `row_count(table_name)` | `int` | Row count for a table. |
+| `.close()` | `close()` | `None` | Close the DuckDB connection. |
+
+### Errors
+
+| Error | Raised by | When |
+|-------|-----------|------|
+| `ValueError` | `.ingest()` | Invalid mode, missing primary_key, or primary_key not in data |
+| `duckdb.CatalogException` | `.query()`, `.ingest()` | Table or namespace doesn't exist |
+
+```python
+lh = Lakehouse()
+
+# Ingest
+lh.ingest("signals", [{"symbol": "AAPL", "score": 0.95}], mode="append")
+lh.ingest("trades", df, mode="incremental", primary_key="trade_id")
+
+# Transform
+lh.transform("daily_pnl", "SELECT ... GROUP BY ...", mode="snapshot")
+
+# Query
+results = lh.query("SELECT * FROM lakehouse.default.signals WHERE _is_current = true")
+lh.close()
+```
+
+---
+
+## 9. Time-Series Database
 
 **Backend-agnostic historical market data storage.**
 
@@ -333,5 +418,6 @@ See [TIMESERIES.md](TIMESERIES.md) for full details.
 | **reactive** | `computed`, `effect` | 2 |
 | **workflow** | `WorkflowEngine`, `WorkflowStatus` | 2 |
 | **bridge** | `StoreBridge` | 1 |
+| **lakehouse** | `Lakehouse` | 1 |
 | **timeseries** | `TSDBBackend`, `TSDBConsumer`, `create_backend`, `Bar`, `HistoryQuery`, `BarQuery` | 6 |
-| **Total** | | **21** |
+| **Total** | | **22** |
