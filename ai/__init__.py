@@ -9,10 +9,12 @@ from ai.embeddings import EmbeddingProvider, GeminiEmbeddings
 from ai.llm import LLMClient, GeminiLLM, Message, LLMResponse, ToolCall
 from ai.tools import Tool, ToolRegistry, create_search_tools
 from ai.rag import RAGPipeline, RAGResult
+from ai.extraction import extract, ExtractionResult
 
 __all__ = [
     "EmbeddingProvider", "GeminiEmbeddings",
     "LLMClient", "GeminiLLM", "Message", "LLMResponse", "ToolCall",
     "Tool", "ToolRegistry", "create_search_tools",
     "RAGPipeline", "RAGResult",
+    "extract", "ExtractionResult",
 ]
