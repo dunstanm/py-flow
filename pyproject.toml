@@ -65,6 +65,9 @@ media = [
     "beautifulsoup4>=4.12.0",
     "pgvector>=0.3.0",
 ]
+ai = [
+    "google-genai>=1.0",
+]
 client = [
     "pydeephaven>=0.36.0",
     "pandas",
@@ -81,7 +84,7 @@ Repository = "https://github.com/neema2/py-flow"
 Issues = "https://github.com/neema2/py-flow/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["store", "reactive", "bridge", "workflow", "marketdata", "timeseries", "lakehouse", "media"]
+packages = ["store", "reactive", "bridge", "workflow", "marketdata", "timeseries", "lakehouse", "media", "ai"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
