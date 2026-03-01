@@ -9,7 +9,7 @@ Shows all three tiers of side-effects firing on a single state transition:
   Tier 3 (start_workflow): Durable workflow dispatch after commit.
 
 Usage:
-    python demo_three_tiers.py
+    python demo_state_machine.py
 """
 
 import tempfile

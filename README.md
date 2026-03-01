@@ -81,7 +81,7 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 ## Quick Start
 
 ```bash
-pip install -r requirements-store.txt
+pip install -e "."
 ```
 
 ```python
@@ -931,7 +931,7 @@ py-flow/
 │   ├── test_embed_upload.py          # Embed + upload + semantic search (12)
 │   ├── test_ai_client.py             # AI generation, RAG, tools (11)
 │   └── ...                           # 942 tests total, 0 skips
-├── demo_irs.py             # IRS reactive grid → DH ticking tables
+├── demo_ir_swap.py         # IRS reactive grid → DH ticking tables
 ├── demo_bridge.py          # Store + @computed → DH ticking tables
 ├── demo_trading.py         # Trading server: prices + risk → DH tables
 ├── demo_backtest.py        # TSDB tick collection + MA crossover backtest
@@ -939,7 +939,7 @@ py-flow/
 ├── demo_lakehouse_ingest.py  # Lakehouse ingest/transform all 4 modes
 ├── demo_media.py           # Media store: upload, extract, search
 ├── demo_rag.py             # AI + RAG: upload, search, ask, extract, tools
-├── demo_three_tiers.py     # Three-tier state machine side-effects
+├── demo_state_machine.py   # Three-tier state machine side-effects
 ├── API.md                  # Functional API reference
 ├── AI.md                   # AI architecture docs
 ├── STREAMING.md            # Streaming ticking tables docs
@@ -954,12 +954,12 @@ py-flow/
 
 ## Demos
 
-### `demo_irs.py` — Interest Rate Swap Reactive Grid
+### `demo_ir_swap.py` — Interest Rate Swap Reactive Grid
 
 A live IRS trading desk in Deephaven. Yield curve ticks cascade through the reactive graph: **FX spots → curve points → swap pricing → portfolio aggregates** — all recomputing automatically every 1.5 seconds.
 
 ```bash
-python3 demo_irs.py
+python3 demo_ir_swap.py
 # Open http://localhost:10000
 ```
 
@@ -1010,12 +1010,12 @@ python3 demo_rag.py
 | Streaming | Real-time token-by-token output |
 | Tool calling | LLM autonomously searches documents |
 
-### `demo_three_tiers.py` — Three-Tier Side-Effects
+### `demo_state_machine.py` — Three-Tier Side-Effects
 
 Exercises all three tiers of state machine side-effects:
 
 ```bash
-python3 demo_three_tiers.py
+python3 demo_state_machine.py
 ```
 
 - **Tier 1**: Action commits atomically with state change

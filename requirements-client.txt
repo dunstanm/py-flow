@@ -1,4 +1,0 @@
-# Deephaven Trading Client dependencies
-# Lightweight — no Java/JVM required on client machines
-pydeephaven>=0.36.0
-pandas

@@ -21,7 +21,7 @@ The reactive chain (triggered by each FX tick):
       → @effect on_total_npv   → portfolio_writer.write_row(...)
 
 Usage:
-  python3 demo_irs.py
+  python3 demo_ir_swap.py
   Open http://localhost:10000 in your browser
 """
 

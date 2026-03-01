@@ -26,7 +26,7 @@ The IRS demo consumes live FX ticks from the Market Data Server and prices an en
 python -m marketdata.server
 
 # Terminal 2: Start IRS Demo
-python3 demo_irs.py
+python3 demo_ir_swap.py
 
 # Open http://localhost:10000 in your browser
 ```
