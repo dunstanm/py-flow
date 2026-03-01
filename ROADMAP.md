@@ -77,16 +77,17 @@ A governance-first data+AI platform in pure Python. This roadmap tracks what's b
 
 | # | Step | Status |
 |---|------|--------|
-| 17 | Schedule + ScheduleRun Storable models | 🔲 |
-| 18 | Cron parser (croniter) | 🔲 |
-| 19 | Scheduler engine — register, fire, track runs | 🔲 |
-| 20 | `@schedule` decorator | 🔲 |
-| 21 | Management API — list, pause, resume, trigger, history | 🔲 |
-| 22 | DAG model — `.task(name, fn, depends_on=[...])`, acyclicity validation | 🔲 |
-| 23 | DAG runner — parallel branches, checkpointed steps, per-task status | 🔲 |
-| 24 | DAG + Schedule — `register_dag(name, cron, dag)` | 🔲 |
+| 0 | `Embedded(Storable)` base class — reactive-capable nested objects, write guard | ✅ |
+| 17 | Schedule, DAG, Run Storables + TaskDef, TaskResult Embeddeds + state machines | ✅ |
+| 18 | Cron parser (croniter isolated in `cron.py`) — next_fire, is_due, validate, describe | ✅ |
+| 19 | Scheduler engine — register, tick, fire, run_loop, management | ✅ |
+| 20 | `@schedule` decorator + `collect_schedules()` | ✅ |
+| 21 | Management API — list_schedules, pause, resume, delete, history | ✅ |
+| 22 | DAG graph helpers — validate_acyclic, execution_order, get_task | ✅ |
+| 23 | DAG runner — parallel branches, checkpointed steps, skip propagation | ✅ |
+| 24 | DAG + Schedule composition — `run_type="dag"` | ✅ |
 | 25 | Event-driven DAG trigger — `on_event(type_name, dag)` | 🔲 |
-| 26 | Pre-built DAGs — `sync_dag()`, `media_embed_dag()`, `quality_dag()` | 🔲 |
+| 26 | Pre-built DAGs — `make_sync_dag()`, `make_media_embed_dag()` | ✅ |
 
 **New package:** `scheduler/`  
 **Dependencies:** `croniter`
@@ -195,7 +196,7 @@ A governance-first data+AI platform in pure Python. This roadmap tracks what's b
 │  ✅      │  ✅      │  ✅       │  ✅      │  ✅       │ ✅     │
 ├──────────┼──────────┼───────────┼──────────┼───────────┼────────┤
 │ market   │ time     │    ai     │scheduler │ platform  │lineage │
-│ data ✅  │series ✅ │   ✅      │  🔲      │   🔲      │  🔲    │
+│ data ✅  │series ✅ │   ✅      │  ✅      │   🔲      │  🔲    │
 ├──────────┴──────────┼───────────┼──────────┴───────────┼────────┤
 │      quality 🔲     │           │    dashboard 🔲      │        │
 └─────────────────────┴───────────┴──────────────────────┴────────┘

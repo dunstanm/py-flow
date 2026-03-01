@@ -401,6 +401,29 @@ class Storable:
         return client.as_of(cls, entity_id, tx_time=tx_time, valid_time=valid_time)
 
 
+class Embedded(Storable):
+    """A Storable that lives inside another Storable, not persisted independently.
+
+    Gets full reactive wiring (Signals, @computed, @effect) via __post_init__
+    but is never written to PG as its own entity.
+    Serialized as part of the parent's JSONB via dataclasses.asdict().
+
+    Usage::
+
+        @dataclass
+        class TaskDef(Embedded):
+            name: str = ""
+            target_fn: str = ""
+            enabled: bool = True
+
+        @dataclass
+        class DAG(Storable):
+            tasks: list = field(default_factory=list)  # list of TaskDef
+    """
+    # Opt out of column registry validation — Embedded types are internal
+    _registry = None
+
+
 # ── Wire mandatory column registry (no circular import — columns/ does not import base) ──
 from store.columns import REGISTRY  # noqa: E402
 Storable._registry = REGISTRY

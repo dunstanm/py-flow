@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import psycopg2
 import psycopg2.extras
 
-from store.base import Storable, _JSONEncoder, _json_decoder_hook
+from store.base import Storable, Embedded, _JSONEncoder, _json_decoder_hook
 from store.state_machine import InvalidTransition, GuardFailure, TransitionNotPermitted
 from store.subscriptions import ChangeEvent
 
@@ -84,6 +84,10 @@ class StoreClient:
         Create a new entity (version 1). Returns the entity_id.
         If the Storable class has a state machine, initial state is set automatically.
         """
+        if isinstance(obj, Embedded):
+            raise TypeError(
+                f"{type(obj).__name__} is Embedded — write the parent Storable instead"
+            )
         entity_id = str(uuid.uuid4())
         json_data = obj.to_json()
         type_name = obj.type_name()

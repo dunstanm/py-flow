@@ -13,6 +13,10 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 │  │ Server   │ │  Server  │ │Server │ │ Server  │ │  Server   │  │
 │  └────┬─────┘ └────┬─────┘ └───┬───┘ └────┬────┘ └─────┬─────┘  │
 │       │            │           │          │            │          │
+│  ┌────┴────────────┴───────────┴──────────┴────────────┴─────┐   │
+│  │              SchedulerServer (cron + DAG runner)           │   │
+│  └───────────────────────────────────────────────────────────┘   │
+│       │            │           │          │            │          │
 │  ┌────┴─────┐ ┌────┴─────┐ ┌──┴───┐ ┌────┴────┐ ┌─────┴─────┐  │
 │  │Embedded  │ │Embedded  │ │  S3  │ │Lakekeeper│ │  QuestDB  │  │
 │  │PG + RLS  │ │PG + DBOS │ │ store│ │ +S3+PG  │ │  binary   │  │
@@ -73,8 +77,9 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 14. [Lakehouse](#lakehouse) — Iceberg analytical store
 15. [Media Store](#media-store) — unstructured data storage & search
 16. [AI](#ai) — embeddings, LLM, RAG, extraction, tool calling
-17. [Project Structure](#project-structure)
-18. [Demos](#demos)
+17. [Scheduler](#scheduler) — cron-based task execution + pipelines
+18. [Project Structure](#project-structure)
+19. [Demos](#demos)
 
 ---
 
@@ -164,6 +169,7 @@ db = connect("demo", user="alice", password="pw")
 | `TsdbServer` | `timeseries.admin` | QuestDB binary | `Timeseries("alias")` |
 | `MediaServer` | `media.admin` | S3 object store | `MediaStore("alias", ai=)` |
 | `LakehouseServer` | `lakehouse.admin` | Lakekeeper + S3 + PG | `Lakehouse("alias")` |
+| `SchedulerServer` | `scheduler.admin` | Cron + DAG runner | `Scheduler(client, server)` |
 
 Each `XxxServer` has `start()`, `stop()`, and `register_alias()`. Users never see the implementation — no PG connection strings, no S3 credentials, no JVM args.
 
@@ -800,6 +806,60 @@ Text extraction: PDF (pymupdf), plain text, markdown, HTML. Documents inherit al
 
 ---
 
+## Scheduler
+
+Cron-based task execution with dependency graphs and parallel branches. Everything is a task list — a single function is just a one-element list. See [SCHEDULER.md](SCHEDULER.md) for full docs.
+
+```bash
+pip install -e "."
+python3 demo_scheduler.py
+```
+
+### Decorator (simplest — 90% of users)
+
+```python
+from scheduler import schedule
+
+@schedule("*/5 * * * *")
+def ingest_events():
+    print("Ingesting...")
+
+@schedule("0 2 * * *", name="etl")
+def extract(): ...
+
+@schedule("0 2 * * *", name="etl", depends_on=["extract"])
+def transform(): ...
+```
+
+### Programmatic
+
+```python
+from scheduler import Scheduler, Schedule, Task
+
+scheduler.register(Schedule(
+    name="etl",
+    cron_expr="0 2 * * *",
+    tasks=[
+        Task("extract", fn="jobs:extract"),
+        Task("transform", fn="jobs:transform", depends_on=["extract"]),
+        Task("load", fn="jobs:load", depends_on=["transform"]),
+    ],
+))
+
+scheduler.fire("etl")       # manual trigger
+scheduler.pause("etl")      # pause
+scheduler.history("etl")    # query runs
+```
+
+### Execution
+
+- **Parallel branches**: tasks at the same dependency level run concurrently
+- **Failure propagation**: failed task → downstream dependents SKIPPED
+- **Durable**: function references stored as importable paths, resolved via importlib
+- **WorkflowEngine**: optional checkpointed steps for crash recovery
+
+---
+
 ## AI
 
 Embeddings, LLM generation, RAG, structured extraction, and tool calling — all through a single `AI` class. Provider details are internal. See [AI.md](AI.md) for full docs.
@@ -864,6 +924,17 @@ py-flow/
 │   ├── engine.py           # WorkflowEngine ABC + durable_transition()
 │   ├── factory.py          # create_engine("alias") factory
 │   └── dbos_engine.py      # DBOS-backed implementation (hidden)
+├── scheduler/
+│   ├── admin.py            # SchedulerServer + collect_schedules
+│   ├── server.py           # Platform-side scheduler (tick loop, DAG runner)
+│   ├── client.py           # User-facing Scheduler client
+│   ├── models.py           # Schedule, Task, Run, TaskResult
+│   ├── dag.py              # Graph helpers (acyclicity, execution order)
+│   ├── dag_runner.py       # Parallel task execution engine
+│   ├── cron.py             # Cron utilities (croniter hidden)
+│   ├── decorators.py       # @schedule decorator (+ depends_on)
+│   ├── resolve.py          # importlib function resolution
+│   └── prebuilt.py         # Pre-built Schedule definition
 ├── streaming/
 │   ├── admin.py            # StreamingServer (Deephaven JVM)
 │   ├── table.py            # TickingTable + LiveTable (auto-locked)
@@ -930,7 +1001,8 @@ py-flow/
 │   ├── test_vector_search.py         # pgvector cosine search (12)
 │   ├── test_embed_upload.py          # Embed + upload + semantic search (12)
 │   ├── test_ai_client.py             # AI generation, RAG, tools (11)
-│   └── ...                           # 987 tests total, 0 skips
+│   ├── test_scheduler.py          # Scheduler: models, cron, DAG, runner, integration (71)
+│   └── _sched_fixtures.py         # Importable test functions for scheduler
 ├── demo_ir_swap.py         # IRS reactive grid → DH ticking tables
 ├── demo_bridge.py          # Store + @computed → DH ticking tables
 ├── demo_trading.py         # Trading server: prices + risk → DH tables
@@ -939,8 +1011,10 @@ py-flow/
 ├── demo_lakehouse_ingest.py  # Lakehouse ingest/transform all 4 modes
 ├── demo_media.py           # Media store: upload, extract, search
 ├── demo_rag.py             # AI + RAG: upload, search, ask, extract, tools
+├── demo_scheduler.py       # Scheduler: cron + pipelines + parallel execution
 ├── demo_state_machine.py   # Three-tier state machine side-effects
 ├── API.md                  # Functional API reference
+├── SCHEDULER.md            # Scheduler architecture docs
 ├── AI.md                   # AI architecture docs
 ├── STREAMING.md            # Streaming ticking tables docs
 ├── REACTIVE.md             # Reactive properties design
@@ -1011,6 +1085,24 @@ python3 demo_rag.py
 | Extraction | Earnings report → structured JSON |
 | Streaming | Real-time token-by-token output |
 | Tool calling | LLM autonomously searches documents |
+
+### `demo_scheduler.py` — Scheduler: Cron + Pipelines
+
+Starts embedded PG + WorkflowEngine, registers schedules via `@schedule` decorator and programmatic API, fires single-task and multi-task pipelines, demonstrates parallel execution, failure propagation, and pause/resume.
+
+```bash
+python3 demo_scheduler.py
+```
+
+| Feature | What it shows |
+|---------|---------------|
+| `@schedule` decorator | Simple function + pipeline with `depends_on` |
+| Programmatic API | `Schedule` + `Task` registration |
+| Parallel branches | Diamond DAG: a → (b, c) → d |
+| Failure propagation | Failed task → dependent skipped |
+| Tick loop | Cron-based automatic firing |
+| Pause/resume | Management API |
+| Duration tracking | Per-task timing |
 
 ### `demo_state_machine.py` — Three-Tier Side-Effects
 
