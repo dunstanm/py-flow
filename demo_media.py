@@ -43,25 +43,24 @@ def run_demo():
     # ── Start infrastructure ──────────────────────────────────────────
     section("Starting MinIO + PG")
 
-    from lakehouse.services import MinIOManager
-    from store.server import ObjectStoreServer
-    from store.schema import provision_user
+    from store.server import StoreServer
     from store.connection import connect
+    from media.admin import MediaServer
+    from media.models import bootstrap_search_schema
 
     # PG for Storable metadata
-    server = ObjectStoreServer(data_dir="data/demo_media_store")
+    server = StoreServer(data_dir="data/demo_media_store")
     server.start()
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "demo_user", "demo_pw")
+    server.provision_user("demo_user", "demo_pw")
 
     # Bootstrap document_search table
-    from media.models import bootstrap_search_schema
+    admin_conn = server.admin_conn()
     bootstrap_search_schema(admin_conn)
     admin_conn.close()
 
     # MinIO for binary storage
-    minio = MinIOManager(data_dir="data/demo_media_minio", api_port=9022, console_port=9023)
-    asyncio.run(minio.start())
+    media_srv = MediaServer(data_dir="data/demo_media", api_port=9022, console_port=9023)
+    asyncio.run(media_srv.start())
 
     # Connect as demo_user
     info = server.conn_info()
@@ -69,12 +68,12 @@ def run_demo():
                    dbname=info["dbname"], password="demo_pw")
 
     print(f"  PG:    {info['host']}:{info['port']}")
-    print(f"  MinIO: localhost:9022")
+    print(f"  MinIO: {media_srv.endpoint}")
 
     # ── Create MediaStore ─────────────────────────────────────────────
     from media import MediaStore
 
-    ms = MediaStore(s3_endpoint="localhost:9022", s3_bucket="demo-media")
+    ms = MediaStore(s3_endpoint=media_srv.endpoint, s3_bucket=media_srv.bucket)
 
     try:
         # ── 1. Upload documents ───────────────────────────────────────
@@ -220,7 +219,7 @@ def run_demo():
         print("\n  Shutting down...")
         ms.close()
         conn.close()
-        asyncio.run(minio.stop())
+        asyncio.run(media_srv.stop())
         server.stop()
         print("  Done.")
 

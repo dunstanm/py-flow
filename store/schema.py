@@ -169,7 +169,7 @@ def bootstrap_schema(admin_conn):
         cur.execute(f"GRANT SELECT, INSERT, UPDATE ON subscription_checkpoints TO {GROUP_ROLE};")
 
 
-def provision_user(admin_conn, username, password):
+def _provision_user(admin_conn, username, password):
     """
     Create a new PG role for a user. Zero-trust: NOSUPERUSER, NOCREATEDB,
     NOCREATEROLE, NOBYPASSRLS, LOGIN with password, inherits app_user.

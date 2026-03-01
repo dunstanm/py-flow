@@ -20,12 +20,9 @@ The reactive chain (triggered by each FX tick):
     → @computed SwapPortfolio.total_npv      (cross-entity: reads swaps[].npv)
       → @effect on_total_npv   → portfolio_writer.write_row(...)
 
-Prerequisites:
-  1. Start Market Data Server:  python -m marketdata.server
-  2. Run this demo:             python3 demo_irs.py
-  3. Open http://localhost:10000 in your browser
-
-Usage:  python3 demo_irs.py
+Usage:
+  python3 demo_irs.py
+  Open http://localhost:10000 in your browser
 """
 
 import os
@@ -53,13 +50,19 @@ streaming.start()
 streaming.register_alias("demo")
 print(f"  Streaming server started on {streaming.url}")
 
-from deephaven.execution_context import get_exec_ctx
-from deephaven import agg
+print("  Starting market data server...")
+from marketdata.admin import MarketDataServer
+
+_md_server = MarketDataServer(port=8000)
+asyncio.run(_md_server.start())
+print(f"  Market data server started on port {_md_server.port}")
+
+from streaming import flush, agg
 
 # ── 2. Domain models — fully reactive (@computed + @effect) ──────────────
 from dataclasses import dataclass, field
 from store.base import Storable
-from store.dh import dh_table, get_dh_tables
+from streaming import ticking, get_tables
 from reactive.computed import computed, effect
 
 # Publish queue: @effect on YieldCurvePoint.rate enqueues CurveTicks here;
@@ -67,7 +70,7 @@ from reactive.computed import computed, effect
 _curve_publish_queue: deque = deque()
 
 
-@dh_table
+@ticking
 @dataclass
 class FXSpot(Storable):
     """Live FX spot rate.  @effect pushes every mid change to DH."""
@@ -88,10 +91,10 @@ class FXSpot(Storable):
 
     @effect("mid")
     def on_mid(self, value):
-        self.dh_write()
+        self.tick()
 
 
-@dh_table(exclude={"base_rate", "sensitivity", "fx_base_mid"})
+@ticking(exclude={"base_rate", "sensitivity", "fx_base_mid"})
 @dataclass
 class YieldCurvePoint(Storable):
     """Single curve point.  rate is @computed from fx_ref.mid (cross-entity)."""
@@ -121,7 +124,7 @@ class YieldCurvePoint(Storable):
 
     @effect("rate")
     def on_rate(self, value):
-        self.dh_write()
+        self.tick()
         _curve_publish_queue.append({
             "type": "curve",
             "label": self.label,
@@ -133,7 +136,7 @@ class YieldCurvePoint(Storable):
         })
 
 
-@dh_table
+@ticking
 @dataclass
 class InterestRateSwap(Storable):
     """IRS pricing.  float_rate is @computed from curve_ref.rate (cross-entity)."""
@@ -189,10 +192,10 @@ class InterestRateSwap(Storable):
 
     @effect("npv")
     def on_npv(self, value):
-        self.dh_write()
+        self.tick()
 
 
-@dh_table
+@ticking
 @dataclass
 class SwapPortfolio(Storable):
     """Aggregate portfolio.  @computed reads child swap NPVs (cross-entity)."""
@@ -223,22 +226,22 @@ class SwapPortfolio(Storable):
 
     @effect("total_npv")
     def on_total_npv(self, value):
-        self.dh_write()
+        self.tick()
 
 
-# ── 3. Publish @dh_table tables to DH global scope ───────────────────────
-tables = get_dh_tables()
+# ── 3. Publish @ticking tables to DH global scope ────────────────────────
+tables = get_tables()
 
 # Aggregates
-swap_summary = InterestRateSwap._dh_live.agg_by([
-    agg.sum_(["TotalNPV=npv", "TotalDV01=dv01"]),
-    agg.count_("NumSwaps"),
+swap_summary = InterestRateSwap._ticking_live.agg_by([
+    agg.sum(["TotalNPV=npv", "TotalDV01=dv01"]),
+    agg.count("NumSwaps"),
     agg.avg(["AvgNPV=npv"]),
 ])
 tables["swap_summary"] = swap_summary
 
 for name, tbl in tables.items():
-    globals()[name] = tbl
+    tbl.publish(name)
 
 
 # ── 4. Build reactive objects — cross-entity refs wired at construction ───
@@ -328,7 +331,7 @@ portfolios = {
 
 # All initial DH pushes happened automatically via @effects during construction.
 # Just flush the DH update graph once.
-get_exec_ctx().update_graph.j_update_graph.requestRefresh()
+flush()
 
 # Drain initial CurveTick publishes (they'll be sent on first WS connect)
 _initial_curve_ticks = list(_curve_publish_queue)
@@ -391,8 +394,8 @@ async def _consume_and_publish():
                     # @effect DH pushes all fire inside batch_update().
                     fx.batch_update(bid=tick["bid"], ask=tick["ask"])
 
-                    # Flush DH update graph (all writes already queued by @effects)
-                    get_exec_ctx().update_graph.j_update_graph.requestRefresh()
+                    # Flush update graph (all writes already queued by @effects)
+                    flush()
 
                     tick_count += 1
 
@@ -448,7 +451,6 @@ print("    FX bid/ask → @computed mid → @computed rate → @computed float_r
 print("    → @computed npv → @computed total_npv")
 print("    Every @effect fires automatically: DH push + CurveTick publish")
 print()
-print("  Requires: python -m marketdata.server  (running on port 8000)")
 print("  Press Ctrl+C to stop.")
 print("=" * 70)
 print()
@@ -466,4 +468,5 @@ try:
         time.sleep(1)
 except KeyboardInterrupt:
     print("\n  Shutting down...")
+    asyncio.run(_md_server.stop())
     print("  Done!")

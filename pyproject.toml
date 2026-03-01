@@ -89,3 +89,8 @@ packages = ["store", "reactive", "bridge", "workflow", "marketdata", "timeseries
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Disable faulthandler — it conflicts with the JVM's internal SIGSEGV
+# handling (safepoint polling). Without this, any DH table derivation
+# (last_by, agg_by, sort_descending) crashes the process.
+faulthandler_timeout = 0
+addopts = "-p no:faulthandler"

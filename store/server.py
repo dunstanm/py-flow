@@ -222,7 +222,7 @@ class StoreServer:
 
     def provision_user(self, username: str, password: str):
         """Create a user with RLS access. Idempotent."""
-        from store.schema import provision_user as _provision
+        from store.schema import _provision_user as _provision
         admin_conn = self.admin_conn()
         _provision(admin_conn, username, password)
         admin_conn.close()
@@ -240,6 +240,3 @@ class StoreServer:
     def __exit__(self, *args):
         self.stop()
 
-
-# Deprecated alias — use StoreServer instead
-ObjectStoreServer = StoreServer

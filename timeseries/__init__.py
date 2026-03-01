@@ -16,8 +16,6 @@ Internal: TSDBBackend ABC, models, factory, consumer.
 
 from timeseries.base import TSDBBackend
 from timeseries.models import Bar, HistoryQuery, BarQuery
-from timeseries.factory import create_backend
-from timeseries.consumer import TSDBConsumer
 from timeseries.client import Timeseries
 
 __all__ = [
@@ -26,6 +24,4 @@ __all__ = [
     "Bar",
     "HistoryQuery",
     "BarQuery",
-    "create_backend",
-    "TSDBConsumer",
 ]

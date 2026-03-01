@@ -80,17 +80,13 @@ class TestExtraction:
 
 @pytest.fixture(scope="module")
 def pg_server():
-    from store.server import ObjectStoreServer
-    from store.schema import provision_user
+    from store.server import StoreServer
     from media.models import bootstrap_search_schema, bootstrap_chunks_schema
 
     import tempfile
-    server = ObjectStoreServer(data_dir=tempfile.mkdtemp(prefix="test_ai_client_"))
+    server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_ai_client_"))
     server.start()
-
-    conn = server.admin_conn()
-    provision_user(conn, "ai_user", "ai_pw")
-    conn.close()
+    server.provision_user("ai_user", "ai_pw")
 
     conn = server.admin_conn()
     bootstrap_search_schema(conn, embedding_dim=768)

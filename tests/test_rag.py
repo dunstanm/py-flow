@@ -20,17 +20,13 @@ requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY 
 
 @pytest.fixture(scope="module")
 def pg_server():
-    from store.server import ObjectStoreServer
-    from store.schema import provision_user
+    from store.server import StoreServer
     from media.models import bootstrap_search_schema, bootstrap_chunks_schema
 
     import tempfile
-    server = ObjectStoreServer(data_dir=tempfile.mkdtemp(prefix="test_rag_"))
+    server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_rag_"))
     server.start()
-
-    conn = server.admin_conn()
-    provision_user(conn, "rag_user", "rag_pw")
-    conn.close()
+    server.provision_user("rag_user", "rag_pw")
 
     conn = server.admin_conn()
     bootstrap_search_schema(conn, embedding_dim=768)

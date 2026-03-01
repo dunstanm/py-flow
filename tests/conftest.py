@@ -4,10 +4,35 @@ Session-scoped test infrastructure — started once, shared across all test file
 This is the equivalent of a GitHub Actions ``services:`` block.
 Heavy servers (DH JVM, MarketDataServer) start once for the entire session.
 Each test file publishes its own tables via the public client API.
+
+Requires a ``.env`` file at the project root with::
+
+    GEMINI_API_KEY=your-key-here
 """
 
 import os
+from pathlib import Path
 import pytest
+
+# ── Load .env ────────────────────────────────────────────────────────────────
+# Simple loader — no dependency on python-dotenv.
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+if _env_file.exists():
+    for line in _env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+# Fail fast if key is missing — don't silently skip 64 tests.
+if not os.environ.get("GEMINI_API_KEY"):
+    raise RuntimeError(
+        "GEMINI_API_KEY not set. Create a .env file in the project root:\n"
+        "  echo 'GEMINI_API_KEY=your-key-here' > .env"
+    )
 
 # ── Streaming (Deephaven JVM) ─────────────────────────────────────────────
 # The JVM MUST start before any test file that imports deephaven is collected.
@@ -22,6 +47,15 @@ _streaming.start()
 def streaming_server():
     """Expose the already-running StreamingServer as a fixture."""
     return _streaming
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Bypass Python finalization to avoid DH JVM segfault on teardown.
+
+    The embedded Deephaven JVM spawns daemon threads that crash during
+    Python's atexit / module cleanup.  os._exit() skips that entirely.
+    """
+    os._exit(exitstatus)
 
 
 # ── Market Data Server (with QuestDB) ────────────────────────────────────

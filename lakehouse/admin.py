@@ -13,14 +13,13 @@ Platform usage::
 
     # User code:  Lakehouse("demo")
 
-Legacy functions ``start_lakehouse()`` / ``stop_lakehouse()`` still work.
 """
 
 from __future__ import annotations
 
 import logging
 
-from lakehouse.services import start_lakehouse, stop_lakehouse, LakehouseStack
+from lakehouse.services import start_lakehouse as _start_lakehouse, stop_lakehouse as _stop_lakehouse, LakehouseStack as _LakehouseStack
 from lakehouse.sync import SyncEngine
 from lakehouse.models import SyncState
 from lakehouse.catalog import create_catalog
@@ -54,11 +53,11 @@ class LakehouseServer:
         self._minio_console_port = minio_console_port
         self._warehouse = warehouse
         self._bucket = bucket
-        self._stack: LakehouseStack | None = None
+        self._stack: _LakehouseStack | None = None
 
     async def start(self) -> "LakehouseServer":
         """Start the full lakehouse stack (PG + Lakekeeper + MinIO)."""
-        self._stack = await start_lakehouse(
+        self._stack = await _start_lakehouse(
             data_dir=self._data_dir,
             pg_port=self._pg_port,
             lakekeeper_port=self._lakekeeper_port,
@@ -72,7 +71,7 @@ class LakehouseServer:
     async def stop(self) -> None:
         """Stop all lakehouse services."""
         if self._stack:
-            await stop_lakehouse(self._stack)
+            await _stop_lakehouse(self._stack)
             self._stack = None
 
     @property
@@ -110,16 +109,9 @@ class LakehouseServer:
 
 
 __all__ = [
-    # New consistent API
     "LakehouseServer",
-    # Legacy functions (backward compat)
-    "start_lakehouse",
-    "stop_lakehouse",
-    "LakehouseStack",
-    # Sync service
     "SyncEngine",
     "SyncState",
-    # Bootstrap
     "create_catalog",
     "ensure_tables",
 ]

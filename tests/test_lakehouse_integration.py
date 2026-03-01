@@ -3,14 +3,14 @@ Lakehouse Integration Tests — Full Round-Trip
 ===============================================
 End-to-end tests using the real public API:
 
-  ObjectStoreServer  →  connect()  →  Storable.save()
+  StoreServer  →  connect()  →  Storable.save()
        ↓ (object_events)
   SyncEngine  →  Iceberg (via Lakekeeper + MinIO)
        ↓
   Lakehouse (DuckDB SQL)
 
 Two PostgreSQL instances:
-  - pgserver (ObjectStoreServer): Storable object store with RLS
+  - pgserver (StoreServer): Storable object store with RLS
   - zonkyio (EmbeddedPG via start_lakehouse): Lakekeeper catalog backend
 
 No Docker needed.
@@ -31,8 +31,7 @@ import pytest
 
 from store.base import Storable
 from store.connection import connect
-from store.server import ObjectStoreServer
-from store.schema import provision_user
+from store.server import StoreServer
 from marketdata.models import Tick, FXTick, CurveTick
 
 logging.basicConfig(level=logging.INFO)
@@ -65,12 +64,9 @@ class Order(Storable):
 def server():
     """Start the Storable object store (pgserver with RLS)."""
     tmp_dir = tempfile.mkdtemp(prefix="test_lakehouse_store_")
-    srv = ObjectStoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
+    srv = StoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
     srv.start()
-    # Provision a test user
-    admin_conn = srv.admin_conn()
-    provision_user(admin_conn, "alice", "alice_pw")
-    admin_conn.close()
+    srv.provision_user("alice", "alice_pw")
     yield srv
     srv.stop()
 
@@ -78,12 +74,13 @@ def server():
 @pytest.fixture(scope="module")
 def stack():
     """Start the lakehouse stack (Lakekeeper PG + Lakekeeper + MinIO)."""
-    from lakehouse.admin import start_lakehouse, stop_lakehouse
+    from lakehouse.admin import LakehouseServer
     # Use /tmp to keep Unix socket path < 103 bytes (macOS limit)
     tmp_dir = tempfile.mkdtemp(prefix="tst_lh_", dir="/tmp")
-    s = asyncio.run(start_lakehouse(data_dir=tmp_dir))
-    yield s
-    asyncio.run(stop_lakehouse(s))
+    srv = LakehouseServer(data_dir=tmp_dir)
+    asyncio.run(srv.start())
+    yield srv
+    asyncio.run(srv.stop())
 
 
 @pytest.fixture(scope="module")
@@ -139,7 +136,7 @@ def pg_conn(server):
 @pytest.fixture(scope="module")
 def tsdb():
     """Start a TSDBBackend via the public factory (real QuestDB)."""
-    from timeseries import create_backend
+    from timeseries.factory import create_backend
     tmp_dir = tempfile.mkdtemp(prefix="test_lakehouse_questdb_")
     backend = create_backend(
         "questdb",

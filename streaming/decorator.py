@@ -1,0 +1,178 @@
+"""
+streaming.decorator — @ticking class decorator.
+
+Auto-creates a TickingTable from a Storable dataclass, deriving column
+schema from dataclass fields and @computed properties.
+
+Usage::
+
+    @ticking
+    @dataclass
+    class FXSpot(Storable):
+        __key__ = "pair"
+        pair: str = ""
+        bid: float = 0.0
+        ...
+
+    @ticking(exclude={"base_rate", "sensitivity"})
+    @dataclass
+    class YieldCurvePoint(Storable):
+        __key__ = "label"
+        ...
+
+Adds to the class:
+    cls._ticking_table   TickingTable instance
+    cls._ticking_live    LiveTable (last_by __key__)
+    cls._ticking_cols    [(col_name, attr_name, python_type), ...]
+    cls._ticking_name    snake_case name derived from class name
+    self.tick()          instance method — writes all column values
+"""
+
+import re
+
+from streaming.table import TickingTable, LiveTable
+
+# Global registry: table_name → (TickingTable, LiveTable)
+_registry = {}
+
+# Primitive types that map to ticking table columns
+_PRIMITIVE_TYPES = {str, float, int, bool}
+
+
+def _to_snake_case(name):
+    """Convert CamelCase class name to snake_case table name.
+
+    FXSpot           → fx_spot
+    YieldCurvePoint  → yield_curve_point
+    InterestRateSwap → interest_rate_swap
+    SwapPortfolio    → swap_portfolio
+    """
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s)
+    return s.lower()
+
+
+def _resolve_column_specs(cls, exclude=None):
+    """Pure-Python column resolution — no DH imports needed.
+
+    Returns list of (col_name, attr_name, python_type).
+    Skips non-primitive fields (object, list, etc.) and anything in exclude.
+    """
+    from reactive.computed import ComputedProperty
+
+    exclude = set(exclude) if exclude else set()
+    specs = []
+
+    # 1. Dataclass fields (in definition order)
+    for fname, fobj in cls.__dataclass_fields__.items():
+        if fname in exclude or fname.startswith("_"):
+            continue
+        py_type = fobj.type
+        if isinstance(py_type, str):
+            py_type = {"str": str, "float": float, "int": int, "bool": bool}.get(py_type)
+        if py_type not in _PRIMITIVE_TYPES:
+            continue  # skip object, list, etc.
+        specs.append((fname, fname, py_type))
+
+    # 2. @computed properties (sorted for deterministic order)
+    computed_names = sorted(
+        name
+        for name in dir(cls)
+        if not name.startswith("_")
+        and name not in exclude
+        and isinstance(getattr(cls, name, None), ComputedProperty)
+    )
+    for name in computed_names:
+        cp = getattr(cls, name)
+        ret = getattr(cp.fn, "__annotations__", {}).get("return", float)
+        if ret not in _PRIMITIVE_TYPES:
+            ret = float  # default to float for unannotated computed
+        specs.append((name, name, ret))
+
+    return specs
+
+
+def _tick(self):
+    """Write all column values to the ticking table. Added to decorated classes."""
+    cls = type(self)
+    cls._ticking_table.write_row(*(getattr(self, attr) for _, attr, _ in cls._ticking_cols))
+
+
+def _apply_ticking(cls, exclude=None):
+    """Core logic: create TickingTable, derive live table, attach to class."""
+    # Require __key__
+    key = getattr(cls, "__key__", None)
+    if key is None:
+        raise ValueError(
+            f"@ticking on {cls.__name__} requires a __key__ class variable "
+            f"(e.g. __key__ = 'symbol')"
+        )
+
+    # Resolve columns (pure Python types)
+    col_specs = _resolve_column_specs(cls, exclude)
+    if not col_specs:
+        raise ValueError(f"@ticking on {cls.__name__}: no columns resolved")
+
+    # Table name from class name
+    table_name = _to_snake_case(cls.__name__)
+
+    # Create TickingTable with Python-typed schema
+    schema = {col_name: py_type for col_name, _, py_type in col_specs}
+    tt = TickingTable(schema)
+
+    # Derive live table (auto-locked via TickingTable.last_by)
+    live = tt.last_by(key)
+
+    # Attach to class
+    cls._ticking_table = tt
+    cls._ticking_live = live
+    cls._ticking_cols = col_specs
+    cls._ticking_name = table_name
+    cls.tick = _tick
+
+    # Backward compat aliases (will be removed after full migration)
+    cls._dh_writer = tt._writer
+    cls._dh_raw = tt._table
+    cls._dh_live = live._table
+    cls._dh_columns = col_specs
+    cls._dh_table_name = table_name
+    cls.dh_write = _tick
+
+    # Register
+    _registry[table_name] = (tt, live)
+
+    return cls
+
+
+def ticking(cls=None, *, exclude=None):
+    """Class decorator: auto-create TickingTable + live table from Storable fields.
+
+    Supports both bare and parameterized usage::
+
+        @ticking                          # auto-infer all columns
+        @ticking(exclude={"internal"})    # skip specific fields
+    """
+    if cls is not None:
+        # Bare @ticking (no parentheses)
+        return _apply_ticking(cls)
+    # Parameterized @ticking(exclude=...)
+    def decorator(cls):
+        return _apply_ticking(cls, exclude=exclude)
+    return decorator
+
+
+def get_tables():
+    """Return dict of all registered tables: {name_raw: TickingTable, name_live: LiveTable}.
+
+    Returns wrapped tables so all ops are auto-locked.
+    """
+    tables = {}
+    for name, (tt, live) in _registry.items():
+        tables[f"{name}_raw"] = tt          # TickingTable (inherits LiveTable)
+        tables[f"{name}_live"] = live       # LiveTable from last_by
+    return tables
+
+
+def get_ticking_tables():
+    """Return dict of all registered TickingTable instances: {name: TickingTable}."""
+    return {name: tt for name, (tt, _live) in _registry.items()}

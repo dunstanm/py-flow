@@ -13,7 +13,7 @@ Usage:
     bridge.start()
 
     orders_raw  = bridge.table(Order)
-    orders_live = orders_raw.last_by("EntityId")
+    orders_live = orders_raw.last_by("EntityId")   # auto-locked!
 """
 
 import json
@@ -21,25 +21,24 @@ import dataclasses
 import threading
 from typing import Optional, Dict, Type, Any
 
-from deephaven import DynamicTableWriter
+from streaming import TickingTable
 
 from store.base import Storable
 from store.client import StoreClient
 from store.subscriptions import EventBus, ChangeEvent, SubscriptionListener
-from bridge.type_mapping import infer_dh_schema, extract_row
+from bridge.type_mapping import infer_schema, extract_row
 
 
 class _Registration:
-    """Internal: tracks a registered Storable type and its writer."""
+    """Internal: tracks a registered Storable type and its TickingTable."""
 
-    __slots__ = ("storable_cls", "type_name", "writer", "table",
+    __slots__ = ("storable_cls", "type_name", "ticking",
                  "column_names", "filter_expr", "read_cls")
 
-    def __init__(self, storable_cls, writer, table, column_names, filter_expr):
+    def __init__(self, storable_cls, ticking, column_names, filter_expr):
         self.storable_cls = storable_cls
         self.type_name = storable_cls.type_name()
-        self.writer = writer
-        self.table = table
+        self.ticking = ticking
         self.column_names = column_names
         self.filter_expr = filter_expr
         self.read_cls = storable_cls
@@ -99,43 +98,45 @@ class StoreBridge:
 
     # ── Registration ─────────────────────────────────────────────────
 
-    def register(self, storable_cls, *, filter=None, columns=None, writer=None):
-        """Register a Storable type to be bridged to Deephaven.
+    def register(self, storable_cls, *, filter=None, columns=None):
+        """Register a Storable type to be bridged to a ticking table.
 
         Args:
             storable_cls: @dataclass Storable subclass (e.g. Order, Trade).
             filter: Optional Expr predicate. Only events where
                     filter.eval(obj_data_dict) is truthy are shipped.
-            columns: Optional dict override for DH column schema.
-                     If None, auto-generated from dataclass fields.
-            writer: Optional pre-created DynamicTableWriter. If None,
-                    one is created from the inferred/provided schema.
+            columns: Optional dict override for column schema
+                     (Python types). If None, auto-generated from
+                     dataclass fields.
         """
         if self._started:
             raise RuntimeError("Cannot register types after start()")
 
-        schema = columns if columns is not None else infer_dh_schema(storable_cls)
+        schema = columns if columns is not None else infer_schema(storable_cls)
         column_names = list(schema.keys())
-
-        if writer is None:
-            writer = DynamicTableWriter(schema)
+        tt = TickingTable(schema)
 
         reg = _Registration(
             storable_cls=storable_cls,
-            writer=writer,
-            table=writer.table,
+            ticking=tt,
             column_names=column_names,
             filter_expr=filter,
         )
         self._registrations[reg.type_name] = reg
 
     def table(self, storable_cls):
-        """Return the raw (append-only) Deephaven table for a registered type."""
+        """Return the TickingTable for a registered type.
+
+        The returned TickingTable supports auto-locked derivations::
+
+            raw = bridge.table(Order)
+            live = raw.last_by("EntityId")   # auto shared_lock
+        """
         type_name = storable_cls.type_name()
         reg = self._registrations.get(type_name)
         if reg is None:
             raise KeyError(f"{storable_cls.__name__} is not registered")
-        return reg.table
+        return reg.ticking
 
     # ── Lifecycle ────────────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ class StoreBridge:
             except Exception:
                 return  # Filter evaluation error — skip
 
-        # Extract row values and write to DH
+        # Extract row values and write to the ticking table.
+        # write_row() is thread-safe per DH docs.
         row = extract_row(obj, reg.column_names)
-        reg.writer.write_row(*row)
+        reg.ticking.write_row(*row)

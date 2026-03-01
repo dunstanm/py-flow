@@ -151,20 +151,18 @@ async def run_demo(args):
 
     # ── Step 1: Start the lakehouse stack ──────────────────────────────
     print("Step 2: Starting lakehouse stack...")
-    from lakehouse.admin import start_lakehouse, stop_lakehouse, SyncEngine, create_catalog, ensure_tables
-    from store.server import ObjectStoreServer
-    from store.schema import provision_user
-    from timeseries import create_backend
+    from lakehouse.admin import LakehouseServer, SyncEngine, create_catalog, ensure_tables
+    from store.server import StoreServer
+    from timeseries.factory import create_backend
 
     # Object store (Storable PG)
-    server = ObjectStoreServer(data_dir="data/demo_lakehouse_store")
+    server = StoreServer(data_dir="data/demo_lakehouse_store")
     server.start()
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "demo_user", "demo_pw")
-    admin_conn.close()
+    server.provision_user("demo_user", "demo_pw")
 
     # Lakehouse infra (Lakekeeper PG + Lakekeeper + MinIO)
-    stack = await start_lakehouse(data_dir="data/demo_lakehouse")
+    stack = LakehouseServer(data_dir="data/demo_lakehouse")
+    await stack.start()
 
     # TSDB (QuestDB)
     backend = create_backend(
@@ -253,7 +251,7 @@ async def run_demo(args):
     finally:
         print("\n  Shutting down...")
         await backend.stop()
-        await stop_lakehouse(stack)
+        await stack.stop()
         server.stop()
         print("  Done.")
 

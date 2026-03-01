@@ -26,7 +26,9 @@ from marketdata.models import (
     Subscription, SnapshotResponse, Tick, FXTick, CurveTick,
     MarketDataMessage, get_symbol_key,
 )
-from timeseries import TSDBBackend, TSDBConsumer, create_backend
+from timeseries.base import TSDBBackend
+from timeseries.factory import create_backend
+from timeseries.consumer import TSDBConsumer
 
 logger = logging.getLogger(__name__)
 

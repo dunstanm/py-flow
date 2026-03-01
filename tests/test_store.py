@@ -20,8 +20,7 @@ from decimal import Decimal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from store.server import ObjectStoreServer
-from store.schema import provision_user
+from store.server import StoreServer
 from store.base import Storable, _JSONEncoder, _json_decoder_hook
 from store.client import StoreClient
 from store.state_machine import StateMachine, Transition, InvalidTransition, GuardFailure, TransitionNotPermitted
@@ -106,7 +105,7 @@ Order._state_machine = OrderLifecycle
 def server():
     """Start an embedded PostgreSQL server for testing."""
     tmp_dir = tempfile.mkdtemp(prefix="test_store_")
-    srv = ObjectStoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
+    srv = StoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
     srv.start()
     yield srv
     srv.stop()
@@ -121,11 +120,9 @@ def conn_info(server):
 @pytest.fixture(scope="module")
 def _provision_users(server):
     """Provision test users: alice, bob, charlie."""
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "alice", "alice_pw")
-    provision_user(admin_conn, "bob", "bob_pw")
-    provision_user(admin_conn, "charlie", "charlie_pw")
-    admin_conn.close()
+    server.provision_user("alice", "alice_pw")
+    server.provision_user("bob", "bob_pw")
+    server.provision_user("charlie", "charlie_pw")
 
 
 @pytest.fixture()
@@ -570,20 +567,9 @@ class TestStateMachine:
             alice.transition(o, "CANCELLED")
         assert o._store_state == "PENDING"
 
-    def test_allowed_by_permits_authorized_user(self, conn_info, _provision_users):
+    def test_allowed_by_permits_authorized_user(self, conn_info, _provision_users, server):
         """User 'risk_manager' can cancel."""
-        from store.schema import provision_user
-        from store.server import ObjectStoreServer
-        # Provision risk_manager user
-        admin_c = StoreClient(
-            user="app_admin", password="test_admin_pw",
-            host=conn_info["host"], port=conn_info["port"], dbname=conn_info["dbname"],
-        )
-        with admin_c.conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'risk_manager'")
-            if cur.fetchone() is None:
-                provision_user(admin_c.conn, "risk_manager", "rm_pw")
-        admin_c.close()
+        server.provision_user("risk_manager", "rm_pw")
 
         rm = StoreClient(
             user="risk_manager", password="rm_pw",

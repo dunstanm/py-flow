@@ -636,8 +636,9 @@ bridge.register(Order)
 bridge.register(Trade, filter=Field("symbol") == Const("AAPL"))
 bridge.start()
 
-orders_raw  = bridge.table(Order)              # append-only event stream
-orders_live = orders_raw.last_by("EntityId")   # latest state per entity
+orders = bridge.table(Order)                   # TickingTable (auto-locked)
+orders_live = orders.last_by("EntityId")       # LiveTable — latest per entity
+orders_live.publish("orders_live")             # visible to all DH clients
 ```
 
 ### Three Patterns: Computed Values → Deephaven
@@ -652,14 +653,47 @@ orders_live = orders_raw.last_by("EntityId")   # latest state per entity
 
 ## Streaming & Clients
 
-### Start the streaming server
+Real-time ticking tables with auto-locked derivations. All Deephaven internals are hidden — user code works with Python types only. See [STREAMING.md](STREAMING.md) for full docs.
+
+### Create ticking tables
 
 ```python
-from streaming.admin import StreamingServer
+from streaming import TickingTable, agg, flush
 
-streaming = StreamingServer(port=10000)
-streaming.start()
-# Web IDE at http://localhost:10000
+prices = TickingTable({"Symbol": str, "Price": float, "Volume": int})
+prices.write_row("AAPL", 228.50, 1200)
+flush()
+
+# Derived tables (auto-locked, no manual locking needed)
+prices_live = prices.last_by("Symbol")
+top_movers  = prices_live.sort_descending("Price")
+summary     = prices_live.agg_by([agg.sum(["TotalVol=Volume"]), agg.count("N")])
+
+# Publish to all clients
+prices.publish("prices_raw")
+prices_live.publish("prices_live")
+
+# Snapshot to pandas
+df = prices_live.snapshot()
+```
+
+### `@ticking` decorator
+
+Auto-creates ticking tables from `Storable` dataclasses:
+
+```python
+from streaming import ticking, get_tables, flush
+
+@ticking
+@dataclass
+class FXSpot(Storable):
+    pair: str = ""
+    bid: float = 0.0
+    ask: float = 0.0
+
+spot = FXSpot(pair="EUR/USD", bid=1.0850, ask=1.0852)
+spot.tick()
+flush()
 ```
 
 ### Connect from client code
@@ -674,16 +708,6 @@ with DeephavenClient() as client:
 ```
 
 Clients connect via `pydeephaven` (lightweight — **no Java needed** on client machines).
-
-### Client Capabilities
-
-| Feature | How |
-|---------|-----|
-| Read shared tables | `client.open_table("prices_live")` |
-| List all tables | `client.list_tables()` |
-| Run server-side scripts | `client.run_script("...")` |
-| Export to pandas | `table.to_arrow().to_pandas()` |
-| Filter / sort | DH table operations via `run_script` |
 
 ---
 
@@ -842,6 +866,9 @@ py-flow/
 │   └── dbos_engine.py      # DBOS-backed implementation (hidden)
 ├── streaming/
 │   ├── admin.py            # StreamingServer (Deephaven JVM)
+│   ├── table.py            # TickingTable + LiveTable (auto-locked)
+│   ├── agg.py              # Aggregation helpers (lazy-imported)
+│   ├── decorator.py        # @ticking decorator
 │   └── _registry.py        # Alias registry
 ├── bridge/
 │   ├── store_bridge.py     # StoreBridge: PG NOTIFY → DH ticking tables
@@ -914,6 +941,7 @@ py-flow/
 ├── demo_three_tiers.py     # Three-tier state machine side-effects
 ├── API.md                  # Functional API reference
 ├── AI.md                   # AI architecture docs
+├── STREAMING.md            # Streaming ticking tables docs
 ├── REACTIVE.md             # Reactive properties design
 ├── TIMESERIES.md           # Time-series architecture
 ├── LAKEHOUSE.md            # Lakehouse architecture

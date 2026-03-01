@@ -4,15 +4,14 @@ Integration tests for pgvector on embedded PostgreSQL.
 Verifies that pgvector extension works with pgserver, embedding columns
 can store vectors, and HNSW cosine similarity queries return correct results.
 
-Requires: embedded PG via ObjectStoreServer (real pgserver, no mocks).
+Requires: embedded PG via StoreServer (real pgserver, no mocks).
 """
 
 import uuid
 import math
 import pytest
 
-from store.server import ObjectStoreServer
-from store.schema import provision_user
+from store.server import StoreServer
 from media.models import bootstrap_search_schema, bootstrap_chunks_schema
 
 
@@ -23,13 +22,9 @@ from media.models import bootstrap_search_schema, bootstrap_chunks_schema
 def pg_server():
     """Start embedded PG, provision user, bootstrap search schema with pgvector."""
     import tempfile
-    server = ObjectStoreServer(data_dir=tempfile.mkdtemp(prefix="test_vector_search_"))
+    server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_vector_search_"))
     server.start()
-
-    # Provision user + bootstrap search schema BEFORE any test connections
-    conn = server.admin_conn()
-    provision_user(conn, "vec_user", "vec_pw")
-    conn.close()
+    server.provision_user("vec_user", "vec_pw")
 
     conn = server.admin_conn()
     bootstrap_search_schema(conn, embedding_dim=768)

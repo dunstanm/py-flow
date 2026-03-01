@@ -1,6 +1,6 @@
 # Functional API Reference
 
-Complete public API organized by feature area — **45 symbols** across 10 packages.
+Complete public API organized by feature area — **47 symbols** across 11 packages.
 
 ---
 
@@ -322,7 +322,58 @@ Backend is swappable — implement `WorkflowEngine` for Temporal, AWS Step Funct
 
 ---
 
-## 7. Deephaven Bridge
+## 7. Streaming
+
+**Real-time ticking tables with auto-locked derivations.** See [STREAMING.md](STREAMING.md) for full docs.
+
+```python
+from streaming import TickingTable, LiveTable, flush, agg, ticking, get_tables
+```
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `TickingTable` | class | Writable ticking table backed by DynamicTableWriter. Python-typed schema. |
+| `LiveTable` | class | Read-only derived table. All operations auto-acquire UG shared lock. |
+| `flush` | function | Flush the update graph so pending writes become visible. Thread-safe. |
+| `agg` | module | Aggregation helpers: `sum`, `avg`, `count`, `min`, `max`, `first`, `last`, `std`, `var`, `median`, `pct`, `weighted_avg`. |
+| `ticking` | decorator | Auto-creates TickingTable + LiveTable from a Storable dataclass. |
+| `get_tables` | function | Returns dict of all `@ticking`-decorated tables. |
+
+### TickingTable
+
+```python
+prices = TickingTable({"Symbol": str, "Price": float, "Volume": int})
+```
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.write_row(*values)` | — | Write a single row. Thread-safe. |
+| `.flush()` | — | Flush the update graph. |
+| `.close()` | — | Close the underlying writer. |
+| `.last_by(by)` | `LiveTable` | Latest row per group key. |
+| `.agg_by(aggs, by_columns)` | `LiveTable` | Aggregation. |
+| `.sort_descending(by)` | `LiveTable` | Sort descending. |
+| `.where(filters)` | `LiveTable` | Filter rows. |
+| `.select(columns)` | `LiveTable` | Select/rename columns. |
+| `.update(formulas)` | `LiveTable` | Add computed columns. |
+| `.snapshot()` | `DataFrame` | Pandas snapshot. |
+| `.publish(name)` | — | Publish to DH query scope. |
+| `.size` | `int` | Current row count. |
+
+### Supported types
+
+| Python | Deephaven |
+|--------|-----------|
+| `str` | `string` |
+| `int` | `int64` |
+| `float` | `double` |
+| `bool` | `bool_` |
+| `datetime` | `Instant` |
+| `Decimal` | `double` |
+
+---
+
+## 8. Deephaven Bridge
 
 **Stream store events into Deephaven ticking tables.**
 
@@ -332,21 +383,21 @@ from bridge import StoreBridge
 
 | Symbol | Kind | Description |
 |--------|------|-------------|
-| `StoreBridge` | class | Streams PG NOTIFY events into Deephaven DynamicTableWriter tables. |
+| `StoreBridge` | class | Streams PG NOTIFY events into `TickingTable` instances. |
 
 ### StoreBridge methods
 
 | Method | Description |
 |--------|-------------|
 | `StoreBridge(host, port, dbname, user, password, subscriber_id)` | Create bridge with PG connection params. |
-| `.register(storable_cls, *, filter=None, columns=None, writer=None)` | Register a Storable type to be bridged. |
-| `.table(storable_cls)` | Get the raw append-only DH table for a type. |
+| `.register(storable_cls, *, filter=None, columns=None)` | Register a Storable type to be bridged. |
+| `.table(storable_cls)` | Get the `TickingTable` for a type (all derivations auto-locked). |
 | `.start()` | Begin listening and bridging events. |
 | `.stop()` | Stop and clean up. |
 
 ---
 
-## 8. Lakehouse
+## 9. Lakehouse
 
 **Query, ingest, and transform data in Apache Iceberg tables via DuckDB SQL.**
 
@@ -431,7 +482,7 @@ lh.close()
 
 ---
 
-## 9. Media Store
+## 10. Media Store
 
 **Unstructured data storage & search — full-text, semantic, and hybrid.**
 
@@ -511,7 +562,7 @@ ms.close()
 
 ---
 
-## 10. AI
+## 11. AI
 
 **Embeddings, LLM generation, RAG, extraction, and tool calling.** See [AI.md](AI.md) for full docs.
 
@@ -573,7 +624,7 @@ response = ai.run_tool_loop("Search for Basel docs", tools=ai.search_tools(ms))
 
 ---
 
-## 11. Time-Series Database
+## 12. Time-Series Database
 
 **Backend-agnostic historical market data storage.**
 
@@ -611,11 +662,11 @@ See [TIMESERIES.md](TIMESERIES.md) for full details.
 | **store** | `Storable`, `connect`, `StateMachine`, `Transition`, `EventListener`, `ChangeEvent`, `VersionConflict`, `InvalidTransition`, `GuardFailure`, `TransitionNotPermitted` | 10 |
 | **reactive** | `computed`, `effect` | 2 |
 | **workflow** | `WorkflowEngine`, `WorkflowStatus`, `create_engine` | 3 |
-| **streaming** | `StreamingServer` (also in platform) | — |
+| **streaming** | `TickingTable`, `LiveTable`, `flush`, `agg`, `ticking`, `get_tables` | 6 |
 | **bridge** | `StoreBridge` | 1 |
 | **lakehouse** | `Lakehouse` | 1 |
 | **media** | `MediaStore`, `Document` | 2 |
 | **ai** | `AI`, `Message`, `LLMResponse`, `ToolCall`, `RAGResult`, `ExtractionResult`, `Tool` | 7 |
 | **timeseries** | `TSDBBackend`, `TSDBConsumer`, `Timeseries`, `create_backend`, `Bar`, `HistoryQuery`, `BarQuery` | 7 |
 | **client** | `DeephavenClient` | 1 |
-| **Total** | | **41** |
+| **Total** | | **47** |

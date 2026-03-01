@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from store.base import Storable
 from store.server import StoreServer
 from store.client import StoreClient
-from store.schema import provision_user
 from workflow.engine import WorkflowEngine, WorkflowHandle, WorkflowStatus
 from workflow.factory import create_engine
 
@@ -59,9 +58,7 @@ def conn_info(server):
 
 @pytest.fixture(scope="module")
 def _provision_users(server):
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "wf_alice", "pass_alice")
-    admin_conn.close()
+    server.provision_user("wf_alice", "pass_alice")
 
 
 @pytest.fixture(scope="module")

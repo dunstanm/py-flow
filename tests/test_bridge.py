@@ -5,7 +5,7 @@ All tests use REAL Deephaven (in-process JVM) and REAL embedded PostgreSQL.
 No mocks.
 
 Covers:
-- Type mapping: infer_dh_schema, extract_row
+- Type mapping: infer_schema, extract_row
 - StoreBridge: register, table, event dispatch, Expr filters
 - Full round-trip: StoreClient.write() → PG NOTIFY → bridge → DH table
 """
@@ -23,24 +23,20 @@ from typing import Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # DH JVM is started by conftest.py before test collection — safe to import.
-import deephaven.dtypes as dht
-from deephaven import DynamicTableWriter
-from deephaven import pandas as dhpd
-from deephaven.execution_context import get_exec_ctx
+from streaming import flush as streaming_flush
 
 from store.base import Storable
-from store.server import ObjectStoreServer
+from store.server import StoreServer
 from store.client import StoreClient
-from store.schema import provision_user
 from store.subscriptions import EventBus, ChangeEvent
-from bridge.type_mapping import infer_dh_schema, extract_row
+from bridge.type_mapping import infer_schema, extract_row
 from bridge.store_bridge import StoreBridge
 from reactive.expr import Field, Const
 
 
 def _flush_dh():
-    """Flush the DH update graph so write_row() results are visible."""
-    get_exec_ctx().update_graph.j_update_graph.requestRefresh()
+    """Flush the streaming update graph so write_row() results are visible."""
+    streaming_flush()
     time.sleep(0.2)
 
 
@@ -74,7 +70,7 @@ class RichItem(Storable):
 @pytest.fixture(scope="module")
 def store_server():
     tmp_dir = tempfile.mkdtemp(prefix="test_bridge_")
-    srv = ObjectStoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
+    srv = StoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
     srv.start()
     yield srv
     srv.stop()
@@ -87,9 +83,7 @@ def conn_info(store_server):
 
 @pytest.fixture(scope="module")
 def _provision_users(store_server):
-    admin_conn = store_server.admin_conn()
-    provision_user(admin_conn, "bridge_user", "bridge_pw")
-    admin_conn.close()
+    store_server.provision_user("bridge_user", "bridge_pw")
 
 
 @pytest.fixture(scope="module")
@@ -109,27 +103,27 @@ def client(conn_info, _provision_users):
 class TestTypeMapping:
 
     def test_infer_schema_basic_types(self):
-        schema = infer_dh_schema(Widget)
+        schema = infer_schema(Widget)
         # Domain columns
-        assert schema["name"] == dht.string
-        assert schema["color"] == dht.string
-        assert schema["weight"] == dht.double
+        assert schema["name"] == str
+        assert schema["color"] == str
+        assert schema["weight"] == float
 
     def test_infer_schema_int_type(self):
-        schema = infer_dh_schema(Gadget)
-        assert schema["quantity"] == dht.int64
-        assert schema["price"] == dht.double
-        assert schema["label"] == dht.string
+        schema = infer_schema(Gadget)
+        assert schema["quantity"] == int
+        assert schema["price"] == float
+        assert schema["label"] == str
 
     def test_infer_schema_optional_decimal_datetime(self):
-        schema = infer_dh_schema(RichItem)
-        assert schema["amount"] == dht.double       # Decimal → double
-        assert schema["created"] == dht.Instant      # Optional[datetime] → Instant
-        assert schema["active"] == dht.bool_
-        assert schema["notes"] == dht.string          # Optional[str] → string
+        schema = infer_schema(RichItem)
+        assert schema["amount"] == float               # field is float, not Decimal
+        assert schema["created"] == datetime          # Optional[datetime] → datetime
+        assert schema["active"] == bool
+        assert schema["notes"] == str                  # Optional[str] → str
 
     def test_infer_schema_metadata_columns(self):
-        schema = infer_dh_schema(Widget)
+        schema = infer_schema(Widget)
         keys = list(schema.keys())
         # Metadata columns come first
         assert keys[0] == "EntityId"
@@ -224,7 +218,7 @@ class TestBridgeDH:
 
         # Verify row in DH table
         assert tbl.size == 1
-        df = dhpd.to_pandas(tbl)
+        df = tbl.snapshot()
         assert df["name"].iloc[0] == "gear"
         assert df["color"].iloc[0] == "blue"
         assert abs(df["weight"].iloc[0] - 1.2) < 0.001
@@ -298,7 +292,7 @@ class TestBridgeDH:
         _flush_dh()
 
         assert tbl.size == 1
-        df = dhpd.to_pandas(tbl)
+        df = tbl.snapshot()
         assert df["name"].iloc[0] == "valve"
 
         bridge.stop()
@@ -336,10 +330,9 @@ class TestBridgeDH:
         bridge.stop()
         client.close()
 
-    def test_custom_writer(self, conn_info, _provision_users):
-        # User provides their own DynamicTableWriter
-        custom_schema = infer_dh_schema(Widget)
-        custom_writer = DynamicTableWriter(custom_schema)
+    def test_custom_columns(self, conn_info, _provision_users):
+        # User provides their own column schema (Python types)
+        custom_schema = infer_schema(Widget)
 
         bridge = StoreBridge(
             host=conn_info["host"], port=conn_info["port"],
@@ -347,10 +340,8 @@ class TestBridgeDH:
             user="bridge_user", password="bridge_pw",
             subscriber_id=None,
         )
-        bridge.register(Widget, writer=custom_writer)
-
-        # The table should be the custom writer's table
-        assert bridge.table(Widget) is custom_writer.table
+        bridge.register(Widget, columns=custom_schema)
+        tbl = bridge.table(Widget)
 
         client = StoreClient(
             user="bridge_user", password="bridge_pw",
@@ -369,8 +360,8 @@ class TestBridgeDH:
         bridge._dispatch(event)
         _flush_dh()
 
-        assert custom_writer.table.size == 1
-        df = dhpd.to_pandas(custom_writer.table)
+        assert tbl.size == 1
+        df = tbl.snapshot()
         assert df["name"].iloc[0] == "nut"
 
         bridge.stop()
@@ -412,7 +403,7 @@ class TestFullRoundTrip:
         _flush_dh()
 
         assert tbl.size >= 1
-        df = dhpd.to_pandas(tbl)
+        df = tbl.snapshot()
         matched = df[df["name"] == "spring"]
         assert len(matched) == 1
         assert matched["color"].iloc[0] == "steel"
@@ -450,7 +441,7 @@ class TestFullRoundTrip:
         # Both versions should be in the raw table
         _flush_dh()
         assert tbl.size >= 2
-        df = dhpd.to_pandas(tbl)
+        df = tbl.snapshot()
         tablet_rows = df[df["label"] == "tablet"]
         assert len(tablet_rows) >= 2
         # Latest version should have updated price
@@ -489,8 +480,8 @@ class TestFullRoundTrip:
 
         # Widget table should have the widget, gadget table should have the gadget
         _flush_dh()
-        w_df = dhpd.to_pandas(widget_tbl)
-        g_df = dhpd.to_pandas(gadget_tbl)
+        w_df = widget_tbl.snapshot()
+        g_df = gadget_tbl.snapshot()
         assert any(w_df["name"] == "cam")
         assert any(g_df["label"] == "lens")
         # No cross-contamination
@@ -529,7 +520,7 @@ class TestFullRoundTrip:
 
         # Raw table has 2 rows, live table has 1 (latest)
         _flush_dh()
-        df_live = dhpd.to_pandas(live_tbl)
+        df_live = live_tbl.snapshot()
         shaft_live = df_live[df_live["name"] == "shaft"]
         assert len(shaft_live) == 1
         assert shaft_live["color"].iloc[0] == "chrome"
@@ -586,7 +577,7 @@ class TestFullRoundTrip:
 
         # tbl2 should have pin2 but NOT pin1 (checkpoint skipped it)
         _flush_dh()
-        df2 = dhpd.to_pandas(tbl2)
+        df2 = tbl2.snapshot()
         assert any(df2["name"] == "pin2")
         assert not any(df2["name"] == "pin1")
 

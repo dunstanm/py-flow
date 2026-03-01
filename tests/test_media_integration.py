@@ -1,7 +1,7 @@
 """
 Integration tests for the media package.
 
-Requires: embedded PG (via ObjectStoreServer) + MinIO (via lakehouse services).
+Requires: embedded PG (via StoreServer) + MinIO (via lakehouse services).
 Tests the full upload → extract → search → download → delete flow.
 """
 
@@ -15,16 +15,12 @@ import asyncio
 @pytest.fixture(scope="session")
 def pg_server():
     """Start an embedded PG server for the media tests."""
-    from store.server import ObjectStoreServer
-    from store.schema import provision_user
+    from store.server import StoreServer
 
     import tempfile
-    server = ObjectStoreServer(data_dir=tempfile.mkdtemp(prefix="test_media_store_"))
+    server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_media_store_"))
     server.start()
-
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "media_user", "media_pw")
-    admin_conn.close()
+    server.provision_user("media_user", "media_pw")
 
     yield server
     server.stop()

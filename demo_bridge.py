@@ -10,12 +10,9 @@ This script acts as "Process 4" — a user process that:
 4. Consumes live equity prices from the Market Data Server (port 8000)
 5. Uses live prices for Order/Trade generation + reactive Position graph
 
-Prerequisites:
-  1. Start Market Data Server:  python -m marketdata.server
-  2. Run this demo:             python3 demo_bridge.py
-  3. Open http://localhost:10000 in your browser
-
-Usage:  python3 demo_bridge.py
+Usage:
+  python3 demo_bridge.py
+  Open http://localhost:10000 in your browser
 """
 
 import os
@@ -40,8 +37,15 @@ streaming.start()
 streaming.register_alias("demo")
 print(f"  Streaming server started on {streaming.url}")
 
-# Now safe to import DH modules
-from deephaven.execution_context import get_exec_ctx
+print("  Starting market data server...")
+from marketdata.admin import MarketDataServer
+
+_md_server = MarketDataServer(port=8000)
+asyncio.run(_md_server.start())
+print(f"  Market data server started on port {_md_server.port}")
+
+# Now safe to import streaming modules
+from streaming import flush, agg, ticking, get_tables
 
 # ── 2. Start store server ───────────────────────────────────────────
 print("  Starting store server...")
@@ -92,21 +96,19 @@ trades_raw  = bridge.table(Trade)
 orders_live = orders_raw.last_by("EntityId")
 trades_live = trades_raw.last_by("EntityId")
 
-# Create derived DH tables (these tick automatically!)
-from deephaven import agg
+# Create derived tables (these tick automatically!)
 portfolio = trades_live.agg_by(
     [
-        agg.sum_(["TotalPnL=pnl", "TotalQty=quantity"]),
-        agg.count_("NumTrades"),
+        agg.sum(["TotalPnL=pnl", "TotalQty=quantity"]),
+        agg.count("NumTrades"),
     ]
 )
 
 # ── 5. In-memory @computed positions → DH direct push (NO persistence) ───
 print("  Wiring @computed positions → DH (in-memory, no store)...")
 from reactive.computed import computed, effect as reactive_effect
-from store.dh import dh_table, get_dh_tables
 
-@dh_table
+@ticking
 @dataclass
 class Position(Storable):
     __key__ = "symbol"
@@ -126,12 +128,12 @@ class Position(Storable):
     @reactive_effect("market_value")
     def on_market_value(self, value):
         """Push computed values directly to DH writer on recomputation."""
-        self.dh_write()
+        self.tick()
 
-risk_totals = Position._dh_live.agg_by(
+risk_totals = Position._ticking_live.agg_by(
     [
-        agg.sum_(["TotalMV=market_value", "TotalRisk=risk_score"]),
-        agg.count_("NumPositions"),
+        agg.sum(["TotalMV=market_value", "TotalRisk=risk_score"]),
+        agg.count("NumPositions"),
     ]
 )
 
@@ -147,8 +149,8 @@ def ensure_tracked(symbol, price, quantity):
         pos = tracked_positions[symbol]
         pos.batch_update(price=price, quantity=quantity)
 
-# Publish all tables to DH global scope (visible in web UI)
-pos_tables = get_dh_tables()
+# Publish all tables to DH query scope (visible in web UI)
+pos_tables = get_tables()
 for name, tbl in {
     "orders_raw": orders_raw,
     "orders_live": orders_live,
@@ -158,7 +160,7 @@ for name, tbl in {
     "risk_totals": risk_totals,
     **pos_tables,
 }.items():
-    globals()[name] = tbl
+    tbl.publish(name)
 
 print()
 print("=" * 64)
@@ -265,8 +267,8 @@ try:
 
         print(f"  [{tick}] {side} {qty} {sym} @ ${price:.2f}  (pnl: ${pnl:+.2f})  [graph: mv={qty*price:.0f}]")
 
-        # Flush DH update graph so tables tick
-        get_exec_ctx().update_graph.j_update_graph.requestRefresh()
+        # Flush update graph so tables tick
+        flush()
 
         time.sleep(2)
 
@@ -274,5 +276,6 @@ except KeyboardInterrupt:
     print("\n  Shutting down...")
     bridge.stop()
     db.close()
+    asyncio.run(_md_server.stop())
     store.stop()
     print("  Done!")

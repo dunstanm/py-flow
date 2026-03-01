@@ -16,8 +16,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from store.server import ObjectStoreServer
-from store.schema import provision_user
+from store.server import StoreServer
 from store.base import Storable
 from store.connection import connect, register_alias, get_connection, _set_active
 from store.client import VersionConflict
@@ -49,7 +48,7 @@ Item._state_machine = ItemLifecycle
 def server():
     """Start an embedded PostgreSQL server for testing."""
     tmp_dir = tempfile.mkdtemp(prefix="test_conn_")
-    srv = ObjectStoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
+    srv = StoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
     srv.start()
     yield srv
     srv.stop()
@@ -62,10 +61,8 @@ def conn_info(server):
 
 @pytest.fixture(scope="module")
 def _provision_users(server):
-    admin_conn = server.admin_conn()
-    provision_user(admin_conn, "alice", "alice_pw")
-    provision_user(admin_conn, "bob", "bob_pw")
-    admin_conn.close()
+    server.provision_user("alice", "alice_pw")
+    server.provision_user("bob", "bob_pw")
 
 
 @pytest.fixture()

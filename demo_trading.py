@@ -48,63 +48,54 @@ def publish_tables(md_ws_url: str = "ws://localhost:8000/md/subscribe"):
     """
     global _feed_thread, _feed_stop
 
-    # ── DH imports (available only after JVM is running) ──────────────────
-    from deephaven import DynamicTableWriter, agg
-    import deephaven.dtypes as dht
+    # ── Streaming imports (available only after JVM is running) ─────────
+    from streaming import TickingTable, agg
 
-    # ── Price writer + raw table ──────────────────────────────────────────
-    price_writer = DynamicTableWriter({
-        "Symbol":    dht.string,
-        "Price":     dht.double,
-        "Bid":       dht.double,
-        "Ask":       dht.double,
-        "Volume":    dht.int64,
-        "Change":    dht.double,
-        "ChangePct": dht.double,
+    # ── Price writer ──────────────────────────────────────────────────────
+    prices = TickingTable({
+        "Symbol":    str,
+        "Price":     float,
+        "Bid":       float,
+        "Ask":       float,
+        "Volume":    int,
+        "Change":    float,
+        "ChangePct": float,
     })
-    prices_raw = price_writer.table
 
-    # ── Risk writer + raw table ───────────────────────────────────────────
-    risk_writer = DynamicTableWriter({
-        "Symbol":         dht.string,
-        "Price":          dht.double,
-        "Position":       dht.int64,
-        "MarketValue":    dht.double,
-        "UnrealizedPnL":  dht.double,
-        "Delta":          dht.double,
-        "Gamma":          dht.double,
-        "Theta":          dht.double,
-        "Vega":           dht.double,
+    # ── Risk writer ───────────────────────────────────────────────────────
+    risk = TickingTable({
+        "Symbol":         str,
+        "Price":          float,
+        "Position":       int,
+        "MarketValue":    float,
+        "UnrealizedPnL":  float,
+        "Delta":          float,
+        "Gamma":          float,
+        "Theta":          float,
+        "Vega":           float,
     })
-    risk_raw = risk_writer.table
 
-    # ── Derived tables ────────────────────────────────────────────────────
-    prices_live = prices_raw.last_by("Symbol")
-    risk_live = risk_raw.last_by("Symbol")
+    # ── Derived tables (auto-locked) ──────────────────────────────────────
+    prices_live = prices.last_by("Symbol")
+    risk_live = risk.last_by("Symbol")
 
     portfolio_summary = risk_live.agg_by([
-        agg.sum_(["TotalMV=MarketValue", "TotalPnL=UnrealizedPnL", "TotalDelta=Delta"]),
-        agg.avg_(["AvgGamma=Gamma", "AvgTheta=Theta", "AvgVega=Vega"]),
-        agg.count_("NumPositions"),
+        agg.sum(["TotalMV=MarketValue", "TotalPnL=UnrealizedPnL", "TotalDelta=Delta"]),
+        agg.avg(["AvgGamma=Gamma", "AvgTheta=Theta", "AvgVega=Vega"]),
+        agg.count("NumPositions"),
     ])
 
     top_movers = prices_live.sort_descending("ChangePct")
     volume_leaders = prices_live.sort_descending("Volume")
 
-    # ── Publish to DH global scope (visible to all clients) ──────────────
-    from deephaven import execution_context
-    import jpy
-
-    _globals = jpy.get_type("io.deephaven.engine.util.ScriptSession").DATA_VARIABLE_NAME
-    ctx = execution_context.get_exec_ctx()
-    query_scope = ctx.j_exec_ctx.getQueryScope()
-    for name, table in [
-        ("prices_raw", prices_raw), ("prices_live", prices_live),
-        ("risk_raw", risk_raw), ("risk_live", risk_live),
-        ("portfolio_summary", portfolio_summary),
-        ("top_movers", top_movers), ("volume_leaders", volume_leaders),
-    ]:
-        query_scope.putParam(name, table)
+    # ── Publish to DH query scope (visible to all clients) ────────────────
+    prices.publish("prices_raw")
+    prices_live.publish("prices_live")
+    risk.publish("risk_raw")
+    risk_live.publish("risk_live")
+    portfolio_summary.publish("portfolio_summary")
+    top_movers.publish("top_movers")
+    volume_leaders.publish("volume_leaders")
 
     # ── WS consumer: feed ticks from MarketDataServer → writers ──────────
     import random
@@ -114,7 +105,7 @@ def publish_tables(md_ws_url: str = "ws://localhost:8000/md/subscribe"):
 
     def _on_tick(tick: dict):
         sym = tick["symbol"]
-        price_writer.write_row(
+        prices.write_row(
             sym, tick["price"], tick["bid"], tick["ask"],
             tick["volume"], tick["change"], tick["change_pct"],
         )
@@ -122,7 +113,7 @@ def publish_tables(md_ws_url: str = "ws://localhost:8000/md/subscribe"):
         if sym not in _positions:
             _positions[sym] = random.randint(100, 1000)
         pos = _positions[sym]
-        risk_writer.write_row(
+        risk.write_row(
             sym, tick["price"], pos,
             tick["price"] * pos,              # MarketValue
             tick["change"] * pos,             # UnrealizedPnL
@@ -163,8 +154,8 @@ def publish_tables(md_ws_url: str = "ws://localhost:8000/md/subscribe"):
     _log.info("Trading tables published — 7 tables available to all clients")
 
     return {
-        "prices_raw": prices_raw, "prices_live": prices_live,
-        "risk_raw": risk_raw, "risk_live": risk_live,
+        "prices_raw": prices, "prices_live": prices_live,
+        "risk_raw": risk, "risk_live": risk_live,
         "portfolio_summary": portfolio_summary,
         "top_movers": top_movers, "volume_leaders": volume_leaders,
     }

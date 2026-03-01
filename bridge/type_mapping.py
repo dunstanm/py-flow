@@ -1,8 +1,8 @@
 """
-Type mapping between Python @dataclass fields and Deephaven column types.
+Type mapping between Python @dataclass fields and streaming column types.
 
 Provides:
-- infer_dh_schema(storable_cls) → OrderedDict of {column_name: dh_type}
+- infer_schema(storable_cls) → OrderedDict of {column_name: python_type}
 - extract_row(obj, column_names) → tuple of values in column order
 """
 
@@ -13,16 +13,12 @@ from decimal import Decimal
 from typing import Optional, get_type_hints, get_origin, get_args
 
 
-def _get_dh_type(python_type):
-    """Map a Python type annotation to a Deephaven dtype.
+# Supported Python types for columns
+_SUPPORTED_TYPES = {str, int, float, bool, Decimal, datetime}
 
-    Must be called after deephaven_server.Server.start().
-    """
-    import deephaven.dtypes as dht
 
-    # Unwrap Optional[X] → X
-    if get_origin(python_type) is type(None):
-        pass
+def _unwrap_type(python_type):
+    """Unwrap Optional[X] → X, and normalise to a supported Python type."""
     origin = get_origin(python_type)
     if origin is not None:
         args = get_args(python_type)
@@ -31,15 +27,7 @@ def _get_dh_type(python_type):
         if non_none:
             python_type = non_none[0]
 
-    mapping = {
-        str: dht.string,
-        int: dht.int64,
-        float: dht.double,
-        bool: dht.bool_,
-        Decimal: dht.double,
-        datetime: dht.Instant,
-    }
-    return mapping.get(python_type, dht.string)
+    return python_type if python_type in _SUPPORTED_TYPES else str
 
 
 # Standard metadata columns prepended to every schema
@@ -53,11 +41,10 @@ _METADATA_COLUMNS = [
 ]
 
 
-def infer_dh_schema(storable_cls):
-    """Auto-generate a Deephaven column schema from a @dataclass Storable.
+def infer_schema(storable_cls):
+    """Auto-generate a column schema from a @dataclass Storable.
 
-    Returns an OrderedDict of {column_name: dh_type}.
-    Must be called after deephaven_server.Server.start().
+    Returns an OrderedDict of {column_name: python_type}.
 
     Metadata columns (EntityId, Version, EventType, State, UpdatedBy, TxTime)
     are always prepended. Domain columns follow from the dataclass fields.
@@ -69,7 +56,7 @@ def infer_dh_schema(storable_cls):
 
     # Metadata columns
     for col_name, py_type in _METADATA_COLUMNS:
-        schema[col_name] = _get_dh_type(py_type)
+        schema[col_name] = py_type
 
     # Domain columns from dataclass fields
     if dataclasses.is_dataclass(storable_cls):
@@ -85,9 +72,13 @@ def infer_dh_schema(storable_cls):
                     py_type = hints.get(field.name, str)
             else:
                 py_type = hints.get(field.name, str)
-            schema[field.name] = _get_dh_type(py_type)
+            schema[field.name] = _unwrap_type(py_type)
 
     return schema
+
+
+# Backward compat alias
+infer_dh_schema = infer_schema
 
 
 def _to_dh_value(value):

@@ -28,31 +28,29 @@ server = Server(
 )
 server.start()
 
-# ── 2. Deephaven imports (available only after server.start()) ───────────────
-from deephaven import DynamicTableWriter, agg
-import deephaven.dtypes as dht
+# ── 2. Streaming imports (available only after server.start()) ───────────────
+from streaming import TickingTable
 
-# ── 3. Create DynamicTableWriters — the raw ticking data sources ─────────────
-price_writer = DynamicTableWriter({
-    "Symbol":    dht.string,
-    "Price":     dht.double,
-    "Bid":       dht.double,
-    "Ask":       dht.double,
-    "Volume":    dht.int64,
-    "Change":    dht.double,
-    "ChangePct": dht.double,
+# ── 3. Create TickingTable — the raw ticking data source ─────────────────────
+prices = TickingTable({
+    "Symbol":    str,
+    "Price":     float,
+    "Bid":       float,
+    "Ask":       float,
+    "Volume":    int,
+    "Change":    float,
+    "ChangePct": float,
 })
 
-# Raw append-only table
-prices_raw = price_writer.table
-
-# ── 4. Derived tables (published to global scope for clients) ────────────────
-# Latest snapshot per symbol — ticks on every update
-prices_live = prices_raw.last_by("Symbol")
-
-# Top movers and volume leaders (always available)
+# ── 4. Derived tables (auto-locked, published to query scope) ────────────────
+prices_live = prices.last_by("Symbol")
 top_movers = prices_live.sort_descending("ChangePct")
 volume_leaders = prices_live.sort_descending("Volume")
+
+prices.publish("prices_raw")
+prices_live.publish("prices_live")
+top_movers.publish("top_movers")
+volume_leaders.publish("volume_leaders")
 
 # ── 5. Connect to Market Data Server via WebSocket ───────────────────────────
 
@@ -78,7 +76,7 @@ async def _consume_market_data():
                     tick = json.loads(msg)
                     if tick.get("type") != "equity":
                         continue
-                    price_writer.write_row(
+                    prices.write_row(
                         tick["symbol"],
                         tick["price"],
                         tick["bid"],

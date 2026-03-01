@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 
 from marketdata.models import Tick, FXTick, CurveTick
-from timeseries import create_backend
+from timeseries.factory import create_backend
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
