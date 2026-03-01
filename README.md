@@ -699,15 +699,15 @@ flush()
 ### Connect from client code
 
 ```python
-from base_client import DeephavenClient
+from streaming import StreamingClient
 
-with DeephavenClient() as client:
+with StreamingClient() as client:
     tables = client.list_tables()
     df = client.open_table("prices_live").to_arrow().to_pandas()
     client.run_script('filtered = prices_live.where(["Symbol = `AAPL`"])')
 ```
 
-Clients connect via `pydeephaven` (lightweight — **no Java needed** on client machines).
+Clients connect via `pydeephaven` internally (lightweight — **no Java needed** on client machines).
 
 ---
 
@@ -867,6 +867,7 @@ py-flow/
 ├── streaming/
 │   ├── admin.py            # StreamingServer (Deephaven JVM)
 │   ├── table.py            # TickingTable + LiveTable (auto-locked)
+│   ├── client.py           # StreamingClient (remote queries)
 │   ├── agg.py              # Aggregation helpers (lazy-imported)
 │   ├── decorator.py        # @ticking decorator
 │   └── _registry.py        # Alias registry
@@ -904,13 +905,10 @@ py-flow/
 │   ├── __init__.py         # 7 public symbols: AI, Message, LLMResponse, ...
 │   ├── client.py           # AI class — single entry point
 │   └── _*.py               # Private: embeddings, LLM, RAG, tools, extraction
-├── client/
-│   ├── base_client.py      # DeephavenClient wrapper (pydeephaven)
+├── examples/
 │   ├── quant_client.py     # Watchlists, top movers, volume leaders
 │   ├── risk_client.py      # Exposure monitoring, risk scoring
 │   └── pm_client.py        # Portfolio summary, P&L snapshots
-├── server/
-│   └── app.py              # Legacy standalone DH server (demo)
 ├── tests/
 │   ├── conftest.py         # Session fixtures: StreamingServer + MarketDataServer
 │   ├── test_store.py       # Bi-temporal + state machine + RLS (134)

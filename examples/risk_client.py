@@ -9,15 +9,17 @@ Usage:  python3 risk_client.py [--host localhost] [--port 10000]
 """
 
 import argparse
-import time
 import sys
-sys.path.insert(0, ".")
+import time
+from pathlib import Path
 
-from base_client import DeephavenClient
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from streaming import StreamingClient
 
 
 def main(host="localhost", port=10000):
-    with DeephavenClient(host=host, port=port) as client:
+    with StreamingClient(host=host, port=port) as client:
         # ── 1. List available tables ─────────────────────────────────
         print("\nAvailable server tables:")
         for name in client.list_tables():

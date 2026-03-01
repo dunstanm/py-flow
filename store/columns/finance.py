@@ -427,6 +427,37 @@ REGISTRY.define("pnl_status", str,
     category="risk",
 )
 
+REGISTRY.define("base_rate", float,
+    description="Base reference rate before adjustments",
+    role="measure", unit="ratio",
+    format=".4%",
+    category="fixed_income",
+)
+
+REGISTRY.define("sensitivity", float,
+    description="Rate sensitivity to underlying factor moves",
+    role="measure", unit="ratio",
+    category="risk",
+)
+
+REGISTRY.define("fx_base_mid", float,
+    description="Base FX mid price used for rate derivation",
+    role="measure", unit="price",
+    category="fx",
+)
+
+REGISTRY.define("fx_ref", object,
+    description="Cross-entity reference to an FXSpot instance",
+    role="attribute",
+    category="fx",
+)
+
+REGISTRY.define("curve_ref", object,
+    description="Cross-entity reference to a YieldCurvePoint instance",
+    role="attribute",
+    category="fixed_income",
+)
+
 REGISTRY.define("avg_rate", float,
     description="Average rate across yield curve points",
     role="measure", unit="ratio",

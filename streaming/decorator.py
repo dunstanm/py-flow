@@ -130,14 +130,6 @@ def _apply_ticking(cls, exclude=None):
     cls._ticking_name = table_name
     cls.tick = _tick
 
-    # Backward compat aliases (will be removed after full migration)
-    cls._dh_writer = tt._writer
-    cls._dh_raw = tt._table
-    cls._dh_live = live._table
-    cls._dh_columns = col_specs
-    cls._dh_table_name = table_name
-    cls.dh_write = _tick
-
     # Register
     _registry[table_name] = (tt, live)
 

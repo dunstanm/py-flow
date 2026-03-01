@@ -5,14 +5,10 @@ Auto-starts StreamingServer via conftest, publishes tables via public client API
 Run with: pytest tests/test_multi_client.py -v
 """
 
-import sys
-import os
 import time
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "client"))
-
-from base_client import DeephavenClient
+from streaming import StreamingClient
 
 def _publish_tables():
     """Publish prices_live + portfolio_summary to DH query scope."""
@@ -51,7 +47,7 @@ def _setup_tables(streaming_server):
 
 def _connect():
     """Helper to create a client."""
-    return DeephavenClient()
+    return StreamingClient()
 
 
 # ── Cross-session table visibility ───────────────────────────────────────────

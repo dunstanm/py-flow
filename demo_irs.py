@@ -428,7 +428,9 @@ async def _consume_and_publish():
 
 def _start_md_consumer():
     """Run the market data consumer in a background thread with its own loop."""
-    asyncio.run(_consume_and_publish())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(_consume_and_publish())
 
 
 print()

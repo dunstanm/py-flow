@@ -1164,3 +1164,45 @@ class TestComputedPropertyDescriptor:
         # Direct descriptor call (bypasses __getattribute__)
         val = desc.__get__(pos, type(pos))
         assert val == 22800.0
+
+
+# ---------------------------------------------------------------------------
+# Async compatibility
+# ---------------------------------------------------------------------------
+
+class TestAsyncCompatibility:
+    def test_batch_update_inside_running_event_loop(self):
+        """batch_update() must not crash when called from inside an async context.
+
+        Regression test: Storable._tick() used to call
+        loop.run_until_complete(asyncio.sleep(0)) unconditionally, which raises
+        RuntimeError('This event loop is already running') when called from
+        within an async for / await context (e.g. a WebSocket consumer).
+        """
+        import asyncio
+
+        effect_values = []
+
+        @dataclass
+        class AsyncSensor(Storable):
+            name: str = ""
+            value: float = 0.0
+
+            @computed
+            def doubled(self):
+                return self.value * 2
+
+            @effect("doubled")
+            def on_doubled(self, v):
+                effect_values.append(v)
+
+        async def run():
+            sensor = AsyncSensor(name="test", value=1.0)
+            sensor.batch_update(value=5.0)
+            assert sensor.doubled == 10.0
+            sensor.batch_update(value=7.5)
+            assert sensor.doubled == 15.0
+
+        asyncio.run(run())
+        assert 10.0 in effect_values
+        assert 15.0 in effect_values

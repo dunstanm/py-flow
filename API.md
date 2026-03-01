@@ -327,7 +327,7 @@ Backend is swappable — implement `WorkflowEngine` for Temporal, AWS Step Funct
 **Real-time ticking tables with auto-locked derivations.** See [STREAMING.md](STREAMING.md) for full docs.
 
 ```python
-from streaming import TickingTable, LiveTable, flush, agg, ticking, get_tables
+from streaming import TickingTable, LiveTable, StreamingClient, flush, agg, ticking, get_tables
 ```
 
 | Symbol | Kind | Description |
@@ -338,6 +338,7 @@ from streaming import TickingTable, LiveTable, flush, agg, ticking, get_tables
 | `agg` | module | Aggregation helpers: `sum`, `avg`, `count`, `min`, `max`, `first`, `last`, `std`, `var`, `median`, `pct`, `weighted_avg`. |
 | `ticking` | decorator | Auto-creates TickingTable + LiveTable from a Storable dataclass. |
 | `get_tables` | function | Returns dict of all `@ticking`-decorated tables. |
+| `StreamingClient` | class | Lightweight remote client for querying a streaming server. Wraps pydeephaven. |
 
 ### TickingTable
 
@@ -662,11 +663,10 @@ See [TIMESERIES.md](TIMESERIES.md) for full details.
 | **store** | `Storable`, `connect`, `StateMachine`, `Transition`, `EventListener`, `ChangeEvent`, `VersionConflict`, `InvalidTransition`, `GuardFailure`, `TransitionNotPermitted` | 10 |
 | **reactive** | `computed`, `effect` | 2 |
 | **workflow** | `WorkflowEngine`, `WorkflowStatus`, `create_engine` | 3 |
-| **streaming** | `TickingTable`, `LiveTable`, `flush`, `agg`, `ticking`, `get_tables` | 6 |
+| **streaming** | `TickingTable`, `LiveTable`, `StreamingClient`, `flush`, `agg`, `ticking`, `get_tables` | 7 |
 | **bridge** | `StoreBridge` | 1 |
 | **lakehouse** | `Lakehouse` | 1 |
 | **media** | `MediaStore`, `Document` | 2 |
 | **ai** | `AI`, `Message`, `LLMResponse`, `ToolCall`, `RAGResult`, `ExtractionResult`, `Tool` | 7 |
 | **timeseries** | `TSDBBackend`, `TSDBConsumer`, `Timeseries`, `create_backend`, `Bar`, `HistoryQuery`, `BarQuery` | 7 |
-| **client** | `DeephavenClient` | 1 |
 | **Total** | | **47** |

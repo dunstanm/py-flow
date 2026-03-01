@@ -214,12 +214,12 @@ prices.publish("prices_raw")
 prices_live.publish("prices_live")
 ```
 
-Clients see these via `DeephavenClient`:
+Clients see these via `StreamingClient`:
 
 ```python
-from base_client import DeephavenClient
+from streaming import StreamingClient
 
-with DeephavenClient() as c:
+with StreamingClient() as c:
     tables = c.list_tables()        # includes "prices_raw", "prices_live"
     df = c.open_table("prices_live").to_arrow().to_pandas()
 ```

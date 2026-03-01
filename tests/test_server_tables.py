@@ -6,16 +6,12 @@ using the DH Python API directly (same process as JVM).
 Run with: pytest tests/test_server_tables.py -v
 """
 
-import sys
-import os
 import time
 import random
 import threading
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "client"))
-
-from base_client import DeephavenClient
+from streaming import StreamingClient
 
 # Constants
 _SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX"]
@@ -107,7 +103,7 @@ def client(streaming_server):
     """Publish all 7 trading tables, then connect a pydeephaven client."""
     _publish_tables()
     time.sleep(0.5)  # let a few ticks accumulate
-    c = DeephavenClient()
+    c = StreamingClient()
     yield c
     _ticker_stop.set()
     c.close()

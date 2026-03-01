@@ -1,14 +1,14 @@
 """
-Tests for store.dh — @dh_table decorator (pure-Python parts).
+Tests for streaming.decorator — @ticking decorator (pure-Python parts).
 
 Tests _to_snake_case and _resolve_column_specs which don't need Deephaven.
-The full @dh_table decorator and dh_write() are integration-tested via the demos.
+The full @ticking decorator and tick() are integration-tested via the demos.
 """
 
 import pytest
 from dataclasses import dataclass, field
 
-from store.dh import _to_snake_case, _resolve_column_specs
+from streaming.decorator import _to_snake_case, _resolve_column_specs
 from store.base import Storable
 from reactive.computed import computed
 

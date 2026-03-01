@@ -5,13 +5,9 @@ Auto-starts StreamingServer and publishes demo tables.
 Run with: pytest tests/test_client_ops.py -v
 """
 
-import sys
-import os
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "client"))
-
-from base_client import DeephavenClient
+from streaming import StreamingClient
 
 # Script to publish minimal demo tables for testing
 _SETUP_SCRIPT = """
@@ -47,7 +43,7 @@ portfolio_summary = risk_live.agg_by([
 @pytest.fixture(scope="module")
 def client(streaming_server):
     """Connect to the session-scoped StreamingServer and publish demo tables."""
-    c = DeephavenClient()
+    c = StreamingClient()
     c.run_script(_SETUP_SCRIPT)
     yield c
     c.close()
@@ -65,14 +61,14 @@ class TestConnection:
         assert client.port == 10000
 
     def test_context_manager_connect_and_close(self, streaming_server):
-        with DeephavenClient() as c:
+        with StreamingClient() as c:
             assert c.session.is_alive
             tables = c.list_tables()
             assert len(tables) > 0
 
     def test_close_is_idempotent(self, streaming_server):
         """Closing twice should not raise."""
-        c = DeephavenClient()
+        c = StreamingClient()
         c.close()
         c.close()
 

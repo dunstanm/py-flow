@@ -253,7 +253,8 @@ class Storable:
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        loop.run_until_complete(asyncio.sleep(0))
+        if not loop.is_running():
+            loop.run_until_complete(asyncio.sleep(0))
 
     def to_json(self) -> str:
         """Serialize this object to a JSON string for JSONB storage."""
