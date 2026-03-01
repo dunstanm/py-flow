@@ -51,6 +51,10 @@ class MediaServer:
         await self._store.ensure_bucket(self._bucket)
         return self
 
+    async def stop(self) -> None:
+        """Stop the media server. Object store cleanup is handled by atexit."""
+        self._store = None
+
     async def health(self) -> bool:
         """Check if the media storage backend is healthy."""
         if self._store is None:

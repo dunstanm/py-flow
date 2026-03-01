@@ -40,7 +40,7 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 │  Lakehouse("demo")       ─── Iceberg SQL via DuckDB              │
 │  Timeseries("demo")      ─── Historical tick read/write          │
 │  StoreBridge("demo")     ─── PG events → DH ticking tables      │
-│  DeephavenClient()       ─── Ticking table queries               │
+│  StreamingClient()       ─── Ticking table queries               │
 └────────────────────────────┬─────────────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────────────┐
@@ -51,7 +51,7 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**942 tests**, zero skips, zero failures. All services auto-start in the test harness.
+**943 tests**, zero skips, zero failures. All services auto-start in the test harness.
 
 ---
 
@@ -159,7 +159,7 @@ db = connect("demo", user="alice", password="pw")
 |--------|---------|--------|----------|
 | `StoreServer` | `store.admin` | Embedded PG + RLS + pgvector | `connect("alias")` |
 | `WorkflowServer` | `workflow.admin` | Embedded PG + DBOS | `create_engine("alias")` |
-| `StreamingServer` | `streaming.admin` | Deephaven JVM | `DeephavenClient()` |
+| `StreamingServer` | `streaming.admin` | Deephaven JVM | `StreamingClient()` |
 | `MarketDataServer` | `marketdata.admin` | FastAPI + simulator + QuestDB | REST / WebSocket |
 | `TsdbServer` | `timeseries.admin` | QuestDB binary | `Timeseries("alias")` |
 | `MediaServer` | `media.admin` | S3 object store | `MediaStore("alias", ai=)` |
@@ -892,7 +892,7 @@ py-flow/
 │   ├── catalog.py          # PyIceberg REST catalog
 │   ├── query.py            # Lakehouse class: query, ingest, transform
 │   ├── sync.py             # Incremental ETL: PG + QuestDB → Iceberg
-│   ├── services.py         # Binary lifecycle managers
+│   ├── services.py         # EmbeddedPG + Lakekeeper lifecycle
 │   └── models.py           # SyncState, TableInfo
 ├── media/
 │   ├── admin.py            # MediaServer (object store lifecycle)
@@ -930,7 +930,7 @@ py-flow/
 │   ├── test_vector_search.py         # pgvector cosine search (12)
 │   ├── test_embed_upload.py          # Embed + upload + semantic search (12)
 │   ├── test_ai_client.py             # AI generation, RAG, tools (11)
-│   └── ...                           # 942 tests total, 0 skips
+│   └── ...                           # 943 tests total, 0 skips
 ├── demo_ir_swap.py         # IRS reactive grid → DH ticking tables
 ├── demo_bridge.py          # Store + @computed → DH ticking tables
 ├── demo_trading.py         # Trading server: prices + risk → DH tables
@@ -947,6 +947,8 @@ py-flow/
 ├── TIMESERIES.md           # Time-series architecture
 ├── LAKEHOUSE.md            # Lakehouse architecture
 ├── MEDIA.md                # Media store architecture
+├── IRS_DEMO.md             # IRS reactive demo design
+├── MARKETDATA.md           # Market data server docs
 └── README.md
 ```
 
