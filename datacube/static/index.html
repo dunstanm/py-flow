@@ -324,6 +324,16 @@
             <div class="avail-dims" id="pivot-by-avail"></div>
         </div>
 
+        <!-- Columns (show/hide + reorder) -->
+        <div class="section">
+            <div class="section-header">
+                Columns
+                <span class="badge" id="col-count">0</span>
+            </div>
+            <div class="pill-list" id="col-visible-pills"></div>
+            <div class="avail-dims" id="col-hidden-list"></div>
+        </div>
+
         <!-- Aggregation -->
         <div class="section">
             <div class="section-header">Aggregation</div>
@@ -452,6 +462,7 @@
         function renderSidebar() {
             renderGroupBy();
             renderPivotBy();
+            renderColumns();
             renderAgg();
             renderFilters();
             renderSort();
@@ -529,6 +540,159 @@
                     const newFields = [...currentFields];
                     [newFields[idx], newFields[idx + 1]] = [newFields[idx + 1], newFields[idx]];
                     send({ cmd, fields: newFields });
+                });
+            });
+        }
+
+        // Column chooser (show/hide + reorder via Perspective viewer API)
+        async function renderColumns() {
+            const config = await viewer.save();
+            const visible = config.columns || [];
+            const visibleSet = new Set(visible);
+
+            // All possible columns from the table schema
+            const allNames = allColumns.map(c => c.name);
+            const hidden = allNames.filter(c => !visibleSet.has(c));
+
+            document.getElementById("col-count").textContent = visible.length;
+
+            // All columns as a unified draggable list — visible first, then hidden
+            const pillsEl = document.getElementById("col-visible-pills");
+            const hiddenEl = document.getElementById("col-hidden-list");
+
+            // Visible: draggable pills with hide button
+            pillsEl.innerHTML = visible.map((name, idx) => `
+                <div class="pill-item" data-name="${name}" data-idx="${idx}" data-visible="1" draggable="true" style="cursor:grab">
+                    <span class="pill-name">${name}</span>
+                    <button class="pill-btn pill-remove" data-idx="${idx}" title="Hide">&#10005;</button>
+                </div>
+            `).join("");
+
+            // Hidden: draggable pills (dimmed) — full rows, not tags
+            hiddenEl.innerHTML = hidden.map(name => `
+                <div class="pill-item" data-name="${name}" data-visible="0" draggable="true"
+                     style="cursor:grab; opacity:0.45; border-color:#333">
+                    <span class="pill-name">${name}</span>
+                    <button class="pill-btn pill-add" data-name="${name}" title="Show">+</button>
+                </div>
+            `).join("");
+
+            // Unified drag state
+            let dragName = null;
+            let dragWasVisible = false;
+
+            // Attach drag handlers to ALL pills (visible + hidden)
+            const allPills = [...pillsEl.querySelectorAll(".pill-item"), ...hiddenEl.querySelectorAll(".pill-item")];
+            allPills.forEach(pill => {
+                pill.addEventListener("dragstart", (e) => {
+                    dragName = pill.dataset.name;
+                    dragWasVisible = pill.dataset.visible === "1";
+                    pill.style.opacity = "0.3";
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", dragName);
+                });
+                pill.addEventListener("dragend", () => {
+                    pill.style.opacity = pill.dataset.visible === "1" ? "1" : "0.45";
+                    // Clear all drop indicators
+                    allPills.forEach(p => p.style.borderTop = "");
+                    pillsEl.style.borderBottom = "";
+                });
+            });
+
+            // Visible pills accept drops (reorder or insert from hidden)
+            pillsEl.querySelectorAll(".pill-item").forEach(pill => {
+                pill.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    pill.style.borderTop = "2px solid #e94560";
+                });
+                pill.addEventListener("dragleave", () => {
+                    pill.style.borderTop = "";
+                });
+                pill.addEventListener("drop", async (e) => {
+                    e.preventDefault();
+                    pill.style.borderTop = "";
+                    const dropIdx = parseInt(pill.dataset.idx);
+                    if (!dragName || dragName === pill.dataset.name) return;
+
+                    const newCols = [...visible];
+                    if (dragWasVisible) {
+                        // Reorder within visible
+                        const srcIdx = newCols.indexOf(dragName);
+                        if (srcIdx < 0) return;
+                        newCols.splice(srcIdx, 1);
+                        newCols.splice(dropIdx, 0, dragName);
+                    } else {
+                        // Insert from hidden at this position
+                        newCols.splice(dropIdx, 0, dragName);
+                    }
+                    savedColumnOrder = newCols;
+                    await viewer.restore({ columns: newCols });
+                    renderColumns();
+                });
+            });
+
+            // Also accept drop at the END of the visible list
+            pillsEl.addEventListener("dragover", (e) => {
+                if (e.target === pillsEl) {
+                    e.preventDefault();
+                    pillsEl.style.borderBottom = "2px solid #e94560";
+                }
+            });
+            pillsEl.addEventListener("dragleave", (e) => {
+                if (e.target === pillsEl) pillsEl.style.borderBottom = "";
+            });
+            pillsEl.addEventListener("drop", async (e) => {
+                if (e.target !== pillsEl) return;
+                e.preventDefault();
+                pillsEl.style.borderBottom = "";
+                if (!dragName) return;
+                const newCols = [...visible];
+                if (dragWasVisible) {
+                    const srcIdx = newCols.indexOf(dragName);
+                    if (srcIdx >= 0) newCols.splice(srcIdx, 1);
+                }
+                newCols.push(dragName);
+                savedColumnOrder = newCols;
+                await viewer.restore({ columns: newCols });
+                renderColumns();
+            });
+
+            // Hidden list accepts drops (to hide a visible column)
+            hiddenEl.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                hiddenEl.style.borderTop = "2px solid #e94560";
+            });
+            hiddenEl.addEventListener("dragleave", () => {
+                hiddenEl.style.borderTop = "";
+            });
+            hiddenEl.addEventListener("drop", async (e) => {
+                e.preventDefault();
+                hiddenEl.style.borderTop = "";
+                if (!dragName || !dragWasVisible) return;
+                const newCols = visible.filter(c => c !== dragName);
+                savedColumnOrder = newCols;
+                await viewer.restore({ columns: newCols });
+                renderColumns();
+            });
+
+            // Click handlers: hide (✕) and show (+)
+            pillsEl.querySelectorAll(".pill-remove").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const idx = parseInt(btn.dataset.idx);
+                    const newCols = [...visible];
+                    newCols.splice(idx, 1);
+                    savedColumnOrder = newCols;
+                    await viewer.restore({ columns: newCols });
+                    renderColumns();
+                });
+            });
+            hiddenEl.querySelectorAll(".pill-add").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const newCols = [...visible, btn.dataset.name];
+                    savedColumnOrder = newCols;
+                    await viewer.restore({ columns: newCols });
+                    renderColumns();
                 });
             });
         }
