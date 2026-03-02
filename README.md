@@ -78,9 +78,10 @@ Every service follows the same pattern: **`XxxServer`** (platform/admin) → **`
 15. [Datacube](#datacube) — Legend-inspired pivot engine + Perspective UI
 16. [Media Store](#media-store) — unstructured data storage & search
 17. [AI](#ai) — embeddings, LLM, RAG, extraction, tool calling
-18. [Scheduler](#scheduler) — cron-based task execution + pipelines
-19. [Project Structure](#project-structure)
-20. [Demos](#demos)
+18. [Agents](#agents) — tool-calling agents, multi-agent teams, eval, memory
+19. [Scheduler](#scheduler) — cron-based task execution + pipelines
+20. [Project Structure](#project-structure)
+21. [Demos](#demos)
 
 ---
 
@@ -935,6 +936,86 @@ response = ai.run_tool_loop("Find Basel III docs", tools=ai.search_tools(ms))
 
 ---
 
+## Agents
+
+Tool-calling agents with conversation memory, multi-agent teams, and an eval framework — all built on the `AI` class. See [AGENT_DEMO.md](AGENT_DEMO.md) for the full platform demo architecture.
+
+```bash
+export GEMINI_API_KEY="your-key"
+python3 demo_agent_platform.py
+```
+
+### Single Agent
+
+```python
+from ai import Agent, tool
+
+@tool
+def get_price(symbol: str) -> str:
+    """Get the current price of a stock."""
+    return '{"price": 150.25}'
+
+agent = Agent(tools=[get_price], system_prompt="You are a trading assistant.")
+result = agent.run("What is AAPL trading at?")
+print(result.content)   # natural language answer
+print(result.steps)     # [AgentStep(action=..., observation=...)]
+```
+
+### Multi-Agent Team
+
+An `AgentTeam` routes complex queries across specialist agents via LLM-based delegation:
+
+```python
+from ai import Agent, AgentTeam
+
+market_agent = Agent(tools=[get_positions, get_vol], name="market_data")
+risk_agent = Agent(tools=[get_risk, stress_test], name="risk_analyst")
+research_agent = Agent(tools=[search_docs, ask_rag], name="research")
+
+team = AgentTeam(agents={
+    "market_data": market_agent,
+    "risk_analyst": risk_agent,
+    "research": research_agent,
+})
+result = team.run("Full portfolio risk briefing with hedge recommendations")
+```
+
+### Conversation Memory
+
+Agents persist conversations to the object store — bi-temporal, RLS-secured, with optional LLM summarization:
+
+```python
+from ai.memory import AgentMemory
+
+memory = AgentMemory(store_conn=conn)
+agent = Agent(tools=[...], memory=memory, name="risk_analyst")
+
+result = agent.run("Analyze AAPL")      # auto-saved
+agent.load_conversation(conv_id)         # resume later
+convos = agent.list_conversations()      # browse history
+```
+
+### Eval Framework
+
+Systematic evaluation of agent quality — expected tool usage, output matching, latency tracking:
+
+```python
+from ai import EvalRunner, EvalCase
+
+cases = [
+    EvalCase(input="What is AAPL trading at?", expected_tools=["get_price"]),
+    EvalCase(input="Run a tech crash stress test", expected_tools=["run_stress_test"]),
+]
+
+runner = EvalRunner(agent=agent)
+results = runner.run(cases)
+runner.summary()   # pass rate, tool accuracy, avg latency
+```
+
+14 public symbols: `AI`, `Message`, `LLMResponse`, `ToolCall`, `RAGResult`, `ExtractionResult`, `Tool`, `Agent`, `AgentResult`, `AgentStep`, `AgentTeam`, `EvalRunner`, `EvalCase`, `EvalResult`.
+
+---
+
 ## Project Structure
 
 ```
@@ -1018,8 +1099,12 @@ py-flow/
 │   ├── _minio.py           # MinIO backend (private)
 │   └── client.py           # S3Client: upload, download, delete, presign
 ├── ai/
-│   ├── __init__.py         # 7 public symbols: AI, Message, LLMResponse, ...
+│   ├── __init__.py         # 14 public symbols: AI, Agent, AgentTeam, ...
 │   ├── client.py           # AI class — single entry point
+│   ├── agent.py            # Agent — tool-calling loop + conversation history
+│   ├── team.py             # AgentTeam — multi-agent LLM-based routing
+│   ├── eval.py             # EvalRunner — agent quality evaluation
+│   ├── memory.py           # AgentMemory — persistent conversations
 │   └── _*.py               # Private: embeddings, LLM, RAG, tools, extraction
 ├── examples/
 │   ├── quant_client.py     # Watchlists, top movers, volume leaders
@@ -1077,6 +1162,25 @@ py-flow/
 ---
 
 ## Demos
+
+### `demo_agent_platform.py` — Multi-Agent Finance Team
+
+Three AI agents collaborate on live portfolio risk analysis, powered by the full platform stack: **reactive graph → QuestDB TSDB → Lakehouse (Iceberg) → RAG**. Five services auto-start.
+
+```bash
+export GEMINI_API_KEY="your-key"
+python3 demo_agent_platform.py
+```
+
+| Feature | What it shows |
+|---------|---------------|
+| Reactive graph | `Position` + `PortfolioRisk` with `@computed` VaR, HHI, sector weights |
+| Market Data Agent | Live prices from reactive graph + OHLCV bars from QuestDB TSDB |
+| Risk Agent | `@computed` VaR/stress tests + Lakehouse SQL analytics (DuckDB over Iceberg) |
+| Research Agent | Hybrid search (pgvector + tsvector) + RAG Q&A with Gemini |
+| `@effect` → Lakehouse | Portfolio snapshots ingested to Iceberg on VaR change (throttled) |
+| AgentTeam | LLM-based routing across all three specialists |
+| Eval | 6 test cases verify correct tool selection |
 
 ### `demo_ir_swap.py` — Interest Rate Swap Reactive Grid
 
