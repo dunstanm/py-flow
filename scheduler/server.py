@@ -1,19 +1,27 @@
 """
-SchedulerServer — platform-side scheduler engine (internal).
+SchedulerServer — self-contained scheduler with embedded PG.
 
-Owns WorkflowEngine, DAGRunner, function resolution, and tick loop.
+Manages its own StoreServer (embedded PG) and WorkflowEngine internally.
 Users never import this directly.
 
 Public import via ``scheduler.admin``::
 
     from scheduler.admin import SchedulerServer
+
+    server = SchedulerServer(data_dir="data/scheduler")
+    server.start()
+    server.register_alias("demo")
+    server.collect_schedules()
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
 import threading
+import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -23,57 +31,224 @@ from scheduler.dag_runner import DAGRunner
 
 logger = logging.getLogger(__name__)
 
+_SVC_USER = "_sched_svc"
+_SVC_PASSWORD = "sched_" + uuid.uuid4().hex[:12]
+
 
 class SchedulerServer:
-    """Platform-side scheduler: function resolution, DAG execution, tick loop.
+    """Self-contained scheduler: embedded PG, workflow engine, tick loop.
 
-    Users never import this directly. The platform creates a SchedulerServer
-    at startup and passes it to the user-facing Scheduler client.
+    Manages its own ``StoreServer`` and ``WorkflowEngine`` internally —
+    callers never touch workflow or store infrastructure directly.
+
+    Usage::
+
+        server = SchedulerServer(data_dir="data/scheduler")
+        server.start()
+        server.register_alias("demo")
+        server.collect_schedules()
+        # ...
+        server.stop()
     """
 
-    def __init__(self, engine, client):
+    def __init__(self, data_dir: str = "data/scheduler"):
         """
         Args:
-            engine: WorkflowEngine instance for durable execution.
-            client: StoreClient instance for persisting Schedules and Runs.
+            data_dir: Directory for the embedded PG data files.
         """
-        self._engine = engine
-        self._client = client
+        self._data_dir = os.path.abspath(data_dir)
+        self._store = None
+        self._client = None
+        self._engine = None
+        self._dag_runner = None
         self._last_fire: dict[str, datetime] = {}
-        self._dag_runner = DAGRunner(engine, client)
         self._poll_interval = 10.0
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
-    def start(self, poll_interval: float = 10.0) -> None:
-        """Start background tick loop in a daemon thread."""
+    def start(self, poll_interval: float = 10.0) -> "SchedulerServer":
+        """Start embedded PG, workflow engine, and optionally the tick loop.
+
+        Args:
+            poll_interval: Seconds between cron tick checks. Set to 0 to
+                skip starting the background tick loop.
+
+        Returns:
+            self (for chaining).
+        """
+        from store.server import StoreServer
+        from store.client import StoreClient
+        from workflow.factory import create_engine
+
+        # 1. Embedded PG
+        self._store = StoreServer(data_dir=self._data_dir)
+        self._store.start()
+        self._store.provision_user(_SVC_USER, _SVC_PASSWORD)
+
+        # 2. Internal StoreClient
+        info = self._store.conn_info()
+        self._client = StoreClient(
+            host=info["host"], port=info["port"],
+            dbname=info["dbname"],
+            user=_SVC_USER, password=_SVC_PASSWORD,
+        )
+
+        # 3. WorkflowEngine (shares same PG — no separate WorkflowServer)
+        self._engine = create_engine(self._store.pg_url(), name="scheduler")
+        self._engine.launch()
+
+        # 4. DAGRunner
+        self._dag_runner = DAGRunner(self._engine, self._client)
+
+        # 5. Background tick loop (optional)
         self._poll_interval = poll_interval
-        self._running = True
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-        logger.info("SchedulerServer started (poll=%.1fs)", poll_interval)
+        if poll_interval > 0:
+            self._running = True
+            self._thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._thread.start()
+
+        logger.info("SchedulerServer started (data_dir=%s)", self._data_dir)
+        return self
 
     def stop(self) -> None:
-        """Stop the background tick loop."""
+        """Stop tick loop, workflow engine, and embedded PG."""
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=self._poll_interval + 1)
             self._thread = None
+
+        if self._engine is not None:
+            try:
+                self._engine.destroy()
+            except Exception:
+                logger.debug("Engine destroy error (ignored)", exc_info=True)
+            self._engine = None
+
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+        if self._store is not None:
+            self._store.stop()
+            self._store = None
+
         logger.info("SchedulerServer stopped")
 
-    def _run_loop(self) -> None:
-        """Internal blocking loop — runs in background thread."""
-        while self._running:
-            try:
-                runs = self.tick()
-                if runs:
-                    logger.info("Fired %d schedule(s): %s",
-                                len(runs), [r.schedule_name for r in runs])
-            except Exception:
-                logger.exception("Tick failed")
-            time.sleep(self._poll_interval)
+    def register_alias(self, name: str) -> None:
+        """Register this server under an alias name."""
+        from scheduler._registry import register_alias
+        register_alias(name, server=self)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop()
+
+    # ── Registration ──────────────────────────────────────────────────
+
+    def register(self, schedule: Schedule) -> Schedule:
+        """Register a schedule (persists to PG).
+
+        Returns the schedule with entity_id populated.
+        """
+        entity_id = self._client.write(schedule)
+        logger.info("Registered schedule '%s' (%s) → %s",
+                     schedule.name, schedule.cron_expr, entity_id)
+        return schedule
+
+    def collect_schedules(self) -> int:
+        """Flush all @schedule-decorated functions to PG.
+
+        Groups tasks by schedule name — multiple tasks with the same name
+        become a single Schedule with multiple Tasks.
+
+        Idempotent — safe to call on every startup.
+        Returns the number of schedules registered.
+        """
+        from scheduler.decorators import _pending_tasks
+        from scheduler.models import Task
+
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for entry in _pending_tasks:
+            groups[entry["schedule_name"]].append(entry)
+
+        count = 0
+        for sched_name, entries in groups.items():
+            tasks = [
+                Task(
+                    name=e["task_name"],
+                    fn=e["task_fn"],
+                    depends_on=e["depends_on"],
+                )
+                for e in entries
+            ]
+            first = entries[0]
+            sched = Schedule(
+                name=sched_name,
+                cron_expr=first["cron_expr"],
+                tasks=tasks,
+                **first["kwargs"],
+            )
+            self.register(sched)
+            count += 1
+
+        return count
+
+    # ── Trigger ───────────────────────────────────────────────────────
+
+    def fire(self, name: str) -> Run:
+        """Manually trigger a schedule by name (ad-hoc run).
+
+        Raises ValueError if schedule not found.
+        """
+        sched = self._find_schedule(name)
+        if sched is None:
+            raise ValueError(f"Schedule '{name}' not found")
+        return self.execute_run(sched)
+
+    # ── Management ────────────────────────────────────────────────────
+
+    def pause(self, name: str) -> Schedule:
+        """Pause a schedule (ACTIVE → PAUSED)."""
+        sched = self._find_schedule(name)
+        if sched is None:
+            raise ValueError(f"Schedule '{name}' not found")
+        self._client.transition(sched, "PAUSED")
+        return sched
+
+    def resume(self, name: str) -> Schedule:
+        """Resume a schedule (PAUSED → ACTIVE)."""
+        sched = self._find_schedule(name)
+        if sched is None:
+            raise ValueError(f"Schedule '{name}' not found")
+        self._client.transition(sched, "ACTIVE")
+        return sched
+
+    def delete(self, name: str) -> Schedule:
+        """Soft-delete a schedule (→ DELETED)."""
+        sched = self._find_schedule(name)
+        if sched is None:
+            raise ValueError(f"Schedule '{name}' not found")
+        self._client.transition(sched, "DELETED")
+        return sched
+
+    # ── Query ─────────────────────────────────────────────────────────
+
+    def list_schedules(self) -> list[Schedule]:
+        """Return all non-deleted schedules."""
+        all_schedules = self._client.query(Schedule)
+        return [s for s in all_schedules if s._store_state != "DELETED"]
+
+    def history(self, name: str, limit: int = 20) -> list[Run]:
+        """Return past runs for a schedule, most recent first."""
+        all_runs = self._client.query(Run, filters={"schedule_name": name})
+        matching = list(all_runs)
+        matching.sort(key=lambda r: r.started_at, reverse=True)
+        return matching[:limit]
 
     # ── Tick ───────────────────────────────────────────────────────────
 
@@ -147,7 +322,25 @@ class SchedulerServer:
 
     # ── Internal ───────────────────────────────────────────────────────
 
+    def _find_schedule(self, name: str) -> Optional[Schedule]:
+        """Find a schedule by name."""
+        results = self._client.query(Schedule, filters={"name": name})
+        items = list(results)
+        return items[0] if items else None
+
     def _load_active_schedules(self) -> list[Schedule]:
         """Load all schedules in ACTIVE state."""
         all_schedules = self._client.query(Schedule)
         return [s for s in all_schedules if s._store_state == "ACTIVE"]
+
+    def _run_loop(self) -> None:
+        """Internal blocking loop — runs in background thread."""
+        while self._running:
+            try:
+                runs = self.tick()
+                if runs:
+                    logger.info("Fired %d schedule(s): %s",
+                                len(runs), [r.schedule_name for r in runs])
+            except Exception:
+                logger.exception("Tick failed")
+            time.sleep(self._poll_interval)

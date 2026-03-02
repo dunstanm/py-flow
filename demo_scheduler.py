@@ -133,10 +133,7 @@ def etl_load():
 
 
 def main():
-    from store.server import StoreServer
-    from store.client import StoreClient
-    from workflow.factory import create_engine
-    from scheduler.admin import SchedulerServer, collect_schedules
+    from scheduler.admin import SchedulerServer
     from scheduler import Scheduler, Schedule, Task
 
     MODULE = "demo_scheduler"
@@ -150,25 +147,14 @@ def main():
     print("Starting platform services...")
 
     tmp = tempfile.mkdtemp(prefix="demo_scheduler_")
-    store = StoreServer(data_dir=tmp)
-    store.start()
-    store.provision_user("demo_user", "demo_pw")
+    server = SchedulerServer(data_dir=tmp)
+    server.start(poll_interval=0)
+    server.register_alias("demo")
 
-    info = store.conn_info()
-    client = StoreClient(
-        host=info["host"], port=info["port"],
-        dbname=info["dbname"], user="demo_user", password="demo_pw",
-    )
+    scheduler = Scheduler("demo")
 
-    engine = create_engine(store.pg_url(), name="demo-scheduler")
-    engine.launch()
-
-    server = SchedulerServer(engine, client)
-    scheduler = Scheduler(client, server)
-
-    print("  ✓ StoreServer (embedded PG)")
-    print("  ✓ WorkflowEngine (DBOS)")
-    print("  ✓ SchedulerServer + Scheduler client")
+    print("  ✓ SchedulerServer (embedded PG + WorkflowEngine)")
+    print("  ✓ Scheduler client via alias 'demo'")
     print()
 
     # ── 2. @schedule decorator ────────────────────────────────────────
@@ -178,7 +164,7 @@ def main():
     print("-" * 70)
     print()
 
-    count = collect_schedules(scheduler)
+    count = server.collect_schedules()
     print(f"  Registered {count} schedules via @schedule decorator:")
     print("    - ingest_events (*/5 * * * *) — single task")
     print("    - etl_pipeline (0 2 * * *) — 3-task pipeline with depends_on")
@@ -386,9 +372,7 @@ def main():
 
     # ── Cleanup ───────────────────────────────────────────────────────
 
-    engine.destroy()
-    client.close()
-    store.stop()
+    server.stop()
 
     print("=" * 70)
     print("  DEMO COMPLETE")

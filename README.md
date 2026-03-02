@@ -171,7 +171,7 @@ db = connect("demo", user="alice", password="pw")
 | `TsdbServer` | `timeseries.admin` | QuestDB binary | `Timeseries("alias")` |
 | `MediaServer` | `media.admin` | S3 object store | `MediaStore("alias", ai=)` |
 | `LakehouseServer` | `lakehouse.admin` | Lakekeeper + S3 + PG | `Lakehouse("alias")` |
-| `SchedulerServer` | `scheduler.admin` | Cron + DAG runner | `Scheduler(client, server)` |
+| `SchedulerServer` | `scheduler.admin` | Embedded PG + DBOS + cron | `Scheduler("alias")` |
 
 Each `XxxServer` has `start()`, `stop()`, and `register_alias()`. Users never see the implementation — no PG connection strings, no S3 credentials, no JVM args.
 
@@ -873,6 +873,7 @@ def transform(): ...
 ```python
 from scheduler import Scheduler, Schedule, Task
 
+scheduler = Scheduler("demo")
 scheduler.register(Schedule(
     name="etl",
     cron_expr="0 2 * * *",
@@ -1042,9 +1043,9 @@ py-flow/
 │   ├── factory.py          # create_engine("alias") factory
 │   └── dbos_engine.py      # DBOS-backed implementation (hidden)
 ├── scheduler/
-│   ├── admin.py            # SchedulerServer + collect_schedules
-│   ├── server.py           # Platform-side scheduler (tick loop, DAG runner)
-│   ├── client.py           # User-facing Scheduler client
+│   ├── admin.py            # SchedulerServer (self-contained)
+│   ├── server.py           # SchedulerServer impl (embedded PG + engine + tick)
+│   ├── client.py           # Scheduler("alias") — thin proxy
 │   ├── models.py           # Schedule, Task, Run, TaskResult
 │   ├── dag.py              # Graph helpers (acyclicity, execution order)
 │   ├── dag_runner.py       # Parallel task execution engine
@@ -1240,7 +1241,7 @@ python3 demo_rag.py
 
 ### `demo_scheduler.py` — Scheduler: Cron + Pipelines
 
-Starts embedded PG + WorkflowEngine, registers schedules via `@schedule` decorator and programmatic API, fires single-task and multi-task pipelines, demonstrates parallel execution, failure propagation, and pause/resume.
+Self-contained `SchedulerServer` starts its own embedded PG + WorkflowEngine. Registers schedules via `@schedule` decorator and programmatic `Scheduler("demo")` API, fires single-task and multi-task pipelines, demonstrates parallel execution, failure propagation, and pause/resume.
 
 ```bash
 python3 demo_scheduler.py

@@ -643,51 +643,70 @@ class TestSchedulerIntegration:
 
     def test_scheduler_register_and_fire(self, client):
         """Full round-trip: register schedule, fire, check Run."""
-        from scheduler.server import SchedulerServer
-        from scheduler.client import Scheduler
         from scheduler.models import Schedule, Task
+        from scheduler.dag_runner import DAGRunner
+        from scheduler.server import SchedulerServer
 
-        server = SchedulerServer(engine=None, client=client)
-        sched = Scheduler(client=client, server=server)
+        # Lightweight: inject client directly (no full start())
+        server = SchedulerServer.__new__(SchedulerServer)
+        server._client = client
+        server._engine = None
+        server._dag_runner = DAGRunner(None, client)
+        server._last_fire = {}
+        server._running = False
+        server._thread = None
+        server._store = None
 
         s = Schedule(
             name="fire_test",
             cron_expr="*/1 * * * *",
             tasks=[Task(name="fire_fn", fn="tests._sched_fixtures:fn_result_42")],
         )
-        sched.register(s)
+        server.register(s)
 
-        run = sched.fire("fire_test")
+        run = server.fire("fire_test")
         assert run._store_state in ("SUCCESS", "ERROR")
 
     def test_scheduler_tick_fires_due(self, client):
         """Tick should fire schedules that are due."""
-        from scheduler.server import SchedulerServer
-        from scheduler.client import Scheduler
         from scheduler.models import Schedule, Task
+        from scheduler.dag_runner import DAGRunner
+        from scheduler.server import SchedulerServer
 
-        server = SchedulerServer(engine=None, client=client)
-        sched = Scheduler(client=client, server=server)
+        server = SchedulerServer.__new__(SchedulerServer)
+        server._client = client
+        server._engine = None
+        server._dag_runner = DAGRunner(None, client)
+        server._last_fire = {}
+        server._running = False
+        server._thread = None
+        server._store = None
 
         s = Schedule(
             name="tick_test",
             cron_expr="*/1 * * * *",
             tasks=[Task(name="tick_fn", fn="tests._sched_fixtures:fn_tick")],
         )
-        sched.register(s)
+        server.register(s)
 
-        runs = sched.tick()
+        runs = server.tick()
         assert len(runs) >= 1
         assert any(r.schedule_name == "tick_test" for r in runs)
 
     def test_scheduler_pipeline_fire(self, client):
         """Fire a multi-task schedule."""
-        from scheduler.server import SchedulerServer
-        from scheduler.client import Scheduler
         from scheduler.models import Schedule, Task
+        from scheduler.dag_runner import DAGRunner
+        from scheduler.server import SchedulerServer
 
-        server = SchedulerServer(engine=None, client=client)
-        sched = Scheduler(client=client, server=server)
+        server = SchedulerServer.__new__(SchedulerServer)
+        server._client = client
+        server._engine = None
+        server._dag_runner = DAGRunner(None, client)
+        server._last_fire = {}
+        server._running = False
+        server._thread = None
+        server._store = None
 
         s = Schedule(
             name="pipeline_fire_test",
@@ -697,9 +716,9 @@ class TestSchedulerIntegration:
                 Task(name="t2", fn="tests._sched_fixtures:fn_return_b", depends_on=["t1"]),
             ],
         )
-        sched.register(s)
+        server.register(s)
 
-        run = sched.fire("pipeline_fire_test")
+        run = server.fire("pipeline_fire_test")
         assert run._store_state in ("SUCCESS", "ERROR")
 
 
@@ -750,38 +769,22 @@ class TestSchedulerFullStack:
 
     @pytest.fixture(scope="class")
     def full_stack(self):
-        """Start real PG, provision user, create real engine + client + server."""
-        from store.server import StoreServer
-        from store.client import StoreClient
-        from workflow.factory import create_engine
+        """Start self-contained SchedulerServer and alias-based Scheduler."""
         from scheduler.admin import SchedulerServer
 
         tmp = tempfile.mkdtemp(prefix="test_sched_fullstack_")
-        srv = StoreServer(data_dir=tmp, admin_password="fullstack_pw")
-        srv.start()
-        srv.provision_user("fs_user", "fs_pw")
+        server = SchedulerServer(data_dir=tmp)
+        server.start(poll_interval=0)
+        server.register_alias("test-fullstack")
 
-        info = srv.conn_info()
-        client = StoreClient(
-            host=info["host"], port=info["port"],
-            dbname=info["dbname"], user="fs_user", password="fs_pw",
-        )
+        yield {"server": server}
 
-        engine = create_engine(srv.pg_url(), name="test-sched-fs")
-        engine.launch()
-
-        server = SchedulerServer(engine, client)
-
-        yield {"server": server, "client": client, "store_server": srv, "engine": engine}
-
-        engine.destroy()
-        client.close()
-        srv.stop()
+        server.stop()
 
     @pytest.fixture
     def scheduler(self, full_stack):
         from scheduler import Scheduler
-        return Scheduler(full_stack["client"], full_stack["server"])
+        return Scheduler("test-fullstack")
 
     def test_single_task_schedule_fire(self, scheduler):
         """Register a single-task schedule, fire it, verify Run is SUCCESS."""

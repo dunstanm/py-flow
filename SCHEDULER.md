@@ -17,37 +17,38 @@ Schedule functions and multi-step pipelines with cron expressions, dependency gr
 │  @schedule("0 2 * * *", name="etl", depends_on=["extract"])      │
 │  def transform(): ...                                            │
 │                                                                  │
+│  scheduler = Scheduler("demo")         # alias-based             │
 │  scheduler.register(Schedule(...))     # programmatic            │
 │  scheduler.fire("etl")                 # manual trigger          │
 │  scheduler.pause("etl")               # management              │
 │  scheduler.history("etl")             # query runs               │
 └────────────────────────────┬─────────────────────────────────────┘
-                             │
+                             │ alias
 ┌────────────────────────────▼─────────────────────────────────────┐
-│                     PLATFORM (admin)                             │
+│                 SchedulerServer (self-contained)                  │
 │                                                                  │
-│  SchedulerServer                                                 │
-│  ├── tick loop (check cron, fire due schedules)                  │
-│  ├── DAGRunner (parallel branches, skip on failure)              │
-│  ├── resolve_fn (importlib: "module:qualname" → callable)        │
-│  └── WorkflowEngine integration (checkpointed steps)             │
-│                                                                  │
-│  collect_schedules(scheduler)  ← flush @schedule to PG           │
-│                                                                  │
-│  StoreClient (PG)                                                │
+│  Embedded PG (StoreServer)                                       │
 │  ├── Schedule Storable (cron + tasks)                            │
 │  ├── Run Storable (execution record + task results)              │
 │  └── State machines (ACTIVE/PAUSED, PENDING→RUNNING→SUCCESS)     │
+│                                                                  │
+│  WorkflowEngine (DBOS, same PG)                                  │
+│  ├── Checkpointed steps (crash recovery)                         │
+│  └── DAGRunner (parallel branches, skip on failure)              │
+│                                                                  │
+│  Tick loop (check cron, fire due schedules)                      │
+│  resolve_fn (importlib: "module:qualname" → callable)            │
+│  collect_schedules() ← flush @schedule to PG                     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 | Component | Technology | Purpose |
-|-----------|-----------|---------|
+|-----------|-----------|--------|
+| **SchedulerServer** | Embedded PG + DBOS | Self-contained: store + workflow + tick loop |
 | **Schedule** | PG Storable | Cron config + embedded task list |
 | **Run** | PG Storable | Execution record with task results |
 | **DAGRunner** | ThreadPoolExecutor | Parallel task execution by level |
 | **resolve_fn** | importlib | Durable function references |
-| **WorkflowEngine** | DBOS (optional) | Checkpointed steps, crash recovery |
 
 ---
 
@@ -215,38 +216,27 @@ When a `WorkflowEngine` is provided, each task executes via `engine.step()` for 
 | Layer | Import | What |
 |-------|--------|------|
 | **User** | `from scheduler import ...` | `Scheduler`, `Schedule`, `Task`, `Run`, `TaskResult`, `CycleError`, `@schedule` |
-| **Platform** | `from scheduler.admin import ...` | `SchedulerServer`, `collect_schedules` |
-| **Internal** | never imported directly | `server.py`, `client.py`, `dag_runner.py`, `dag.py`, `resolve.py`, `cron.py` |
+| **Platform** | `from scheduler.admin import ...` | `SchedulerServer` |
+| **Internal** | never imported directly | `server.py`, `client.py`, `dag_runner.py`, `dag.py`, `resolve.py`, `cron.py`, `_registry.py` |
 
 ### Platform Setup
 
 ```python
-from store.server import StoreServer
-from store.client import StoreClient
-from workflow.factory import create_engine
-from scheduler.admin import SchedulerServer, collect_schedules
+from scheduler.admin import SchedulerServer
 from scheduler import Scheduler
 
-# Platform starts infrastructure
-store = StoreServer(data_dir="data/myapp")
-store.start()
-store.provision_user("app_user", "app_pw")
-
-client = StoreClient(host="localhost", port=store.port,
-                     dbname="store", user="app_user", password="app_pw")
-engine = create_engine(store.pg_url(), name="scheduler")
-engine.launch()
-
-# Create server + client
-server = SchedulerServer(engine, client)
-scheduler = Scheduler(client, server)
+# SchedulerServer is self-contained: embedded PG + WorkflowEngine
+server = SchedulerServer(data_dir="data/scheduler")
+server.start()                    # starts PG, engine, tick loop
+server.register_alias("demo")
 
 # Flush decorator-registered schedules to PG
 import my_jobs  # triggers @schedule decorators
-collect_schedules(scheduler)
+server.collect_schedules()
 
-# Start tick loop (checks cron every 60s)
-server.start()
+# User code
+scheduler = Scheduler("demo")
+scheduler.fire("etl")
 ```
 
 ---

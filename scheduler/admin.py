@@ -1,22 +1,20 @@
 """
 scheduler.admin — Platform API for Scheduler Infrastructure
 =============================================================
-Start/stop the scheduler server, flush decorated schedules to PG.
+Start/stop the scheduler server, flush decorated schedules.
 
 Platform usage::
 
-    from scheduler.admin import SchedulerServer, collect_schedules
+    from scheduler.admin import SchedulerServer
 
-    server = SchedulerServer(engine, client)
-    scheduler = Scheduler(client, server)
-    collect_schedules(scheduler)   # flush @schedule-decorated functions to PG
-    server.start()                 # background tick loop
-    server.stop()
+    server = SchedulerServer(data_dir="data/scheduler")
+    server.start()
+    server.register_alias("demo")
+    server.collect_schedules()   # flush @schedule-decorated functions to PG
 
-User code uses ``Scheduler(client, server)`` from ``scheduler``.
+User code uses ``Scheduler("demo")`` from ``scheduler``.
 """
 
 from scheduler.server import SchedulerServer
-from scheduler.decorators import collect_schedules
 
-__all__ = ["SchedulerServer", "collect_schedules"]
+__all__ = ["SchedulerServer"]
