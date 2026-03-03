@@ -12,18 +12,18 @@ Public surface::
 Platform lifecycle lives in ``streaming.admin``.
 """
 
-from streaming.table import TickingTable, LiveTable, flush
-from streaming.decorator import ticking, get_tables, get_ticking_tables
-from streaming.client import StreamingClient
 from streaming import agg
+from streaming.client import StreamingClient
+from streaming.decorator import get_tables, get_ticking_tables, ticking
+from streaming.table import LiveTable, TickingTable, flush
 
 __all__ = [
-    "TickingTable",
     "LiveTable",
+    "StreamingClient",
+    "TickingTable",
+    "agg",
     "flush",
-    "ticking",
     "get_tables",
     "get_ticking_tables",
-    "StreamingClient",
-    "agg",
+    "ticking",
 ]

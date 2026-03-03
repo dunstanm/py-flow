@@ -33,8 +33,9 @@ from __future__ import annotations
 import enum
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class EvalDimension:
     """
     name: str
     description: str = ""
-    scorer: Optional[Callable] = None     # (case, artifacts) → float
+    scorer: Callable | None = None     # (case, artifacts) → float
     judge_rubric: str = ""                # LLM rubric for qualitative eval
     weight: float = 1.0                   # weight in composite score
     phase: EvalPhase = EvalPhase.TOOL_SELECTION
@@ -329,7 +330,7 @@ class AgentEval:
         dimensions: list[EvalDimension] | None = None,
         max_phase: EvalPhase = EvalPhase.TOOL_SELECTION,
         judge=None,
-    ):
+    ) -> None:
         self._agents = agents
         self._dimensions = dimensions or DEFAULT_DIMENSIONS
         self._max_phase = max_phase
@@ -559,19 +560,19 @@ class AgentEval:
             print(f"  Errors: {errors}")
 
         if dim_averages:
-            print(f"\n  Dimension Scores:")
+            print("\n  Dimension Scores:")
             for name, avg in sorted(dim_averages.items()):
                 bar = "█" * int(avg * 20) + "░" * (20 - int(avg * 20))
                 print(f"    {name:<25} {bar} {avg:.3f}")
 
         if diff_stats:
-            print(f"\n  By Difficulty:")
+            print("\n  By Difficulty:")
             for d, stats in sorted(diff_stats.items()):
                 print(f"    {d:<15} {stats['passed']}/{stats['total']} "
                       f"(avg score: {stats['avg_score']:.3f})")
 
         if tag_stats:
-            print(f"\n  By Tag:")
+            print("\n  By Tag:")
             for tag, stats in sorted(tag_stats.items()):
                 print(f"    {tag:<15} {stats['passed']}/{stats['total']} "
                       f"(avg score: {stats['avg_score']:.3f})")

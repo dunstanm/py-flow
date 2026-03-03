@@ -16,22 +16,20 @@ Sources:
 
 from __future__ import annotations
 
-import json
-import uuid
 import logging
-import dataclasses
+import uuid
 from typing import Any
 
+from datacube import compiler as _compiler
 from datacube.config import (
-    DatacubeSnapshot,
+    PIVOT_COLUMN_NAME_SEPARATOR,
     DatacubeColumnConfig,
+    DatacubeSnapshot,
     ExtendedColumn,
     Filter,
     JoinSpec,
     Sort,
-    PIVOT_COLUMN_NAME_SEPARATOR,
 )
-from datacube import compiler as _compiler
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ class Datacube:
         snapshot: DatacubeSnapshot | None = None,
         source_name: str | None = None,
         lakehouse: Any | None = None,
-    ):
+    ) -> None:
         """
         Args:
             source: A Lakehouse, DuckDB connection, Storable class,
@@ -122,7 +120,6 @@ class Datacube:
 
     def query(self):
         """Execute the datacube query and return a PyArrow Table."""
-        import pyarrow as pa
 
         snap = self._ensure_pivot_values()
         sql = _compiler.compile(snap)
@@ -508,8 +505,9 @@ def _resolve_source(
 
 def _resolve_storable_source(cls) -> tuple[Any, str, list[DatacubeColumnConfig]]:
     """Pull Storable data → Arrow → DuckDB temp view."""
-    import duckdb
     import dataclasses as dc_mod
+
+    import duckdb
 
     # Query all entities
     items = cls.query(limit=100000)

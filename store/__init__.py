@@ -2,18 +2,28 @@
 Zero-trust Python object store backed by PostgreSQL JSONB + Row-Level Security.
 """
 
-from store.base import Storable, Embedded
+from store.base import Embedded, Storable
+from store.client import VersionConflict
 from store.connection import connect
 from store.state_machine import (
-    StateMachine, Transition,
-    InvalidTransition, GuardFailure, TransitionNotPermitted,
+    GuardFailure,
+    InvalidTransition,
+    StateMachine,
+    Transition,
+    TransitionNotPermitted,
 )
-from store.subscriptions import EventListener, ChangeEvent
-from store.client import VersionConflict
+from store.subscriptions import ChangeEvent, EventListener
 
 __all__ = [
-    "Storable", "Embedded", "connect",
-    "StateMachine", "Transition",
-    "EventListener", "ChangeEvent",
-    "VersionConflict", "InvalidTransition", "GuardFailure", "TransitionNotPermitted",
+    "ChangeEvent",
+    "Embedded",
+    "EventListener",
+    "GuardFailure",
+    "InvalidTransition",
+    "StateMachine",
+    "Storable",
+    "Transition",
+    "TransitionNotPermitted",
+    "VersionConflict",
+    "connect",
 ]

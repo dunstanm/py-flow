@@ -12,7 +12,6 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import pyarrow as pa
 from pyiceberg.catalog import Catalog
@@ -38,7 +37,7 @@ class SyncEngine:
         catalog: Catalog,
         state_path: str = DEFAULT_STATE_PATH,
         namespace: str = "default",
-    ):
+    ) -> None:
         self._catalog = catalog
         self._state_path = Path(state_path).resolve()
         self._namespace = namespace
@@ -372,7 +371,7 @@ def _bars_to_arrow(bars: list, tick_type: str, interval: str) -> pa.Table:
     })
 
 
-def _ensure_tz(dt) -> Optional[datetime]:
+def _ensure_tz(dt) -> datetime | None:
     """Ensure a datetime is timezone-aware (UTC). Returns None if input is None."""
     if dt is None:
         return None

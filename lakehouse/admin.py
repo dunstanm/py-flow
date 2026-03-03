@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import logging
 
-from lakehouse.services import start_lakehouse as _start_lakehouse, stop_lakehouse as _stop_lakehouse, LakehouseStack as _LakehouseStack
-from lakehouse.sync import SyncEngine
-from lakehouse.models import SyncState
-from lakehouse.catalog import create_catalog
-from lakehouse.tables import ensure_tables
 from lakehouse._registry import register_alias as _register_alias
+from lakehouse.catalog import create_catalog
+from lakehouse.models import SyncState
+from lakehouse.services import LakehouseStack as _LakehouseStack
+from lakehouse.services import start_lakehouse as _start_lakehouse
+from lakehouse.services import stop_lakehouse as _stop_lakehouse
+from lakehouse.sync import SyncEngine
+from lakehouse.tables import ensure_tables
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class LakehouseServer:
         s3_console_port: int = 9003,
         warehouse: str = "lakehouse",
         bucket: str = "lakehouse",
-    ):
+    ) -> None:
         self._data_dir = data_dir
         self._pg_port = pg_port
         self._lakekeeper_port = lakekeeper_port
@@ -55,7 +57,7 @@ class LakehouseServer:
         self._bucket = bucket
         self._stack: _LakehouseStack | None = None
 
-    async def start(self) -> "LakehouseServer":
+    async def start(self) -> LakehouseServer:
         """Start the full lakehouse stack (PG + Lakekeeper + object store)."""
         self._stack = await _start_lakehouse(
             data_dir=self._data_dir,
@@ -100,11 +102,11 @@ class LakehouseServer:
             s3_endpoint=self.s3_endpoint,
         )
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "LakehouseServer":
         await self.start()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
 

@@ -3,10 +3,7 @@ Example domain classes for the object store.
 Each is a @dataclass subclassing Storable.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from decimal import Decimal
-from typing import Optional
+from dataclasses import dataclass
 
 from store.base import Storable
 
@@ -18,7 +15,7 @@ class Trade(Storable):
     quantity: int = 0
     price: float = 0.0
     side: str = ""  # "BUY" or "SELL"
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 @dataclass
@@ -30,7 +27,7 @@ class Order(Storable):
     side: str = ""
     order_type: str = "LIMIT"  # "LIMIT", "MARKET", "STOP"
     status: str = "PENDING"    # "PENDING", "FILLED", "CANCELLED"
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 @dataclass
@@ -41,4 +38,4 @@ class Signal(Storable):
     strength: float = 0.0  # 0.0 to 1.0
     model_name: str = ""
     notes: str = ""
-    timestamp: Optional[str] = None
+    timestamp: str | None = None

@@ -7,7 +7,7 @@ Pydantic v2 models shared across the market data pipeline.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -63,7 +63,7 @@ class CurveTick(BaseModel):
 
 # Discriminated union of all market data message types
 MarketDataMessage = Annotated[
-    Union[Tick, FXTick, CurveTick],
+    Tick | FXTick | CurveTick,
     Field(discriminator="type"),
 ]
 
@@ -81,11 +81,11 @@ def get_symbol_key(msg: Tick | FXTick | CurveTick) -> str:
 
 class Subscription(BaseModel):
     """Client subscription request — which types/symbols to stream."""
-    types: Optional[list[str]] = None    # ["equity","fx","curve"] or None=all
-    symbols: Optional[list[str]] = None  # symbol/pair/label filter, None=all
+    types: list[str] | None = None    # ["equity","fx","curve"] or None=all
+    symbols: list[str] | None = None  # symbol/pair/label filter, None=all
 
 
 class SnapshotResponse(BaseModel):
     """REST response for a single symbol snapshot."""
     symbol: str
-    tick: Optional[Tick] = None
+    tick: Tick | None = None

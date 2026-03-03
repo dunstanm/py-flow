@@ -16,11 +16,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
-from store.base import Storable, Embedded
+from store.base import Embedded, Storable
 from store.state_machine import StateMachine, Transition
-
 
 # ── Task (Embedded — reactive, not independently persisted) ──────────────
 
@@ -66,7 +64,7 @@ class Schedule(Storable):
         ]
 
     @classmethod
-    def from_json(cls, json_str: str) -> "Schedule":
+    def from_json(cls, json_str: str) -> Schedule:
         """Deserialize and reconstruct embedded Task instances."""
         sched = super().from_json(json_str)
         sched.tasks = [
@@ -126,13 +124,13 @@ class Run(Storable):
     task_results: dict = field(default_factory=dict)
     retries_left: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.run_id:
             self.run_id = str(uuid.uuid4())
         super().__post_init__()
 
     @classmethod
-    def from_json(cls, json_str: str) -> "Run":
+    def from_json(cls, json_str: str) -> Run:
         """Deserialize and reconstruct embedded TaskResult instances."""
         run = super().from_json(json_str)
         run.task_results = {

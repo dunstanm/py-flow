@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from dataclasses import dataclass, field
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
-from marketdata.models import Tick, FXTick, CurveTick, get_symbol_key
+from marketdata.models import CurveTick, FXTick, Tick, get_symbol_key
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 class _Subscription:
     """Internal subscription state."""
     sub_id: str
-    types: Optional[set[str]]    # None = all types
-    symbols: Optional[set[str]]  # None = all symbols
+    types: set[str] | None    # None = all types
+    symbols: set[str] | None  # None = all symbols
     queue: asyncio.Queue
     active: bool = True
 
@@ -36,7 +36,7 @@ class TickBus:
     - ``latest`` dict provides snapshot cache keyed by ``(type, symbol_key)``.
     """
 
-    def __init__(self, maxsize: int = 1000):
+    def __init__(self, maxsize: int = 1000) -> None:
         self._maxsize = maxsize
         self._subscriptions: dict[str, _Subscription] = {}
         self._lock = asyncio.Lock()
@@ -83,8 +83,8 @@ class TickBus:
 
     async def subscribe(
         self,
-        types: Optional[set[str]] = None,
-        symbols: Optional[set[str]] = None,
+        types: set[str] | None = None,
+        symbols: set[str] | None = None,
     ) -> tuple[str, AsyncIterator[Tick | FXTick | CurveTick]]:
         """Subscribe to messages, optionally filtered by type and symbol.
 

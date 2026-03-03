@@ -12,12 +12,10 @@ import logging
 import os
 import platform
 import shutil
-import stat
 import subprocess
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -55,13 +53,13 @@ class QuestDBManager:
         http_port: int = 9000,
         ilp_port: int = 9009,
         pg_port: int = 8812,
-    ):
+    ) -> None:
         self._data_dir = Path(data_dir).resolve()
         self._host = host
         self._http_port = http_port
         self._ilp_port = ilp_port
         self._pg_port = pg_port
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
 
     @property
     def is_running(self) -> bool:

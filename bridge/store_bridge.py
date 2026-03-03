@@ -16,26 +16,28 @@ Usage:
     orders_live = orders_raw.last_by("EntityId")   # auto-locked!
 """
 
-import json
 import dataclasses
-import threading
-from typing import Optional, Dict, Type, Any
 
+from store.client import StoreClient
+from store.subscriptions import ChangeEvent, EventBus, SubscriptionListener
 from streaming import TickingTable
 
-from store.base import Storable
-from store.client import StoreClient
-from store.subscriptions import EventBus, ChangeEvent, SubscriptionListener
-from bridge.type_mapping import infer_schema, extract_row
+from bridge.type_mapping import extract_row, infer_schema
 
 
 class _Registration:
     """Internal: tracks a registered Storable type and its TickingTable."""
 
-    __slots__ = ("storable_cls", "type_name", "ticking",
-                 "column_names", "filter_expr", "read_cls")
+    __slots__ = (
+        "column_names",
+        "filter_expr",
+        "read_cls",
+        "storable_cls",
+        "ticking",
+        "type_name",
+    )
 
-    def __init__(self, storable_cls, ticking, column_names, filter_expr):
+    def __init__(self, storable_cls, ticking, column_names, filter_expr) -> None:
         self.storable_cls = storable_cls
         self.type_name = storable_cls.type_name()
         self.ticking = ticking
@@ -64,7 +66,7 @@ class StoreBridge:
     def __init__(self, alias_or_host=None, port=None, dbname=None,
                  user=None, password=None, *,
                  host=None,
-                 subscriber_id="deephaven_bridge"):
+                 subscriber_id="deephaven_bridge") -> None:
         # Resolve alias vs explicit params
         if alias_or_host is not None and port is None and host is None:
             # Looks like an alias — try to resolve
@@ -90,10 +92,10 @@ class StoreBridge:
                 user=user, password=password,
             )
         self._subscriber_id = subscriber_id
-        self._registrations: Dict[str, _Registration] = {}  # type_name → reg
+        self._registrations: dict[str, _Registration] = {}  # type_name → reg
         self._bus = EventBus()
-        self._listener: Optional[SubscriptionListener] = None
-        self._client: Optional[StoreClient] = None
+        self._listener: SubscriptionListener | None = None
+        self._client: StoreClient | None = None
         self._started = False
 
     # ── Registration ─────────────────────────────────────────────────

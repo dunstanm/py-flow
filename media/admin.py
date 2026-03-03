@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 
 import objectstore
+
 from media._registry import register_alias as _register_alias
 
 logger = logging.getLogger(__name__)
@@ -33,14 +34,14 @@ class MediaServer:
         api_port: int = 9002,
         console_port: int = 9003,
         bucket: str = "media",
-    ):
+    ) -> None:
         self._data_dir = data_dir
         self._api_port = api_port
         self._console_port = console_port
         self._bucket = bucket
         self._store = None  # ObjectStore, set by start()
 
-    async def start(self) -> "MediaServer":
+    async def start(self) -> MediaServer:
         """Start the media storage backend and ensure the default bucket exists."""
         self._store = await objectstore.configure(
             "minio",
@@ -91,11 +92,11 @@ class MediaServer:
             bucket=self._bucket,
         )
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "MediaServer":
         await self.start()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         pass  # atexit handles cleanup
 
 

@@ -27,7 +27,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +76,7 @@ class EvalRunner:
             If not provided, uses substring matching only.
     """
 
-    def __init__(self, agent, judge=None):
+    def __init__(self, agent, judge=None) -> None:
         self._agent = agent
         self._judge = judge
         self._results: list[EvalResult] = []
@@ -156,7 +155,7 @@ class EvalRunner:
         if errors:
             print(f"  Errors:         {errors}")
         if tag_stats:
-            print(f"  By tag:")
+            print("  By tag:")
             for tag, stats in tag_stats.items():
                 print(f"    {tag}: {stats['passed']}/{stats['total']}")
         print(f"{'='*50}\n")

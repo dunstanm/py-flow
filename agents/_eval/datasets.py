@@ -13,7 +13,6 @@ Usage::
 
 from agents._eval.framework import AgentEvalCase
 
-
 # ── OLTP Agent Eval Cases ─────────────────────────────────────────────
 
 OLTP_EVAL_CASES = [

@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from ai._types import Message
 
@@ -67,7 +66,7 @@ class AgentTeam:
         ai=None,
         max_delegations: int = 5,
         temperature: float = 0.7,
-    ):
+    ) -> None:
         self._agents = agents
         self._max_delegations = max_delegations
         self._temperature = temperature
@@ -205,7 +204,7 @@ Always respond with exactly one JSON object per turn. No other text."""
             iterations=len(delegation_log),
         )
 
-    def _parse_decision(self, text: str) -> Optional[dict]:
+    def _parse_decision(self, text: str) -> dict | None:
         """Parse a JSON decision from the router's response."""
         # Strip markdown code fences
         clean = text.strip()

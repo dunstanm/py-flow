@@ -12,18 +12,17 @@ Bi-temporal metadata:
 - event_type: CREATED, UPDATED, DELETED, STATE_CHANGE, CORRECTED
 """
 
-import json
-import uuid
 import asyncio
-import logging
 import dataclasses
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Optional
-
+import json
+import logging
+import uuid
 from collections import namedtuple
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
 
-from reaktiv import Signal, Computed, Effect, batch
+from reaktiv import Computed, Effect, Signal, batch
 from reaktiv.signal import ComputeSignal as _ComputeSignal
 
 logger = logging.getLogger(__name__)
@@ -87,15 +86,15 @@ class Storable:
     """
 
     # Bi-temporal metadata — set by the store after writing / reading
-    _store_entity_id: Optional[str] = None
-    _store_version: Optional[int] = None
-    _store_owner: Optional[str] = None
-    _store_updated_by: Optional[str] = None
-    _store_tx_time: Optional[datetime] = None
-    _store_valid_from: Optional[datetime] = None
-    _store_valid_to: Optional[datetime] = None
-    _store_state: Optional[str] = None
-    _store_event_type: Optional[str] = None
+    _store_entity_id: str | None = None
+    _store_version: int | None = None
+    _store_owner: str | None = None
+    _store_updated_by: str | None = None
+    _store_tx_time: datetime | None = None
+    _store_valid_from: datetime | None = None
+    _store_valid_to: datetime | None = None
+    _store_state: str | None = None
+    _store_event_type: str | None = None
 
     # Optional state machine — set on the class by the user
     _state_machine = None
@@ -110,7 +109,7 @@ class Storable:
     _reactive = {}      # name → _RNode(read, write)
     _effects = []       # Effect objects (prevent GC)
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         if cls._registry is not None:
             # __init_subclass__ fires BEFORE @dataclass, so we use
@@ -124,7 +123,7 @@ class Storable:
 
     # ── Reactive wiring ────────────────────────────────────────────
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-create Signals for fields, Computed for @computed, Effects for @effect."""
         from reactive.computed import ComputedProperty, EffectMethod, _ReactiveProxy
 
@@ -205,14 +204,14 @@ class Storable:
         # Tick effects once to register dependencies
         self._tick()
 
-    def __getattribute__(self, name):
+    def __getattribute__(self, name) -> Any:
         """Route reactive field/computed reads through Signals/Computeds."""
         node = object.__getattribute__(self, '_reactive').get(name)
         if node is not None:
             return node.read()
         return object.__getattribute__(self, name)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name, value) -> None:
         """Intercept field sets to update Signals; computed sets to override."""
         object.__setattr__(self, name, value)
         node = object.__getattribute__(self, '_reactive').get(name)
@@ -426,4 +425,5 @@ class Embedded(Storable):
 
 # ── Wire mandatory column registry (no circular import — columns/ does not import base) ──
 from store.columns import REGISTRY  # noqa: E402
+
 Storable._registry = REGISTRY

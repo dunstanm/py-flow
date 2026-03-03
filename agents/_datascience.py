@@ -28,6 +28,7 @@ import logging
 import math
 
 from ai import Agent, tool
+
 from agents._context import _PlatformContext
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ def create_datascience_tools(ctx: _PlatformContext) -> list:
                     if len(series) == 0:
                         continue
                     stats[col] = {
-                        "count": int(len(series)),
+                        "count": len(series),
                         "mean": round(float(series.mean()), 6),
                         "std": round(float(series.std()), 6),
                         "min": round(float(series.min()), 6),

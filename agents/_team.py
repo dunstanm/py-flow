@@ -17,9 +17,11 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from ai import Agent, AgentTeam
+
 from agents._context import _PlatformContext
 
 logger = logging.getLogger(__name__)
@@ -123,7 +125,7 @@ class PlatformAgents:
         agents: list[str] | None = None,
         temperature: float = 0.5,
         max_delegations: int = 8,
-    ):
+    ) -> None:
         # Build internal context
         self._ctx = _PlatformContext(
             alias=alias,
@@ -139,14 +141,14 @@ class PlatformAgents:
         )
 
         # Lazy-import agent factories to avoid circular imports
-        from agents._oltp import create_oltp_agent
-        from agents._lakehouse import create_lakehouse_agent
-        from agents._feed import create_feed_agent
-        from agents._timeseries import create_timeseries_agent
-        from agents._document import create_document_agent
         from agents._dashboard import create_dashboard_agent
-        from agents._query import create_query_agent
         from agents._datascience import create_datascience_agent
+        from agents._document import create_document_agent
+        from agents._feed import create_feed_agent
+        from agents._lakehouse import create_lakehouse_agent
+        from agents._oltp import create_oltp_agent
+        from agents._query import create_query_agent
+        from agents._timeseries import create_timeseries_agent
 
         _factories = {
             "oltp": create_oltp_agent,

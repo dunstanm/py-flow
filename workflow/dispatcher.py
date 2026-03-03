@@ -23,7 +23,7 @@ class WorkflowDispatcher:
     rather than re-executing the transition.
     """
 
-    def __init__(self, engine, client):
+    def __init__(self, engine, client) -> None:
         self._engine = engine
         self._client = client
 

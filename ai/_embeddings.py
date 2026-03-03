@@ -19,7 +19,6 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +80,11 @@ class GeminiEmbeddings(EmbeddingProvider):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gemini-embedding-001",
         dimension: int = 768,
         max_retries: int = 3,
-    ):
+    ) -> None:
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self._api_key:
             raise ValueError(
@@ -158,7 +157,7 @@ class GeminiEmbeddings(EmbeddingProvider):
         logger.debug("Embedded query → %d-dim vector", self._dimension)
         return vector
 
-    def _call_with_retry(self, fn, retries: Optional[int] = None):
+    def _call_with_retry(self, fn, retries: int | None = None):
         """Call fn with exponential backoff retry on transient errors."""
         max_retries = retries if retries is not None else self._max_retries
         last_error = None

@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from marketdata.models import Tick, FXTick, CurveTick, get_symbol_key
+from marketdata.models import CurveTick, FXTick, Tick, get_symbol_key
+
 from timeseries.base import TSDBBackend
 from timeseries.models import Bar
 
@@ -45,7 +46,7 @@ _INTERVAL_TD = {
 class MemoryBackend(TSDBBackend):
     """In-memory TSDB backend with real bar aggregation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Storage: {msg_type: [(timestamp, dict), ...]}
         self._ticks: dict[str, list[tuple[datetime, dict]]] = defaultdict(list)
         self._started = False
@@ -77,7 +78,7 @@ class MemoryBackend(TSDBBackend):
     def get_all_ticks(
         self,
         msg_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> list[dict]:
         rows = self._ticks.get(msg_type, [])
         if since:
@@ -122,8 +123,8 @@ class MemoryBackend(TSDBBackend):
         msg_type: str,
         symbol: str,
         interval: str = "1m",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[Bar]:
         td = _INTERVAL_TD.get(interval)
         if td is None:
@@ -184,7 +185,7 @@ class MemoryBackend(TSDBBackend):
     def get_latest(
         self,
         msg_type: str,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
     ) -> list[dict]:
         sym_col = _SYMBOL_COL.get(msg_type)
         if sym_col is None:

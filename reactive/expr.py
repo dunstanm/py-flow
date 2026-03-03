@@ -13,7 +13,6 @@ import json
 import math
 from abc import ABC, abstractmethod
 
-
 # ---------------------------------------------------------------------------
 # Base
 # ---------------------------------------------------------------------------
@@ -39,87 +38,87 @@ class Expr(ABC):
 
     # -- Arithmetic operators ------------------------------------------------
 
-    def __add__(self, other):
+    def __add__(self, other) -> "Expr":
         return BinOp("+", self, _wrap(other))
 
-    def __radd__(self, other):
+    def __radd__(self, other) -> "Expr":
         return BinOp("+", _wrap(other), self)
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> "Expr":
         return BinOp("-", self, _wrap(other))
 
-    def __rsub__(self, other):
+    def __rsub__(self, other) -> "Expr":
         return BinOp("-", _wrap(other), self)
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> "Expr":
         return BinOp("*", self, _wrap(other))
 
-    def __rmul__(self, other):
+    def __rmul__(self, other) -> "Expr":
         return BinOp("*", _wrap(other), self)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> "Expr":
         return BinOp("/", self, _wrap(other))
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other) -> "Expr":
         return BinOp("/", _wrap(other), self)
 
-    def __mod__(self, other):
+    def __mod__(self, other) -> "Expr":
         return BinOp("%", self, _wrap(other))
 
-    def __rmod__(self, other):
+    def __rmod__(self, other) -> "Expr":
         return BinOp("%", _wrap(other), self)
 
-    def __pow__(self, other):
+    def __pow__(self, other) -> "Expr":
         return BinOp("**", self, _wrap(other))
 
-    def __rpow__(self, other):
+    def __rpow__(self, other) -> "Expr":
         return BinOp("**", _wrap(other), self)
 
-    def __neg__(self):
+    def __neg__(self) -> "Expr":
         return UnaryOp("neg", self)
 
-    def __abs__(self):
+    def __abs__(self) -> "Expr":
         return UnaryOp("abs", self)
 
     # -- Comparison operators ------------------------------------------------
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> "Expr":
         return BinOp(">", self, _wrap(other))
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> "Expr":
         return BinOp("<", self, _wrap(other))
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> "Expr":
         return BinOp(">=", self, _wrap(other))
 
-    def __le__(self, other):
+    def __le__(self, other) -> "Expr":
         return BinOp("<=", self, _wrap(other))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> "Expr":
         if not isinstance(other, Expr) and other is None:
             return NotImplemented
         return BinOp("==", self, _wrap(other))
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> "Expr":
         if not isinstance(other, Expr) and other is None:
             return NotImplemented
         return BinOp("!=", self, _wrap(other))
 
     # -- Logical operators (use & | ~ since and/or/not can't be overridden) --
 
-    def __and__(self, other):
+    def __and__(self, other) -> "Expr":
         return BinOp("and", self, _wrap(other))
 
-    def __rand__(self, other):
+    def __rand__(self, other) -> "Expr":
         return BinOp("and", _wrap(other), self)
 
-    def __or__(self, other):
+    def __or__(self, other) -> "Expr":
         return BinOp("or", self, _wrap(other))
 
-    def __ror__(self, other):
+    def __ror__(self, other) -> "Expr":
         return BinOp("or", _wrap(other), self)
 
-    def __invert__(self):
+    def __invert__(self) -> "Expr":
         return UnaryOp("not", self)
 
     # -- String methods (chainable) ------------------------------------------
@@ -147,7 +146,7 @@ class Expr(ABC):
     def is_null(self):
         return IsNull(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.to_json()})"
 
 
@@ -182,7 +181,7 @@ _PURE_OPS = {
 class Const(Expr):
     """A constant literal value."""
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         self.value = value
 
     def eval(self, ctx: dict):
@@ -215,7 +214,7 @@ class Const(Expr):
 class Field(Expr):
     """A reference to a field on the current object."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
     def eval(self, ctx: dict):
@@ -238,7 +237,7 @@ class Field(Expr):
 class BinOp(Expr):
     """Binary operation: left op right."""
 
-    def __init__(self, op: str, left: Expr, right: Expr):
+    def __init__(self, op: str, left: Expr, right: Expr) -> None:
         self.op = op
         self.left = left
         self.right = right
@@ -304,7 +303,7 @@ class BinOp(Expr):
 class UnaryOp(Expr):
     """Unary operation: neg, abs, not."""
 
-    def __init__(self, op: str, operand: Expr):
+    def __init__(self, op: str, operand: Expr) -> None:
         self.op = op
         self.operand = operand
 
@@ -370,7 +369,7 @@ class Func(Expr):
         "log": "log", "exp": "exp", "min": "min", "max": "max",
     }
 
-    def __init__(self, name: str, args: list):
+    def __init__(self, name: str, args: list) -> None:
         self.name = name
         self.args = [_wrap(a) for a in args]
 
@@ -405,7 +404,7 @@ class If(Expr):
     Compiles to CASE WHEN in SQL, if()|) in Pure.
     """
 
-    def __init__(self, condition: Expr, then_: Expr, else_: Expr):
+    def __init__(self, condition: Expr, then_: Expr, else_: Expr) -> None:
         self.condition = _wrap(condition)
         self.then_ = _wrap(then_)
         self.else_ = _wrap(else_)
@@ -439,7 +438,7 @@ class If(Expr):
 class Coalesce(Expr):
     """Return the first non-None value from a list of expressions."""
 
-    def __init__(self, exprs: list):
+    def __init__(self, exprs: list) -> None:
         self.exprs = [_wrap(e) for e in exprs]
 
     def eval(self, ctx: dict):
@@ -473,7 +472,7 @@ class Coalesce(Expr):
 class IsNull(Expr):
     """Check if an expression evaluates to null/None."""
 
-    def __init__(self, operand: Expr):
+    def __init__(self, operand: Expr) -> None:
         self.operand = _wrap(operand)
 
     def eval(self, ctx: dict):
@@ -495,7 +494,7 @@ class IsNull(Expr):
 class StrOp(Expr):
     """String operation: length, upper, lower, contains, starts_with, concat."""
 
-    def __init__(self, op: str, operand: Expr, arg: Expr = None):
+    def __init__(self, op: str, operand: Expr, arg: Expr = None) -> None:
         self.op = op
         self.operand = operand
         self.arg = arg

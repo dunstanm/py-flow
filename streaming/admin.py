@@ -36,7 +36,7 @@ class StreamingServer:
         *,
         jvm_args: list[str] | None = None,
         default_jvm_args: list[str] | None = None,
-    ):
+    ) -> None:
         self._port = port
         self._max_heap = max_heap
         self._jvm_args = jvm_args or [
@@ -51,7 +51,7 @@ class StreamingServer:
         ]
         self._server = None
 
-    def start(self) -> "StreamingServer":
+    def start(self) -> StreamingServer:
         """Start the streaming server (Deephaven JVM)."""
         from deephaven_server import Server
 
@@ -84,11 +84,11 @@ class StreamingServer:
         """Register this server under an alias name."""
         _register_alias(name, port=self._port)
 
-    def __enter__(self):
+    def __enter__(self) -> "StreamingServer":
         self.start()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.stop()
 
 

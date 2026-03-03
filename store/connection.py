@@ -15,13 +15,12 @@ connection used by ``Storable.save()``, ``Position.find()``, etc.
 from __future__ import annotations
 
 import threading
-from typing import Dict, Optional
 
 from store.client import StoreClient
 
 # ── Alias registry ────────────────────────────────────────────────────
 
-_aliases: Dict[str, dict] = {}   # name → {"host": …, "port": …, "dbname": …}
+_aliases: dict[str, dict] = {}   # name → {"host": …, "port": …, "dbname": …}
 _lock = threading.Lock()
 
 
@@ -31,7 +30,7 @@ def register_alias(name: str, host: str, port: int, dbname: str = "postgres"):
         _aliases[name] = {"host": host, "port": port, "dbname": dbname}
 
 
-def _resolve_alias(name: str) -> Optional[dict]:
+def _resolve_alias(name: str) -> dict | None:
     with _lock:
         return _aliases.get(name)
 
@@ -41,7 +40,7 @@ def _resolve_alias(name: str) -> Optional[dict]:
 _active: threading.local = threading.local()
 
 
-def get_connection() -> "UserConnection":
+def get_connection() -> UserConnection:
     """Return the active ``UserConnection`` or raise."""
     conn = getattr(_active, "connection", None)
     if conn is None:
@@ -51,7 +50,7 @@ def get_connection() -> "UserConnection":
     return conn
 
 
-def _set_active(conn: Optional["UserConnection"]):
+def _set_active(conn: UserConnection | None):
     _active.connection = conn
 
 
@@ -65,8 +64,8 @@ class UserConnection:
 
     def __init__(self, *, user: str, password: str,
                  host: str, port: int, dbname: str,
-                 alias: Optional[str] = None,
-                 event_bus=None):
+                 alias: str | None = None,
+                 event_bus=None) -> None:
         self.user = user
         self.alias = alias
         self._conn_params = dict(host=host, port=port, dbname=dbname,
@@ -97,23 +96,23 @@ class UserConnection:
         self._client.close()
 
     # Context-manager support
-    def __enter__(self):
+    def __enter__(self) -> "UserConnection":
         self.activate()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         alias_str = f" alias={self.alias!r}" if self.alias else ""
         return f"<UserConnection user={self.user!r}{alias_str}>"
 
 
 # ── connect() — the public entry point ────────────────────────────────
 
-def connect(alias_or_host: Optional[str] = None, *,
+def connect(alias_or_host: str | None = None, *,
             user: str, password: str,
-            host: Optional[str] = None,
+            host: str | None = None,
             port: int = 5432,
             dbname: str = "postgres",
             event_bus=None) -> UserConnection:

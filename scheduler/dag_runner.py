@@ -11,10 +11,9 @@ import logging
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Optional
 
-from scheduler.models import Schedule, Run, TaskResult
 from scheduler.dag import execution_order, get_task
+from scheduler.models import Run, Schedule, TaskResult
 from scheduler.resolve import resolve_fn
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ class DAGRunner:
     If a task fails, its dependents are marked SKIPPED.
     """
 
-    def __init__(self, engine, client, max_workers: int = 4):
+    def __init__(self, engine, client, max_workers: int = 4) -> None:
         """
         Args:
             engine: WorkflowEngine instance.

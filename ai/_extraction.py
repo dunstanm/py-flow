@@ -30,10 +30,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional, Type
 
-from ai._types import Message, ExtractionResult
 from ai._llm import LLMClient
+from ai._types import ExtractionResult, Message
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +58,8 @@ def extract(
     llm: LLMClient,
     text: str,
     schema: dict,
-    model_class: Optional[Type] = None,
-    system_prompt: Optional[str] = None,
+    model_class: type | None = None,
+    system_prompt: str | None = None,
     temperature: float = 0.0,
 ) -> ExtractionResult:
     """

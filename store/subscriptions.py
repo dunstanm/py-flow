@@ -15,10 +15,8 @@ import select
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Callable, List
 
 import psycopg2
-
 
 NOTIFY_CHANNEL = "object_events"
 
@@ -31,7 +29,7 @@ class ChangeEvent:
     event_type: str          # CREATED / UPDATED / DELETED / STATE_CHANGE / CORRECTED
     type_name: str
     updated_by: str
-    state: Optional[str]
+    state: str | None
     tx_time: datetime
 
 
@@ -43,7 +41,7 @@ class EventBus:
     Thread-safe for concurrent emit/subscribe.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._type_listeners = {}       # type_name → [callback]
         self._entity_listeners = {}     # entity_id → [callback]
         self._all_listeners = []        # [callback]
@@ -115,7 +113,7 @@ class SubscriptionListener:
     """
 
     def __init__(self, event_bus, host, port, dbname, user, password,
-                 subscriber_id=None):
+                 subscriber_id=None) -> None:
         self.event_bus = event_bus
         self._conn_params = dict(host=host, port=port, dbname=dbname,
                                  user=user, password=password)
@@ -271,7 +269,7 @@ class EventListener:
             listener.on("Order", handle)
     """
 
-    def __init__(self, subscriber_id=None):
+    def __init__(self, subscriber_id=None) -> None:
         self._bus = EventBus()
         self._subscriber_id = subscriber_id
         self._listener = None   # lazy SubscriptionListener
@@ -338,13 +336,13 @@ class EventListener:
             self._listener = None
         self._started = False
 
-    def __enter__(self):
+    def __enter__(self) -> "SubscriptionManager":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self._stop()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self._stop()
         except Exception:

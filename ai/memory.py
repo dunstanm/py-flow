@@ -26,7 +26,6 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
 
 from ai._types import Message
 
@@ -99,7 +98,7 @@ class AgentMemory:
         auto_summarize: Summarize conversations longer than this many messages (0 = disabled).
     """
 
-    def __init__(self, store_conn=None, auto_summarize: int = 20):
+    def __init__(self, store_conn=None, auto_summarize: int = 20) -> None:
         self._conn = store_conn
         self._auto_summarize = auto_summarize
 
@@ -108,7 +107,7 @@ class AgentMemory:
         conversation_id: str,
         messages: list[Message],
         agent_name: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
         ai=None,
     ) -> Conversation:
         """
@@ -151,7 +150,7 @@ class AgentMemory:
 
         return convo
 
-    def load(self, conversation_id: str) -> Optional[Conversation]:
+    def load(self, conversation_id: str) -> Conversation | None:
         """Load a conversation by ID. Returns None if not found."""
         if self._conn is None:
             return None
@@ -182,7 +181,7 @@ class AgentMemory:
 
     def list_conversations(
         self,
-        agent_name: Optional[str] = None,
+        agent_name: str | None = None,
         limit: int = 20,
     ) -> list[Conversation]:
         """List conversations, optionally filtered by agent name."""

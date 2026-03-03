@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import Optional, Union
 
 import duckdb
 import pyarrow as pa
@@ -66,7 +65,7 @@ class Lakehouse:
         namespace: str = "default",
         # Legacy positional compat
         catalog_uri: str | None = None,
-    ):
+    ) -> None:
         # Resolve alias
         resolved = self._resolve(alias_or_catalog, catalog_uri)
 
@@ -77,7 +76,7 @@ class Lakehouse:
         self._s3_secret_key = s3_secret_key or resolved.get("s3_secret_key") or os.environ.get("S3_SECRET_KEY", DEFAULT_S3_SECRET_KEY)
         self._s3_region = s3_region or resolved.get("s3_region") or os.environ.get("S3_REGION", DEFAULT_S3_REGION)
         self._namespace = namespace or resolved.get("namespace", "default")
-        self._conn: Optional[duckdb.DuckDBPyConnection] = None
+        self._conn: duckdb.DuckDBPyConnection | None = None
 
     @staticmethod
     def _resolve(alias_or_catalog, catalog_uri) -> dict:
@@ -186,7 +185,7 @@ class Lakehouse:
     def ingest(
         self,
         table_name: str,
-        data: Union[pa.Table, list[dict], "pd.DataFrame", str],
+        data: pa.Table | list[dict] | pd.DataFrame | str,
         mode: str = "append",
         primary_key: str | None = None,
     ) -> int:

@@ -14,8 +14,7 @@ from datetime import datetime, timezone
 
 from marketdata.bus import TickBus
 from marketdata.feed import MarketDataFeed
-from marketdata.models import Tick, RiskTick, FXTick
-from marketdata.risk_engine import calculate_greeks
+from marketdata.models import FXTick, Tick
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ class SimulatorFeed(MarketDataFeed):
     Publishes both price Ticks and RiskTicks to the TickBus.
     """
 
-    def __init__(self, tick_interval: float = 0.2):
+    def __init__(self, tick_interval: float = 0.2) -> None:
         self._tick_interval = tick_interval
         self._current_prices: dict[str, float] = dict(BASE_PRICES)
         self._current_fx: dict[str, float] = {

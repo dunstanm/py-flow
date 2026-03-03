@@ -19,24 +19,22 @@ Studio's query composition order::
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from itertools import product
-from typing import Any, Sequence
+from typing import Any
 
 from datacube.config import (
-    DatacubeSnapshot,
-    DatacubeColumnConfig,
-    ExtendedColumn,
-    Filter,
-    JoinSpec,
-    Sort,
     PIVOT_COLUMN_NAME_SEPARATOR,
+    DatacubeColumnConfig,
+    DatacubeSnapshot,
+    Filter,
 )
 
 logger = logging.getLogger(__name__)
 
 # ── Public API ────────────────────────────────────────────────────────
 
-def compile(snapshot: DatacubeSnapshot) -> str:  # noqa: A001 — shadowing builtin is intentional
+def compile(snapshot: DatacubeSnapshot) -> str:
     """Compile a datacube snapshot to a DuckDB SQL string.
 
     This is the main entry point.  The returned SQL is ready to execute
@@ -235,7 +233,7 @@ def _source_sql(snapshot: DatacubeSnapshot) -> str:
 class _Compiler:
     """Internal compiler: snapshot → DuckDB SQL."""
 
-    def __init__(self, snapshot: DatacubeSnapshot):
+    def __init__(self, snapshot: DatacubeSnapshot) -> None:
         self.snap = snapshot
 
     # ── Main ──────────────────────────────────────────────────────

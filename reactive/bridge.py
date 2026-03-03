@@ -7,6 +7,7 @@ objects — no ReactiveGraph needed.
 """
 
 import logging
+
 from reaktiv import Effect
 from reaktiv.signal import ComputeSignal as _ComputeSignal
 

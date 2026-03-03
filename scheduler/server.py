@@ -18,16 +18,15 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 import threading
+import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Optional
 
-from scheduler.models import Schedule, Run, TaskResult
 from scheduler.cron import is_due
 from scheduler.dag_runner import DAGRunner
+from scheduler.models import Run, Schedule
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class SchedulerServer:
         server.stop()
     """
 
-    def __init__(self, data_dir: str = "data/scheduler"):
+    def __init__(self, data_dir: str = "data/scheduler") -> None:
         """
         Args:
             data_dir: Directory for the embedded PG data files.
@@ -64,11 +63,11 @@ class SchedulerServer:
         self._last_fire: dict[str, datetime] = {}
         self._poll_interval = 10.0
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
-    def start(self, poll_interval: float = 10.0) -> "SchedulerServer":
+    def start(self, poll_interval: float = 10.0) -> SchedulerServer:
         """Start embedded PG, workflow engine, and optionally the tick loop.
 
         Args:
@@ -78,8 +77,8 @@ class SchedulerServer:
         Returns:
             self (for chaining).
         """
-        from store.server import StoreServer
         from store.client import StoreClient
+        from store.server import StoreServer
         from workflow.factory import create_engine
 
         # 1. Embedded PG
@@ -141,11 +140,11 @@ class SchedulerServer:
         from scheduler._registry import register_alias
         register_alias(name, server=self)
 
-    def __enter__(self):
+    def __enter__(self) -> "SchedulerServer":
         self.start()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.stop()
 
     # ── Registration ──────────────────────────────────────────────────
@@ -322,7 +321,7 @@ class SchedulerServer:
 
     # ── Internal ───────────────────────────────────────────────────────
 
-    def _find_schedule(self, name: str) -> Optional[Schedule]:
+    def _find_schedule(self, name: str) -> Schedule | None:
         """Find a schedule by name."""
         results = self._client.query(Schedule, filters={"name": name})
         items = list(results)

@@ -7,13 +7,11 @@ Uses the ``questdb`` pip package for high-throughput, non-blocking writes.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import timezone
 
-from marketdata.models import Tick, FXTick, CurveTick
+from marketdata.models import CurveTick, FXTick, Tick
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +30,7 @@ _FLUSH_ROW_COUNT = 100     # or every 100 rows
 class QuestDBWriter:
     """Writes market data ticks to QuestDB via ILP."""
 
-    def __init__(self, host: str = "localhost", ilp_port: int = 9009):
+    def __init__(self, host: str = "localhost", ilp_port: int = 9009) -> None:
         self._host = host
         self._ilp_port = ilp_port
         self._sender = None
@@ -42,7 +40,7 @@ class QuestDBWriter:
 
     def connect(self) -> None:
         """Open the ILP sender connection."""
-        from questdb.ingress import Sender, Protocol
+        from questdb.ingress import Protocol, Sender
 
         self._sender = Sender(Protocol.Tcp, self._host, self._ilp_port)
         self._sender.establish()

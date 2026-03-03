@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Optional
+
+from marketdata.models import CurveTick, FXTick, Tick
 
 from timeseries.base import TSDBBackend
 from timeseries.models import Bar
-from marketdata.models import Tick, FXTick, CurveTick
 
 
 class Timeseries:
@@ -40,7 +40,7 @@ class Timeseries:
         backend: str | None = None,
         # Pass-through kwargs for advanced/testing use
         **kwargs,
-    ):
+    ) -> None:
         self._backend: TSDBBackend | None = None
         self._auto_server = None
         self._alias = alias_or_backend
@@ -48,7 +48,7 @@ class Timeseries:
         self._backend_name = backend
         self._kwargs = kwargs
 
-    async def start(self) -> "Timeseries":
+    async def start(self) -> Timeseries:
         """Start the timeseries client (and auto-start server if needed)."""
         self._backend = self._create_backend()
         await self._backend.start()
@@ -104,7 +104,7 @@ class Timeseries:
     async def flush(self) -> None:
         return await self._backend.flush()
 
-    def get_all_ticks(self, msg_type: str, since: Optional[datetime] = None) -> list[dict]:
+    def get_all_ticks(self, msg_type: str, since: datetime | None = None) -> list[dict]:
         return self._backend.get_all_ticks(msg_type, since)
 
     def get_ticks(self, msg_type: str, symbol: str,
@@ -112,15 +112,15 @@ class Timeseries:
         return self._backend.get_ticks(msg_type, symbol, start, end, limit)
 
     def get_bars(self, msg_type: str, symbol: str, interval: str = "1m",
-                 start: Optional[datetime] = None, end: Optional[datetime] = None) -> list[Bar]:
+                 start: datetime | None = None, end: datetime | None = None) -> list[Bar]:
         return self._backend.get_bars(msg_type, symbol, interval, start, end)
 
-    def get_latest(self, msg_type: str, symbol: str) -> Optional[dict]:
+    def get_latest(self, msg_type: str, symbol: str) -> dict | None:
         return self._backend.get_latest(msg_type, symbol)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "TSDBClient":
         await self.start()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()

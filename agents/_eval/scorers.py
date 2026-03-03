@@ -10,7 +10,6 @@ These are used by EvalDimension objects in the framework.
 from __future__ import annotations
 
 import re
-from typing import Any
 
 
 def score_naming_conventions(case, artifacts: dict) -> float:

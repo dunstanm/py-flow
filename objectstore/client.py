@@ -10,7 +10,6 @@ from __future__ import annotations
 import io
 import logging
 from datetime import timedelta
-from typing import Optional
 
 from minio import Minio
 from minio.error import S3Error
@@ -38,7 +37,7 @@ class S3Client:
         secret_key: str = "minioadmin",
         bucket: str = "data",
         secure: bool = False,
-    ):
+    ) -> None:
         self._endpoint = endpoint.replace("http://", "").replace("https://", "")
         self._bucket = bucket
         self._client = Minio(

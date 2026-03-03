@@ -25,6 +25,7 @@ import json
 import logging
 
 from ai import Agent, tool
+
 from agents._context import _PlatformContext
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
                 "name": name,
                 "columns": {k: v.__name__ for k, v in typed_schema.items()},
                 "key_column": first_col,
-                "message": f"TickingTable created. Write rows with table.write_row(...) and derive with .last_by(), .agg_by(), etc.",
+                "message": "TickingTable created. Write rows with table.write_row(...) and derive with .last_by(), .agg_by(), etc.",
             })
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -259,7 +260,7 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
                 col_lines.append(f'REGISTRY.define("{col_name}", {py_type},')
                 col_lines.append(f'    role="{role}",')
                 if role == "measure":
-                    col_lines.append(f'    unit="units",')
+                    col_lines.append('    unit="units",')
                 desc = comp_match["description"] if comp_match and comp_match.get("description") else f"{col_name} for {name}"
                 col_lines.append(f'    description="{desc}")')
                 col_lines.append("")

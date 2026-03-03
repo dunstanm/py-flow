@@ -35,13 +35,15 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-from typing import Generator, Optional, Type, Union
+from collections.abc import Generator
 
 from ai._types import (
-    Message, LLMResponse, ToolCall, RAGResult, ExtractionResult, Tool,
+    ExtractionResult,
+    LLMResponse,
+    Message,
+    RAGResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,11 +65,11 @@ class AI:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         provider: str = "gemini",
         embedding_dim: int = 768,
-        model: Optional[str] = None,
-    ):
+        model: str | None = None,
+    ) -> None:
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self._api_key:
             raise ValueError(
@@ -95,8 +97,8 @@ class AI:
 
     def generate(
         self,
-        messages: Union[str, list[Message]],
-        tools: Optional[list[dict]] = None,
+        messages: str | list[Message],
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> LLMResponse:
@@ -117,8 +119,8 @@ class AI:
 
     def stream(
         self,
-        messages: Union[str, list[Message]],
-        tools: Optional[list[dict]] = None,
+        messages: str | list[Message],
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> Generator[str, None, None]:
@@ -140,7 +142,7 @@ class AI:
         self,
         question: str,
         documents=None,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         search_mode: str = "hybrid",
         limit: int = 5,
         temperature: float = 0.3,
@@ -181,8 +183,8 @@ class AI:
         self,
         text: str,
         schema: dict,
-        model_class: Optional[Type] = None,
-        system_prompt: Optional[str] = None,
+        model_class: type | None = None,
+        system_prompt: str | None = None,
         temperature: float = 0.0,
     ) -> ExtractionResult:
         """
@@ -212,9 +214,9 @@ class AI:
 
     def run_tool_loop(
         self,
-        messages: Union[str, list[Message]],
-        tools: Optional[list[dict]] = None,
-        execute_tool: Optional[callable] = None,
+        messages: str | list[Message],
+        tools: list[dict] | None = None,
+        execute_tool: callable | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         max_iterations: int = 5,
@@ -268,7 +270,7 @@ class AI:
         """Internal embedding provider. Used by MediaStore."""
         return self._embedder
 
-    def _normalize_messages(self, messages: Union[str, list[Message]]) -> list[Message]:
+    def _normalize_messages(self, messages: str | list[Message]) -> list[Message]:
         """Convert string shorthand to Message list."""
         if isinstance(messages, str):
             return [Message(role="user", content=messages)]

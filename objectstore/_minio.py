@@ -14,7 +14,6 @@ import platform
 import stat
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -56,13 +55,13 @@ class _MinIOBackend:
         console_port: int = 9003,
         access_key: str = "minioadmin",
         secret_key: str = "minioadmin",
-    ):
+    ) -> None:
         self._data_dir = Path(data_dir).resolve()
         self._api_port = api_port
         self._console_port = console_port
         self._access_key = access_key
         self._secret_key = secret_key
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
 
     @property
     def is_running(self) -> bool:

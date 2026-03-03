@@ -5,9 +5,8 @@ Lakehouse alias registry — maps alias names to lakehouse connection info.
 from __future__ import annotations
 
 import threading
-from typing import Dict, Optional
 
-_aliases: Dict[str, dict] = {}
+_aliases: dict[str, dict] = {}
 _lock = threading.Lock()
 
 
@@ -28,7 +27,7 @@ def register_alias(name: str, catalog_url: str, s3_endpoint: str,
         }
 
 
-def resolve_alias(name: str) -> Optional[dict]:
+def resolve_alias(name: str) -> dict | None:
     """Resolve a lakehouse alias to connection info."""
     with _lock:
         return _aliases.get(name)

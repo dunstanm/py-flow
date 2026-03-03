@@ -20,7 +20,6 @@ import asyncio
 import logging
 import subprocess
 import sys
-from typing import Optional
 
 import httpx
 
@@ -39,12 +38,12 @@ class MarketDataServer:
         self,
         port: int = 8000,
         host: str = "0.0.0.0",
-    ):
+    ) -> None:
         self._port = port
         self._host = host
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
 
-    async def start(self) -> "MarketDataServer":
+    async def start(self) -> MarketDataServer:
         """Start the market data server in a subprocess."""
         if await self.health():
             logger.info("Market data server already running on port %d", self._port)
@@ -117,11 +116,11 @@ class MarketDataServer:
         """Register this server under an alias name."""
         _register_alias(name, url=self.url, port=self._port)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "MarketDataServer":
         await self.start()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
 

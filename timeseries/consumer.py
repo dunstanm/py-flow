@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from marketdata.bus import TickBus
+
 from timeseries.base import TSDBBackend
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 class TSDBConsumer:
     """TickBus consumer that routes ticks to a TSDBBackend."""
 
-    def __init__(self, bus: TickBus, backend: TSDBBackend):
+    def __init__(self, bus: TickBus, backend: TSDBBackend) -> None:
         self._bus = bus
         self._backend = backend
-        self._sub_id: Optional[str] = None
-        self._task: Optional[asyncio.Task] = None
+        self._sub_id: str | None = None
+        self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Subscribe to all ticks on the bus and start the write loop."""

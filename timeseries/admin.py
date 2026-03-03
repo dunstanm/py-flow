@@ -36,7 +36,7 @@ class TsdbServer:
         http_port: int = 9000,
         ilp_port: int = 9009,
         pg_port: int = 8812,
-    ):
+    ) -> None:
         self._data_dir = data_dir
         self._host = host
         self._http_port = http_port
@@ -44,7 +44,7 @@ class TsdbServer:
         self._pg_port = pg_port
         self._manager = None
 
-    async def start(self) -> "TsdbServer":
+    async def start(self) -> TsdbServer:
         """Start the TSDB server."""
         from timeseries.backends.questdb.manager import QuestDBManager
         self._manager = QuestDBManager(
@@ -96,11 +96,11 @@ class TsdbServer:
             pg_port=self._pg_port,
         )
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "TsdbServer":
         await self.start()
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
 

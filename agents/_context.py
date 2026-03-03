@@ -9,7 +9,7 @@ client properties to talk to platform services.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class _PlatformContext:
         md_alias: str | None = None,
         media_alias: str | None = None,
         ai: Any = None,
-    ):
+    ) -> None:
         self._alias = alias
         self._user = user
         self._password = password
@@ -169,7 +169,7 @@ class _PlatformContext:
         """Register a dynamically created Storable subclass."""
         self._storable_types[name] = cls
 
-    def get_storable_type(self, name: str) -> Optional[type]:
+    def get_storable_type(self, name: str) -> type | None:
         """Look up a registered Storable type by name."""
         return self._storable_types.get(name)
 

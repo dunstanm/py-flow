@@ -25,8 +25,8 @@ Three tiers of side-effects on each Transition:
     Order._workflow_engine = engine  # enables start_workflow=
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, Callable, List
+from collections.abc import Callable
+from dataclasses import dataclass
 
 
 @dataclass
@@ -49,17 +49,17 @@ class Transition:
     from_state: str
     to_state: str
     guard: object = None            # Optional[Expr] — avoid circular import
-    action: Optional[Callable] = None
-    on_exit: Optional[Callable] = None
-    on_enter: Optional[Callable] = None
-    start_workflow: Optional[Callable] = None
-    allowed_by: Optional[List[str]] = None
+    action: Callable | None = None
+    on_exit: Callable | None = None
+    on_enter: Callable | None = None
+    start_workflow: Callable | None = None
+    allowed_by: list[str] | None = None
 
 
 class InvalidTransition(Exception):
     """Raised when the transition edge does not exist."""
 
-    def __init__(self, from_state, to_state, allowed):
+    def __init__(self, from_state, to_state, allowed) -> None:
         self.from_state = from_state
         self.to_state = to_state
         self.allowed = allowed
@@ -72,7 +72,7 @@ class InvalidTransition(Exception):
 class GuardFailure(Exception):
     """Raised when a transition edge exists but the guard evaluates to False."""
 
-    def __init__(self, from_state, to_state, guard):
+    def __init__(self, from_state, to_state, guard) -> None:
         self.from_state = from_state
         self.to_state = to_state
         self.guard = guard
@@ -84,7 +84,7 @@ class GuardFailure(Exception):
 class TransitionNotPermitted(Exception):
     """Raised when the user is not authorized to trigger a transition."""
 
-    def __init__(self, from_state, to_state, user, allowed_by):
+    def __init__(self, from_state, to_state, user, allowed_by) -> None:
         self.from_state = from_state
         self.to_state = to_state
         self.user = user

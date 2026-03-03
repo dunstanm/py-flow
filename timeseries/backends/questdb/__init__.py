@@ -15,14 +15,14 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from marketdata.models import Tick, FXTick, CurveTick
-from timeseries.base import TSDBBackend
-from timeseries.models import Bar
+from marketdata.models import CurveTick, FXTick, Tick
 
 from timeseries.backends.questdb.manager import QuestDBManager
+from timeseries.backends.questdb.reader import QuestDBReader
 from timeseries.backends.questdb.schema import create_tables
 from timeseries.backends.questdb.writer import QuestDBWriter
-from timeseries.backends.questdb.reader import QuestDBReader
+from timeseries.base import TSDBBackend
+from timeseries.models import Bar
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class QuestDBBackend(TSDBBackend):
         pg_port: int | None = None,
         ttl_days: int = 90,
         auto_start: bool = True,
-    ):
+    ) -> None:
         import os
         data_dir = data_dir or os.environ.get("QUESTDB_DATA_DIR", "data/questdb")
         http_port = http_port or int(os.environ.get("QUESTDB_HTTP_PORT", "9000"))
@@ -93,7 +93,7 @@ class QuestDBBackend(TSDBBackend):
     def get_all_ticks(
         self,
         msg_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> list[dict]:
         return self._reader.get_all_ticks(msg_type, since)
 
@@ -112,14 +112,14 @@ class QuestDBBackend(TSDBBackend):
         msg_type: str,
         symbol: str,
         interval: str = "1m",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[Bar]:
         return self._reader.get_bars(msg_type, symbol, interval, start, end)
 
     def get_latest(
         self,
         msg_type: str,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
     ) -> list[dict]:
         return self._reader.get_latest(msg_type, symbol)

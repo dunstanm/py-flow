@@ -19,8 +19,6 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Optional
-
 
 class StreamingClient:
     """Lightweight client for querying a remote streaming server.
@@ -31,11 +29,11 @@ class StreamingClient:
 
     def __init__(
         self,
-        alias_or_host: Optional[str] = None,
-        port: Optional[int] = None,
+        alias_or_host: str | None = None,
+        port: int | None = None,
         *,
-        host: Optional[str] = None,
-    ):
+        host: str | None = None,
+    ) -> None:
         from pydeephaven import Session
 
         resolved = self._resolve(alias_or_host, host, port)
@@ -46,9 +44,9 @@ class StreamingClient:
 
     @staticmethod
     def _resolve(
-        alias_or_host: Optional[str],
-        host: Optional[str],
-        port: Optional[int],
+        alias_or_host: str | None,
+        host: str | None,
+        port: int | None,
     ) -> dict:
         """Resolve alias or explicit host/port."""
         # If first arg given with no port, try alias resolution
@@ -88,8 +86,8 @@ class StreamingClient:
         self.session.close()
         print("Session closed.")
 
-    def __enter__(self):
+    def __enter__(self) -> "StreamingClient":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()

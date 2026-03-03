@@ -17,20 +17,19 @@ schemas survive process restarts.
 from __future__ import annotations
 
 import ast
-import json
-import io
-import logging
-import os
-import shutil
 import importlib
 import importlib.util
+import io
+import json
+import logging
+import shutil
 import sys
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
 
 from ai import tool
+
 from agents._context import _PlatformContext
 
 logger = logging.getLogger(__name__)
@@ -114,8 +113,8 @@ def validate_code(source: str) -> list[str]:
 def _build_sandbox_namespace(ctx: _PlatformContext | None = None) -> dict:
     """Build a restricted namespace for exec'ing agent code."""
     import dataclasses
-    import math
     import json as json_mod
+    import math
 
     from store.base import Storable
     from store.columns import REGISTRY
@@ -145,8 +144,7 @@ def _build_sandbox_namespace(ctx: _PlatformContext | None = None) -> dict:
 
     # Reactive (lazy — may not always be needed)
     try:
-        from reactive.computed import computed
-        from reactive.computed import effect
+        from reactive.computed import computed, effect
         ns["computed"] = computed
         ns["effect"] = effect
     except ImportError:

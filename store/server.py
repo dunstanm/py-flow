@@ -6,10 +6,9 @@ Configures pg_hba.conf for scram-sha-256 authentication.
 
 import os
 import urllib.parse
-import psycopg2
 
 import pgserver
-
+import psycopg2
 
 DEFAULT_DATA_DIR = os.path.join(
     os.path.dirname(__file__), "..", ".pgdata", "objectstore"
@@ -37,7 +36,7 @@ host    all       all            ::1/128        scram-sha-256
 class StoreServer:
     """Manages an embedded PostgreSQL instance with zero-trust RLS config."""
 
-    def __init__(self, data_dir=None, admin_password=None):
+    def __init__(self, data_dir=None, admin_password=None) -> None:
         self.data_dir = os.path.abspath(data_dir or DEFAULT_DATA_DIR)
         self.admin_password = admin_password or ADMIN_PASSWORD
         self._pg = None
@@ -162,7 +161,7 @@ class StoreServer:
 
         current = ""
         if os.path.exists(pg_hba_path):
-            with open(pg_hba_path, "r") as f:
+            with open(pg_hba_path) as f:
                 current = f.read()
 
         if current.strip() != desired.strip():
@@ -233,10 +232,10 @@ class StoreServer:
             self._pg.cleanup()
             self._pg = None
 
-    def __enter__(self):
+    def __enter__(self) -> "ObjectStoreServer":
         self.start()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.stop()
 

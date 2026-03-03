@@ -25,7 +25,6 @@ import psycopg2
 
 from workflow._registry import register_alias as _register_alias
 
-
 # Reuse the same role constants as store for DBOS compatibility
 ADMIN_ROLE = "app_admin"
 DEFAULT_ADMIN_PASSWORD = "admin_secret"
@@ -38,13 +37,13 @@ class WorkflowServer:
     In production, configure to point to an external PG instead.
     """
 
-    def __init__(self, data_dir: str = "data/workflow", admin_password: str | None = None):
+    def __init__(self, data_dir: str = "data/workflow", admin_password: str | None = None) -> None:
         self.data_dir = os.path.abspath(data_dir)
         self.admin_password = admin_password or DEFAULT_ADMIN_PASSWORD
         self._pg = None
         self._superuser = None
 
-    def start(self) -> "WorkflowServer":
+    def start(self) -> WorkflowServer:
         """Start the embedded PostgreSQL server and bootstrap for workflow use."""
         os.makedirs(self.data_dir, exist_ok=True)
         self._pg = pgserver.get_server(self.data_dir)
@@ -164,11 +163,11 @@ class WorkflowServer:
             self._pg.cleanup()
             self._pg = None
 
-    def __enter__(self):
+    def __enter__(self) -> "WorkflowServer":
         self.start()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.stop()
 
 

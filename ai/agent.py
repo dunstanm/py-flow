@@ -23,10 +23,10 @@ Usage::
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import Generator, Optional, Union
 
-from ai._types import Message, LLMResponse, ToolCall, Tool
+from ai._types import Message, Tool, ToolCall
 from ai.memory import AgentMemory
 
 logger = logging.getLogger(__name__)
@@ -68,15 +68,15 @@ class Agent:
 
     def __init__(
         self,
-        tools: Optional[list] = None,
+        tools: list | None = None,
         system_prompt: str = "You are a helpful assistant.",
         ai=None,
         max_iterations: int = 10,
         temperature: float = 0.7,
-        model: Optional[str] = None,
-        memory: Optional[AgentMemory] = None,
+        model: str | None = None,
+        memory: AgentMemory | None = None,
         name: str = "",
-    ):
+    ) -> None:
         # Lazy-create AI if not provided
         if ai is None:
             from ai import AI
@@ -90,7 +90,7 @@ class Agent:
         self._history: list[Message] = []
         self._memory = memory
         self._name = name or "agent"
-        self._conversation_id: Optional[str] = None
+        self._conversation_id: str | None = None
 
         # Build tool registry
         from ai._tools import ToolRegistry
@@ -117,7 +117,7 @@ class Agent:
         return list(self._history)
 
     @property
-    def conversation_id(self) -> Optional[str]:
+    def conversation_id(self) -> str | None:
         """Current conversation ID (set after first run or load)."""
         return self._conversation_id
 

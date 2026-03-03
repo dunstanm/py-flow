@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from marketdata.bus import TickBus
-from marketdata.models import Tick, FXTick, CurveTick, Subscription, get_symbol_key
+from marketdata.models import Subscription, get_symbol_key
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +23,8 @@ logger = logging.getLogger(__name__)
 class _ClientState:
     """Tracks a connected WebSocket client and its subscription."""
     websocket: WebSocket
-    types: Optional[set[str]] = None    # None = all types
-    symbols: Optional[set[str]] = None  # None = all symbols
+    types: set[str] | None = None    # None = all types
+    symbols: set[str] | None = None  # None = all symbols
 
 
 class WebSocketPublisher:
@@ -36,12 +35,12 @@ class WebSocketPublisher:
     per client and sends matching ones as JSON.
     """
 
-    def __init__(self, bus: TickBus):
+    def __init__(self, bus: TickBus) -> None:
         self._bus = bus
         self._clients: dict[int, _ClientState] = {}  # id(ws) → state
         self._lock = asyncio.Lock()
-        self._sub_id: Optional[str] = None
-        self._task: Optional[asyncio.Task] = None
+        self._sub_id: str | None = None
+        self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start consuming from the TickBus and dispatching to clients."""

@@ -12,10 +12,9 @@ Classes:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional, Sequence, Union
-
 
 # ---------------------------------------------------------------------------
 # Python type → Deephaven type mapping (lazy, avoids import at module level)
@@ -41,7 +40,7 @@ def _type_map():
     return _PY_TO_DH
 
 
-def _resolve_schema(schema: Dict[str, type]) -> dict:
+def _resolve_schema(schema: dict[str, type]) -> dict:
     """Convert a {name: python_type} dict to {name: dh_type}."""
     tm = _type_map()
     resolved = {}
@@ -94,7 +93,7 @@ class LiveTable:
 
     __slots__ = ("_table",)
 
-    def __init__(self, dh_table):
+    def __init__(self, dh_table) -> None:
         self._table = dh_table
 
     # -- helpers ----------------------------------------------------------
@@ -105,11 +104,11 @@ class LiveTable:
 
     # -- derivation (all auto-locked) -------------------------------------
 
-    def last_by(self, by: Union[str, Sequence[str]]) -> LiveTable:
+    def last_by(self, by: str | Sequence[str]) -> LiveTable:
         """Latest row per group."""
         return self._derive(self._table.last_by, by)
 
-    def first_by(self, by: Union[str, Sequence[str]]) -> LiveTable:
+    def first_by(self, by: str | Sequence[str]) -> LiveTable:
         """First row per group."""
         return self._derive(self._table.first_by, by)
 
@@ -119,19 +118,19 @@ class LiveTable:
             return self._derive(self._table.agg_by, aggs, by)
         return self._derive(self._table.agg_by, aggs)
 
-    def sum_by(self, by: Union[str, Sequence[str], None] = None) -> LiveTable:
+    def sum_by(self, by: str | Sequence[str] | None = None) -> LiveTable:
         """Sum by group."""
         if by is not None:
             return self._derive(self._table.sum_by, by)
         return self._derive(self._table.sum_by)
 
-    def avg_by(self, by: Union[str, Sequence[str], None] = None) -> LiveTable:
+    def avg_by(self, by: str | Sequence[str] | None = None) -> LiveTable:
         """Average by group."""
         if by is not None:
             return self._derive(self._table.avg_by, by)
         return self._derive(self._table.avg_by)
 
-    def group_by(self, by: Union[str, Sequence[str], None] = None) -> LiveTable:
+    def group_by(self, by: str | Sequence[str] | None = None) -> LiveTable:
         """Group by."""
         if by is not None:
             return self._derive(self._table.group_by, by)
@@ -143,11 +142,11 @@ class LiveTable:
             return self._derive(self._table.count_by, col, by)
         return self._derive(self._table.count_by, col)
 
-    def sort(self, order_by: Union[str, Sequence[str]]) -> LiveTable:
+    def sort(self, order_by: str | Sequence[str]) -> LiveTable:
         """Sort ascending."""
         return self._derive(self._table.sort, order_by)
 
-    def sort_descending(self, order_by: Union[str, Sequence[str]]) -> LiveTable:
+    def sort_descending(self, order_by: str | Sequence[str]) -> LiveTable:
         """Sort descending."""
         return self._derive(self._table.sort_descending, order_by)
 
@@ -171,8 +170,8 @@ class LiveTable:
     def snapshot(self):
         """Return a pandas DataFrame snapshot of the current table state."""
         from deephaven import pandas as dhpd
-        from deephaven.update_graph import shared_lock
         from deephaven.execution_context import get_exec_ctx
+        from deephaven.update_graph import shared_lock
 
         ug = get_exec_ctx().update_graph
         with shared_lock(ug):
@@ -183,7 +182,7 @@ class LiveTable:
         """Current row count."""
         return self._table.size
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<LiveTable rows={self.size}>"
 
 
@@ -207,7 +206,7 @@ class TickingTable(LiveTable):
 
     __slots__ = ("_writer",)
 
-    def __init__(self, schema: Dict[str, type]):
+    def __init__(self, schema: dict[str, type]) -> None:
         from deephaven import DynamicTableWriter
 
         dh_schema = _resolve_schema(schema)
@@ -226,5 +225,5 @@ class TickingTable(LiveTable):
         """Close the underlying writer."""
         self._writer.close()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TickingTable rows={self.size}>"

@@ -6,9 +6,10 @@ and are never imported directly by application code.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 
 class WorkflowStatus(str, Enum):
@@ -33,7 +34,7 @@ class WorkflowHandle:
         """Return the current status of this workflow."""
         return self._engine.get_workflow_status(self.workflow_id)
 
-    def get_result(self, timeout: Optional[float] = None) -> Any:
+    def get_result(self, timeout: float | None = None) -> Any:
         """Block until the workflow completes and return its result.
 
         Raises TimeoutError if *timeout* seconds elapse first.
@@ -112,7 +113,7 @@ class WorkflowEngine(ABC):
         """Send a notification to the workflow identified by *workflow_id*."""
 
     @abstractmethod
-    def recv(self, topic: str, timeout: Optional[float] = None) -> Any:
+    def recv(self, topic: str, timeout: float | None = None) -> Any:
         """Wait for a notification on *topic* inside the current workflow.
 
         Returns ``None`` if *timeout* seconds elapse without a message.
@@ -126,7 +127,7 @@ class WorkflowEngine(ABC):
 
     @abstractmethod
     def get_workflow_result(
-        self, workflow_id: str, *, timeout: Optional[float] = None
+        self, workflow_id: str, *, timeout: float | None = None
     ) -> Any:
         """Block until the workflow completes and return its output.
 

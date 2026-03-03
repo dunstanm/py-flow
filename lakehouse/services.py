@@ -11,14 +11,12 @@ import asyncio
 import logging
 import os
 import platform
-import shutil
 import stat
 import subprocess
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -73,7 +71,7 @@ class EmbeddedPGManager:
         data_dir: str = "data/lakehouse/postgres",
         port: int = 5488,
         user: str = "postgres",
-    ):
+    ) -> None:
         self._data_dir = Path(data_dir).resolve()
         self._port = port
         self._user = user
@@ -269,7 +267,7 @@ class LakehouseStack:
         pg: EmbeddedPGManager,
         lakekeeper: LakekeeperManager,
         s3_store,
-    ):
+    ) -> None:
         self._pg = pg
         self._lakekeeper = lakekeeper
         self._s3_store = s3_store
@@ -386,12 +384,12 @@ class LakekeeperManager:
         port: int = 8181,
         pg_url: str | None = None,
         encryption_key: str = "py-flow-dev-key-do-not-use-in-prod",
-    ):
+    ) -> None:
         self._data_dir = Path(data_dir).resolve()
         self._port = port
         self._pg_url = pg_url
         self._encryption_key = encryption_key
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
 
     @property
     def is_running(self) -> bool:

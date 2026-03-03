@@ -29,9 +29,9 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Generator, Optional
+from collections.abc import Generator
 
-from ai._types import Message, ToolCall, LLMResponse
+from ai._types import LLMResponse, Message, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class LLMClient(ABC):
     def generate(
         self,
         messages: list[Message],
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> LLMResponse:
@@ -68,7 +68,7 @@ class LLMClient(ABC):
     def stream(
         self,
         messages: list[Message],
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> Generator[str, None, None]:
@@ -92,8 +92,8 @@ class LLMClient(ABC):
     def run_tool_loop(
         self,
         messages: list[Message],
-        tools: Optional[list[dict]] = None,
-        execute_tool: Optional[callable] = None,
+        tools: list[dict] | None = None,
+        execute_tool: callable | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         max_iterations: int = 5,
@@ -163,10 +163,10 @@ class GeminiLLM(LLMClient):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gemini-3-flash-preview",
         max_retries: int = 3,
-    ):
+    ) -> None:
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self._api_key:
             raise ValueError(
@@ -190,12 +190,11 @@ class GeminiLLM(LLMClient):
     def generate(
         self,
         messages: list[Message],
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> LLMResponse:
         """Generate a response using Gemini."""
-        from google.genai import types
 
         client = self._get_client()
         contents = self._messages_to_contents(messages)
@@ -214,12 +213,11 @@ class GeminiLLM(LLMClient):
     def stream(
         self,
         messages: list[Message],
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> Generator[str, None, None]:
         """Stream response chunks from Gemini."""
-        from google.genai import types
 
         client = self._get_client()
         contents = self._messages_to_contents(messages)
@@ -369,7 +367,7 @@ class GeminiLLM(LLMClient):
             _raw_content=raw_content,
         )
 
-    def _call_with_retry(self, fn, retries: Optional[int] = None):
+    def _call_with_retry(self, fn, retries: int | None = None):
         """Call fn with exponential backoff on transient errors."""
         max_retries = retries if retries is not None else self._max_retries
         last_error = None

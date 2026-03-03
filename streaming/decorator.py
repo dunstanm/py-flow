@@ -30,7 +30,7 @@ Adds to the class:
 
 import re
 
-from streaming.table import TickingTable, LiveTable
+from streaming.table import TickingTable
 
 # Global registry: table_name → (TickingTable, LiveTable)
 _registry = {}

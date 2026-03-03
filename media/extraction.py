@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def extract_text(data: bytes, content_type: str, filename: str = "") -> Optional[str]:
+def extract_text(data: bytes, content_type: str, filename: str = "") -> str | None:
     """
     Extract searchable text from binary data based on content type.
 
@@ -51,7 +50,7 @@ def extract_text(data: bytes, content_type: str, filename: str = "") -> Optional
         return None
 
 
-def _extract_pdf(data: bytes) -> Optional[str]:
+def _extract_pdf(data: bytes) -> str | None:
     """Extract text from PDF using pymupdf."""
     try:
         import pymupdf
@@ -75,7 +74,7 @@ def _extract_pdf(data: bytes) -> Optional[str]:
         return None
 
 
-def _extract_plain(data: bytes) -> Optional[str]:
+def _extract_plain(data: bytes) -> str | None:
     """Extract text from plain text files."""
     try:
         text = data.decode("utf-8")
@@ -87,7 +86,7 @@ def _extract_plain(data: bytes) -> Optional[str]:
     return text.strip() if text.strip() else None
 
 
-def _extract_markdown(data: bytes) -> Optional[str]:
+def _extract_markdown(data: bytes) -> str | None:
     """Extract text from markdown, stripping common markup."""
     text = _extract_plain(data)
     if not text:
@@ -108,7 +107,7 @@ def _extract_markdown(data: bytes) -> Optional[str]:
     return text.strip() if text.strip() else None
 
 
-def _extract_html(data: bytes) -> Optional[str]:
+def _extract_html(data: bytes) -> str | None:
     """Extract text from HTML using beautifulsoup4."""
     try:
         from bs4 import BeautifulSoup

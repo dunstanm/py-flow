@@ -10,8 +10,7 @@ import dataclasses
 from collections import OrderedDict
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, get_type_hints, get_origin, get_args
-
+from typing import get_args, get_origin, get_type_hints
 
 # Supported Python types for columns
 _SUPPORTED_TYPES = {str, int, float, bool, Decimal, datetime}

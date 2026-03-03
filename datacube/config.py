@@ -18,11 +18,10 @@ so we use `` / `` instead.
 
 from __future__ import annotations
 
-import json
 import dataclasses
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Constants ──────────────────────────────────────────────────────────
 

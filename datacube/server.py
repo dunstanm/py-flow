@@ -26,13 +26,12 @@ import logging
 import webbrowser
 from pathlib import Path
 
+import perspective
+import perspective.handlers.tornado
 import pyarrow as pa
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
-
-import perspective
-import perspective.handlers.tornado
 
 logger = logging.getLogger(__name__)
 

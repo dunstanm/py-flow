@@ -8,20 +8,21 @@ RLS enforces zero-trust access control automatically.
 
 import json
 import uuid
+from collections.abc import Iterator
 from datetime import datetime, timezone
+from typing import Any
 
 import psycopg2
 import psycopg2.extras
 
-from store.base import Storable, Embedded, _JSONEncoder, _json_decoder_hook
-from store.state_machine import InvalidTransition, GuardFailure, TransitionNotPermitted
+from store.base import Embedded, _json_decoder_hook, _JSONEncoder
 from store.subscriptions import ChangeEvent
 
 
 class VersionConflict(Exception):
     """Raised when optimistic concurrency check fails."""
 
-    def __init__(self, entity_id, expected_version, actual_version):
+    def __init__(self, entity_id, expected_version, actual_version) -> None:
         self.entity_id = entity_id
         self.expected_version = expected_version
         self.actual_version = actual_version
@@ -34,17 +35,17 @@ class VersionConflict(Exception):
 class QueryResult:
     """Result of a paginated query. Contains items and an optional next_cursor."""
 
-    def __init__(self, items, next_cursor=None):
+    def __init__(self, items, next_cursor=None) -> None:
         self.items = items
         self.next_cursor = next_cursor
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         return iter(self.items)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.items)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Any:
         return self.items[index]
 
 
@@ -64,7 +65,7 @@ class StoreClient:
     """
 
     def __init__(self, user, password, host="localhost", port=5432, dbname="postgres",
-                 event_bus=None):
+                 event_bus=None) -> None:
         self.user = user
         self.event_bus = event_bus
         self.conn = psycopg2.connect(
@@ -655,8 +656,8 @@ class StoreClient:
         if self.conn and not self.conn.closed:
             self.conn.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "StoreClient":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self.close()

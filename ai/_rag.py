@@ -22,10 +22,9 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from ai._types import Message, RAGResult
 from ai._llm import LLMClient
+from ai._types import Message, RAGResult
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class RAGPipeline:
         llm: LLMClient,
         media_store,
         search_mode: str = "hybrid",
-    ):
+    ) -> None:
         self._llm = llm
         self._media_store = media_store
         self._search_mode = search_mode
@@ -70,7 +69,7 @@ class RAGPipeline:
     def ask(
         self,
         question: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         limit: int = 5,
         temperature: float = 0.3,
     ) -> RAGResult:

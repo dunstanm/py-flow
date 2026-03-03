@@ -11,24 +11,22 @@ Storable objects in PG with tsvector-indexed full-text search.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
-from typing import Optional, Union
 
 from objectstore import S3Client
+
+from media.chunking import chunk_text
+from media.extraction import detect_content_type, extract_text
 from media.models import (
     Document,
-    bootstrap_search_schema,
-    upsert_search_index,
     delete_search_index,
+    hybrid_search_documents,
     search_documents,
     semantic_search_documents,
-    hybrid_search_documents,
-    upsert_document_chunks,
     update_document_embedding,
+    upsert_document_chunks,
+    upsert_search_index,
 )
-from media.extraction import extract_text, detect_content_type
-from media.chunking import chunk_text
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +76,7 @@ class MediaStore:
         s3_secret_key: str | None = None,
         s3_bucket: str | None = None,
         s3_secure: bool = False,
-    ):
+    ) -> None:
         self._auto_server = None  # MediaServer we auto-started
 
         # Resolve connection info
@@ -126,6 +124,7 @@ class MediaStore:
         # 2. Auto-start from data_dir
         if data_dir is not None:
             import asyncio
+
             from media.admin import MediaServer
             server = MediaServer(data_dir=data_dir)
             asyncio.get_event_loop().run_until_complete(server.start())
@@ -145,13 +144,13 @@ class MediaStore:
 
     def upload(
         self,
-        source: Union[str, Path, bytes],
+        source: str | Path | bytes,
         *,
         filename: str = "",
         title: str = "",
         content_type: str = "",
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict] = None,
+        tags: list[str] | None = None,
+        metadata: dict | None = None,
         extract: bool = True,
     ) -> Document:
         """
@@ -230,7 +229,7 @@ class MediaStore:
 
     # ── Download ──────────────────────────────────────────────────────────
 
-    def download(self, doc: Union[Document, str]) -> bytes:
+    def download(self, doc: Document | str) -> bytes:
         """
         Download file content from S3.
 
@@ -250,7 +249,7 @@ class MediaStore:
 
         return self._s3.download(doc.s3_key)
 
-    def download_to(self, doc: Union[Document, str], path: Union[str, Path]) -> Path:
+    def download_to(self, doc: Document | str, path: str | Path) -> Path:
         """
         Download file content to a local path.
 
@@ -272,8 +271,8 @@ class MediaStore:
     def search(
         self,
         query: str,
-        content_type: Optional[str] = None,
-        tags: Optional[list[str]] = None,
+        content_type: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 50,
     ) -> list[dict]:
         """
@@ -380,8 +379,8 @@ class MediaStore:
 
     def list(
         self,
-        content_type: Optional[str] = None,
-        tags: Optional[list[str]] = None,
+        content_type: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 100,
     ) -> list[Document]:
         """
@@ -404,7 +403,7 @@ class MediaStore:
 
     # ── Delete ────────────────────────────────────────────────────────────
 
-    def delete(self, doc: Union[Document, str]) -> None:
+    def delete(self, doc: Document | str) -> None:
         """
         Soft-delete a document (Storable semantics).
 

@@ -14,10 +14,9 @@ ColumnDef captures:
   G. Cross-layer hints (legend_type, dh_type_override)
 """
 
-import re
 import dataclasses
-from typing import Any, Optional
-
+import re
+from typing import Any
 
 # Sentinel for "no default provided"
 _MISSING = object()
@@ -38,39 +37,39 @@ class ColumnDef:
     default: Any = _MISSING
 
     # ── B. Constraints ────────────────────────────────────────────
-    enum: Optional[list] = None
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    max_length: Optional[int] = None
-    pattern: Optional[str] = None
+    enum: list | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    max_length: int | None = None
+    pattern: str | None = None
 
     # ── C. Semantic / AI ──────────────────────────────────────────
     description: str = ""
-    synonyms: Optional[list] = None
-    sample_values: Optional[list] = None
-    semantic_type: Optional[str] = None
+    synonyms: list | None = None
+    sample_values: list | None = None
+    semantic_type: str | None = None
 
     # ── D. Analytics / OLAP ───────────────────────────────────────
     role: str = ""              # "dimension", "measure", or "attribute"
-    aggregation: Optional[str] = None  # sum, avg, last, min, max, count, weighted_avg
-    unit: Optional[str] = None  # required for measures
+    aggregation: str | None = None  # sum, avg, last, min, max, count, weighted_avg
+    unit: str | None = None  # required for measures
 
     # ── E. Display / UI ───────────────────────────────────────────
-    display_name: Optional[str] = None
-    format: Optional[str] = None
-    category: Optional[str] = None
+    display_name: str | None = None
+    format: str | None = None
+    category: str | None = None
 
     # ── F. Governance ─────────────────────────────────────────────
     sensitivity: str = "public"  # public, internal, confidential, pii
     deprecated: bool = False
-    tags: Optional[list] = None
+    tags: list | None = None
 
     # ── G. Cross-Layer Hints ──────────────────────────────────────
-    legend_type: Optional[str] = None
-    dh_type_override: Optional[str] = None
+    legend_type: str | None = None
+    dh_type_override: str | None = None
 
     # ── Prefix support ────────────────────────────────────────
-    allowed_prefixes: Optional[list] = None
+    allowed_prefixes: list | None = None
 
 
 class ColumnRegistry:
@@ -82,7 +81,7 @@ class ColumnRegistry:
     column's allowed_prefixes list.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._columns: dict[str, ColumnDef] = {}
         self._entities: dict[type, list[str]] = {}  # cls → [column_names]
 
@@ -211,7 +210,8 @@ class ColumnRegistry:
 
         Records the class in the entity map on success.
         """
-        from typing import get_type_hints, get_origin, get_args
+        from typing import get_args, get_origin, get_type_hints
+
         from reactive.computed import ComputedProperty
 
         # get_type_hints resolves forward refs and includes parent annotations

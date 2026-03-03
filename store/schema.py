@@ -4,7 +4,6 @@ indexes, RLS policies, and user provisioning.
 All DDL runs as app_admin (the table owner).
 """
 
-import psycopg2
 
 GROUP_ROLE = "app_user"
 ADMIN_ROLE = "app_admin"

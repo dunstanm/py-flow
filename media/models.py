@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from store.base import Storable
 
@@ -365,8 +364,8 @@ def delete_search_index(conn, entity_id: str) -> None:
     conn.commit()
 
 
-def search_documents(conn, query: str, content_type: Optional[str] = None,
-                      tags: Optional[list] = None, limit: int = 50) -> list[dict]:
+def search_documents(conn, query: str, content_type: str | None = None,
+                      tags: list | None = None, limit: int = 50) -> list[dict]:
     """
     Full-text search over documents.
 

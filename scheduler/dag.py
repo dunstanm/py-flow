@@ -7,7 +7,6 @@ Operates on Schedule instances with embedded Task lists.
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from typing import Optional
 
 from scheduler.models import Schedule, Task
 
@@ -15,12 +14,12 @@ from scheduler.models import Schedule, Task
 class CycleError(Exception):
     """Raised when a DAG contains a cycle."""
 
-    def __init__(self, cycle_path: list[str]):
+    def __init__(self, cycle_path: list[str]) -> None:
         self.cycle_path = cycle_path
         super().__init__(f"Cycle detected in DAG: {' → '.join(cycle_path)}")
 
 
-def get_task(sched: Schedule, name: str) -> Optional[Task]:
+def get_task(sched: Schedule, name: str) -> Task | None:
     """Look up a Task by name from the embedded tasks list.
 
     Returns None if not found.

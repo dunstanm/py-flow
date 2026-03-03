@@ -16,11 +16,19 @@ to create reaktiv Signals/Computed/Effect instances automatically.
 import ast
 import inspect
 import textwrap
+from typing import Any
 
 from reactive.expr import (
-    Expr, Const, Field, BinOp, UnaryOp, Func, If, Coalesce, IsNull,
+    BinOp,
+    Coalesce,
+    Const,
+    Expr,
+    Field,
+    Func,
+    If,
+    IsNull,
+    UnaryOp,
 )
-
 
 # ---------------------------------------------------------------------------
 # Errors
@@ -72,7 +80,7 @@ class _ASTTranslator(ast.NodeVisitor):
     cannot be represented as a single-entity Expr (e.g. iteration).
     """
 
-    def __init__(self, computed_names: set):
+    def __init__(self, computed_names: set) -> None:
         self.computed_names = computed_names
         self.is_cross_entity = False
 
@@ -309,10 +317,10 @@ class _ReactiveProxy:
 
     __slots__ = ("_obj",)
 
-    def __init__(self, obj):
+    def __init__(self, obj) -> None:
         object.__setattr__(self, "_obj", obj)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         obj = object.__getattribute__(self, "_obj")
         # Route through _reactive dict (unified signals + computeds)
         reactive = object.__getattribute__(obj, "_reactive")
@@ -322,7 +330,7 @@ class _ReactiveProxy:
         # Fallback to regular attribute
         return getattr(obj, name)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name, value) -> None:
         obj = object.__getattribute__(self, "_obj")
         setattr(obj, name, value)
 
@@ -339,15 +347,15 @@ class ComputedProperty:
     outer Computeds.
     """
 
-    def __init__(self, fn, expr, name):
+    def __init__(self, fn, expr, name) -> None:
         self.fn = fn          # original function
         self.expr = expr      # Expr tree (or None for cross-entity)
         self.name = name      # method name
 
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: type, name: str) -> None:
         self.name = name
 
-    def __get__(self, obj, objtype=None):
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         if obj is None:
             return self  # class-level: Position.pnl → descriptor
         # __getattribute__ normally intercepts before this descriptor fires,
@@ -358,7 +366,7 @@ class ComputedProperty:
             return node.read()
         return None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         kind = "single-entity" if self.expr is not None else "cross-entity"
         return f"<ComputedProperty {self.name!r} ({kind})>"
 
@@ -374,21 +382,21 @@ class EffectMethod:
     Wiring happens in Storable.__post_init__.
     """
 
-    def __init__(self, target_computed: str, fn):
+    def __init__(self, target_computed: str, fn) -> None:
         self.target_computed = target_computed
         self.fn = fn
         self.name = fn.__name__
 
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: type, name: str) -> None:
         self.name = name
 
-    def __get__(self, obj, objtype=None):
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         if obj is None:
             return self
         # When accessed on an instance, return the bound method
         return self.fn.__get__(obj, objtype)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<EffectMethod {self.name!r} watches={self.target_computed!r}>"
 
 

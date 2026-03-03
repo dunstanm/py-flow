@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from scheduler.models import Schedule, Run
+from scheduler.models import Run, Schedule
 
 if TYPE_CHECKING:
     from scheduler.server import SchedulerServer
@@ -30,7 +30,7 @@ class Scheduler:
     to the server — the user never touches infrastructure directly.
     """
 
-    def __init__(self, alias: str):
+    def __init__(self, alias: str) -> None:
         """
         Args:
             alias: Registered alias name (e.g. ``"demo"``).

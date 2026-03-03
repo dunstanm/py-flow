@@ -13,22 +13,21 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-
 from datetime import datetime
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from timeseries.base import TSDBBackend
+from timeseries.consumer import TSDBConsumer
+from timeseries.factory import create_backend
 
 from marketdata.bus import TickBus
 from marketdata.consumers.ws_publisher import WebSocketPublisher
-from marketdata.feeds.simulator import SimulatorFeed, SYMBOLS, FX_PAIRS
+from marketdata.feeds.simulator import FX_PAIRS, SYMBOLS, SimulatorFeed
 from marketdata.models import (
-    Subscription, SnapshotResponse, Tick, FXTick, CurveTick,
-    MarketDataMessage, get_symbol_key,
+    MarketDataMessage,
+    Subscription,
+    get_symbol_key,
 )
-from timeseries.base import TSDBBackend
-from timeseries.factory import create_backend
-from timeseries.consumer import TSDBConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,8 @@ async def lifespan(app: FastAPI):
     ws_pub = WebSocketPublisher(bus)
 
     # Start TSDB backend + consumer (pluggable via TSDB_BACKEND env)
-    tsdb: Optional[TSDBBackend] = None
-    tsdb_consumer: Optional[TSDBConsumer] = None
+    tsdb: TSDBBackend | None = None
+    tsdb_consumer: TSDBConsumer | None = None
     tsdb_enabled = os.environ.get("TSDB_ENABLED", "1").lower() in ("1", "true", "yes")
     if tsdb_enabled:
         try:
@@ -168,8 +167,8 @@ def _require_tsdb() -> TSDBBackend:
 async def get_tick_history(
     msg_type: str,
     symbol: str,
-    start: Optional[datetime] = Query(None, description="Start time (ISO 8601)"),
-    end: Optional[datetime] = Query(None, description="End time (ISO 8601)"),
+    start: datetime | None = Query(None, description="Start time (ISO 8601)"),
+    end: datetime | None = Query(None, description="End time (ISO 8601)"),
     limit: int = Query(1000, ge=1, le=10000, description="Max rows"),
 ):
     """Raw tick history for a symbol within a time range."""
@@ -186,8 +185,8 @@ async def get_bars(
     msg_type: str,
     symbol: str,
     interval: str = Query("1m", description="Bar interval: 1s,5s,1m,5m,15m,1h,4h,1d"),
-    start: Optional[datetime] = Query(None, description="Start time (ISO 8601)"),
-    end: Optional[datetime] = Query(None, description="End time (ISO 8601)"),
+    start: datetime | None = Query(None, description="Start time (ISO 8601)"),
+    end: datetime | None = Query(None, description="End time (ISO 8601)"),
 ):
     """OHLCV bars for a symbol at the given interval."""
     tsdb = _require_tsdb()
@@ -199,8 +198,8 @@ async def get_bars(
 async def get_bars_by_type(
     msg_type: str,
     interval: str = Query("1h", description="Bar interval"),
-    start: Optional[datetime] = Query(None, description="Start time (ISO 8601)"),
-    end: Optional[datetime] = Query(None, description="End time (ISO 8601)"),
+    start: datetime | None = Query(None, description="Start time (ISO 8601)"),
+    end: datetime | None = Query(None, description="End time (ISO 8601)"),
 ):
     """Latest bars for all symbols of a given type."""
     tsdb = _require_tsdb()
@@ -217,7 +216,7 @@ async def get_bars_by_type(
 @app.get("/md/latest/{msg_type}")
 async def get_latest_from_tsdb(
     msg_type: str,
-    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    symbol: str | None = Query(None, description="Filter by symbol"),
 ):
     """Latest tick(s) per symbol from the time-series store."""
     tsdb = _require_tsdb()
@@ -299,6 +298,7 @@ async def websocket_subscribe(ws: WebSocket):
 def main():
     """Run the market data server via uvicorn."""
     import argparse
+
     import uvicorn
 
     parser = argparse.ArgumentParser(description="Market Data Server")

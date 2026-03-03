@@ -5,23 +5,23 @@ Exports the user-facing API: Datacube, snapshot models, and config types.
 """
 
 from datacube.config import (
-    DatacubeSnapshot,
+    PIVOT_COLUMN_NAME_SEPARATOR,
     DatacubeColumnConfig,
+    DatacubeSnapshot,
     ExtendedColumn,
     Filter,
-    Sort,
     JoinSpec,
-    PIVOT_COLUMN_NAME_SEPARATOR,
+    Sort,
 )
 from datacube.engine import Datacube
 
 __all__ = [
+    "PIVOT_COLUMN_NAME_SEPARATOR",
     "Datacube",
-    "DatacubeSnapshot",
     "DatacubeColumnConfig",
+    "DatacubeSnapshot",
     "ExtendedColumn",
     "Filter",
-    "Sort",
     "JoinSpec",
-    "PIVOT_COLUMN_NAME_SEPARATOR",
+    "Sort",
 ]

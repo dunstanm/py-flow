@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional
 
-from marketdata.models import Tick, FXTick, CurveTick
+from marketdata.models import CurveTick, FXTick, Tick
+
 from timeseries.models import Bar
 
 
@@ -46,7 +46,7 @@ class TSDBBackend(ABC):
     def get_all_ticks(
         self,
         msg_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> list[dict]:
         """All ticks of a type since a timestamp (for sync/ETL).
 
@@ -75,8 +75,8 @@ class TSDBBackend(ABC):
         msg_type: str,
         symbol: str,
         interval: str = "1m",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[Bar]:
         """OHLCV bars for a symbol at the given interval."""
 
@@ -84,6 +84,6 @@ class TSDBBackend(ABC):
     def get_latest(
         self,
         msg_type: str,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
     ) -> list[dict]:
         """Latest tick(s) per symbol for a given message type."""

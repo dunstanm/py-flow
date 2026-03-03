@@ -92,6 +92,40 @@ Issues = "https://github.com/neema2/py-flow/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["store", "reactive", "bridge", "workflow", "marketdata", "timeseries", "lakehouse", "media", "ai", "streaming", "datacube"]
 
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["store", "reactive", "bridge", "workflow", "marketdata", "timeseries", "lakehouse", "media", "ai", "streaming", "datacube", "scheduler", "agents", "objectstore", "models"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "ANN",    # flake8-annotations (missing type hints)
+    "B",      # flake8-bugbear
+    "RUF",    # ruff-specific
+]
+ignore = [
+    "ANN101",  # missing self type
+    "ANN102",  # missing cls type
+    "ANN401",  # Any type allowed
+    "E501",    # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]  # don't require annotations in tests
+"demo_*" = ["ANN"]   # don't require annotations in demos
+"examples/*" = ["ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.environment]
+python-version = "3.10"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Disable faulthandler — it conflicts with the JVM's internal SIGSEGV

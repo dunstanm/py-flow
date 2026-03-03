@@ -21,7 +21,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -42,7 +41,7 @@ class MarketDataClient:
         alias_or_url: str | None = None,
         *,
         url: str | None = None,
-    ):
+    ) -> None:
         resolved = self._resolve(alias_or_url, url)
         self._base_url = resolved.get("url", DEFAULT_URL)
 

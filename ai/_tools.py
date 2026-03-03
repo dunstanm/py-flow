@@ -26,7 +26,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
-from typing import Optional, get_type_hints
+from typing import get_type_hints
 
 from ai._types import Tool
 
@@ -150,7 +150,7 @@ def tool(fn):
 class ToolRegistry:
     """Registry of tools that an LLM can call."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
 
     def register(self, tool: Tool) -> None:
@@ -214,7 +214,7 @@ class ToolRegistry:
         cls,
         media_store=None,
         lakehouse=None,
-    ) -> "ToolRegistry":
+    ) -> ToolRegistry:
         """Create a ToolRegistry with built-in platform tools.
 
         Args:

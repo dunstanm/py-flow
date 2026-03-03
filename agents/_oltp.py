@@ -24,9 +24,9 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-from typing import Optional
 
 from ai import Agent, tool
+
 from agents._context import _PlatformContext
 
 logger = logging.getLogger(__name__)

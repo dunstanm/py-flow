@@ -10,15 +10,20 @@ from store.registry import ColumnRegistry
 REGISTRY = ColumnRegistry()
 
 # Import domain modules to populate the registry
-from store.columns import general   # noqa: F401, E402
-from store.columns import trading   # noqa: F401, E402
-from store.columns import finance   # noqa: F401, E402
-from store.columns import media     # noqa: F401, E402
-from store.columns import scheduler # noqa: F401, E402
+from store.columns import (
+    finance,  # noqa: F401
+    general,  # noqa: F401
+    media,  # noqa: F401
+    scheduler,  # noqa: F401
+    trading,  # noqa: F401
+)
+
 
 # Auto-import agent-generated column modules (no agent dependency)
 def _load_agent_columns():
-    import importlib.util, sys, logging
+    import importlib.util
+    import logging
+    import sys
     from pathlib import Path
     d = Path(__file__).parent / "agent_generated"
     if not d.exists():

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 import psycopg2
 import psycopg2.extras
@@ -19,7 +18,7 @@ from timeseries.models import Bar
 logger = logging.getLogger(__name__)
 
 
-def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def _to_naive_utc(dt: datetime | None) -> datetime | None:
     """Strip tzinfo for QuestDB (it rejects ::timestamptz casts from psycopg2)."""
     if dt is None:
         return None
@@ -60,7 +59,7 @@ _VALID_INTERVALS = {"1s", "5s", "15s", "30s", "1m", "5m", "15m", "30m", "1h", "4
 class QuestDBReader:
     """Reads historical data from QuestDB via PGWire (psycopg2)."""
 
-    def __init__(self, host: str = "localhost", pg_port: int = 8812):
+    def __init__(self, host: str = "localhost", pg_port: int = 8812) -> None:
         self._host = host
         self._pg_port = pg_port
         self._conn = None
@@ -96,7 +95,7 @@ class QuestDBReader:
     def get_all_ticks(
         self,
         msg_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> list[dict]:
         """All ticks of a type since a timestamp, ordered by timestamp ASC."""
         table = _TABLE_MAP.get(msg_type)
@@ -140,8 +139,8 @@ class QuestDBReader:
         msg_type: str,
         symbol: str,
         interval: str = "1m",
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[Bar]:
         """OHLCV bars using QuestDB's SAMPLE BY."""
         table = _TABLE_MAP.get(msg_type)
@@ -208,7 +207,7 @@ class QuestDBReader:
     def get_latest(
         self,
         msg_type: str,
-        symbol: Optional[str] = None,
+        symbol: str | None = None,
     ) -> list[dict]:
         """Latest tick(s) per symbol using LATEST ON."""
         table = _TABLE_MAP.get(msg_type)

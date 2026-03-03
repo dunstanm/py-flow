@@ -4,7 +4,6 @@ Sharing updates readers/writers on ALL versions of an entity.
 All operations run as the entity owner (enforced by RLS).
 """
 
-import psycopg2
 
 
 def share_read(conn, entity_id, to_user):

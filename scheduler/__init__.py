@@ -19,14 +19,17 @@ User API::
 Platform API lives in ``scheduler.admin``.
 """
 
-from scheduler.models import Schedule, Task, Run, TaskResult
 from scheduler.client import Scheduler
 from scheduler.dag import CycleError
 from scheduler.decorators import schedule
+from scheduler.models import Run, Schedule, Task, TaskResult
 
 __all__ = [
-    "Scheduler",
-    "Schedule", "Task", "Run", "TaskResult",
     "CycleError",
+    "Run",
+    "Schedule",
+    "Scheduler",
+    "Task",
+    "TaskResult",
     "schedule",
 ]

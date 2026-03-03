@@ -6,13 +6,13 @@ never import from here.  Use ``workflow.WorkflowEngine`` instead.
 """
 
 import functools
-import urllib.parse
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
-from dbos import DBOS, Queue as DBOSQueue
+from dbos import DBOS
+from dbos import Queue as DBOSQueue
 
 from workflow.engine import WorkflowEngine, WorkflowHandle, WorkflowStatus
-
 
 # Map DBOS status strings → our WorkflowStatus enum
 _STATUS_MAP = {
@@ -37,7 +37,7 @@ class DBOSEngine(WorkflowEngine):
         Application name registered with DBOS.
     """
 
-    def __init__(self, pg_url: str, *, name: str = "workflow-app"):
+    def __init__(self, pg_url: str, *, name: str = "workflow-app") -> None:
         self._dbos = DBOS(config={
             "name": name,
             "system_database_url": pg_url,
@@ -65,11 +65,11 @@ class DBOSEngine(WorkflowEngine):
             DBOS.destroy()
             self._launched = False
 
-    def __enter__(self):
+    def __enter__(self) -> "DBOSEngine":
         self.launch()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.destroy()
 
     # ── Running workflows / steps ────────────────────────────────────
@@ -138,7 +138,7 @@ class DBOSEngine(WorkflowEngine):
     def send(self, workflow_id: str, topic: str, value: Any) -> None:
         DBOS.send(workflow_id, value, topic)
 
-    def recv(self, topic: str, timeout: Optional[float] = None) -> Any:
+    def recv(self, topic: str, timeout: float | None = None) -> Any:
         timeout_s = timeout if timeout is not None else 60
         return DBOS.recv(topic, timeout_seconds=timeout_s)
 
@@ -151,7 +151,7 @@ class DBOSEngine(WorkflowEngine):
         return _STATUS_MAP.get(status.status, WorkflowStatus.RUNNING)
 
     def get_workflow_result(
-        self, workflow_id: str, *, timeout: Optional[float] = None
+        self, workflow_id: str, *, timeout: float | None = None
     ) -> Any:
         handle = DBOS.retrieve_workflow(workflow_id)
         result = handle.get_result()

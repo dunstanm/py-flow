@@ -31,10 +31,10 @@ User API::
 Platform API lives in ``media.admin``.
 """
 
-from media.store import MediaStore
 from media.models import Document
+from media.store import MediaStore
 
 __all__ = [
-    "MediaStore",
     "Document",
+    "MediaStore",
 ]
