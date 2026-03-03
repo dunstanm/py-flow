@@ -4,10 +4,9 @@ No server or Deephaven dependencies required.
 """
 
 import math
+
 import pytest
-
-from marketdata.risk_engine import calculate_greeks, _norm_cdf
-
+from marketdata.risk_engine import _norm_cdf, calculate_greeks
 
 # ── _norm_cdf tests ─────────────────────────────────────────────────────────
 
@@ -99,12 +98,12 @@ class TestGreeksEdgeCases:
 
     def test_very_small_time_to_expiry(self):
         # Near expiry: should not raise, delta should be near 0 or 1
-        delta, gamma, theta, vega = calculate_greeks(100, strike=100, T=0.001)
+        delta, gamma, _theta, _vega = calculate_greeks(100, strike=100, T=0.001)
         assert math.isfinite(delta)
         assert math.isfinite(gamma)
 
     def test_very_high_volatility(self):
-        delta, gamma, theta, vega = calculate_greeks(100, strike=100, sigma=2.0)
+        delta, gamma, _theta, _vega = calculate_greeks(100, strike=100, sigma=2.0)
         assert 0 <= delta <= 1
         assert gamma >= 0
 
@@ -114,11 +113,11 @@ class TestGreeksEdgeCases:
         assert delta > 0.99
 
     def test_penny_stock(self):
-        delta, gamma, theta, vega = calculate_greeks(0.50, strike=0.55)
+        delta, gamma, _theta, _vega = calculate_greeks(0.50, strike=0.55)
         assert 0 <= delta <= 1
         assert math.isfinite(gamma)
 
     def test_high_price_stock(self):
-        delta, gamma, theta, vega = calculate_greeks(5000, strike=5250)
+        delta, gamma, _theta, _vega = calculate_greeks(5000, strike=5250)
         assert 0 <= delta <= 1
         assert math.isfinite(gamma)

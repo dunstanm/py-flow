@@ -43,7 +43,7 @@ pm_positions = risk_live.update([
 
         # ── 3. Show initial portfolio state ──────────────────────────
         summary = client.open_table("portfolio_summary").to_arrow().to_pandas()
-        print(f"\nPortfolio Summary:")
+        print("\nPortfolio Summary:")
         print(summary.to_string(index=False))
 
         risk = client.open_table("risk_live").to_arrow().to_pandas()

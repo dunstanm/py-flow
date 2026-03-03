@@ -93,7 +93,7 @@ class MediaServer:
             bucket=self._bucket,
         )
 
-    async def __aenter__(self) -> "MediaServer":
+    async def __aenter__(self) -> MediaServer:
         await self.start()
         return self
 

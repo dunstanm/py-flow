@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,7 +82,7 @@ def seed_storable_objects(server_info: dict) -> int:
 
 def seed_ticks(backend) -> dict:
     """Write real ticks via the public TSDBBackend API."""
-    from marketdata.models import Tick, FXTick, CurveTick
+    from marketdata.models import CurveTick, FXTick, Tick
 
     now = datetime.now(timezone.utc)
     counts = {"equity": 0, "fx": 0, "curve": 0}
@@ -190,7 +190,8 @@ async def run_demo(args):
     total_ticks = sum(tick_counts.values())
     print(f"  {total_ticks} ticks written ({tick_counts})")
 
-    import time; time.sleep(4)  # QuestDB WAL commit
+    import time
+    time.sleep(4)  # QuestDB WAL commit
     print()
 
     # ── Step 3: Sync to Iceberg ────────────────────────────────────────

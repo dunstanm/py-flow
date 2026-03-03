@@ -5,9 +5,10 @@ Requires: embedded PG + S3-compatible object store + GEMINI_API_KEY.
 Tests the full upload → chunk → embed → store → query flow.
 """
 
-import os
-import pytest
 import asyncio
+import os
+
+import pytest
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -19,10 +20,10 @@ requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY 
 @pytest.fixture(scope="module")
 def pg_server():
     """Start embedded PG with search + chunks schema."""
-    from store.server import StoreServer
-    from media.models import bootstrap_search_schema, bootstrap_chunks_schema
-
     import tempfile
+
+    from media.models import bootstrap_chunks_schema, bootstrap_search_schema
+    from store.server import StoreServer
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_embed_upload_"))
     server.start()
     server.provision_user("emb_user", "emb_pw")
@@ -42,8 +43,9 @@ def pg_server():
 @pytest.fixture(scope="module")
 def s3_server():
     """Start S3-compatible object store."""
-    import objectstore
     import tempfile
+
+    import objectstore
     loop = asyncio.new_event_loop()
     store = loop.run_until_complete(objectstore.configure(
         "minio",
@@ -86,8 +88,8 @@ def media_store_with_embed(s3_server, store_conn):
     if not GEMINI_API_KEY:
         pytest.skip("GEMINI_API_KEY not set")
 
-    from media import MediaStore
     from ai._embeddings import GeminiEmbeddings
+    from media import MediaStore
 
     embedder = GeminiEmbeddings(api_key=GEMINI_API_KEY, dimension=768)
     ms = MediaStore(

@@ -7,7 +7,7 @@ never import from here.  Use ``workflow.WorkflowEngine`` instead.
 
 import functools
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from dbos import DBOS
 from dbos import Queue as DBOSQueue
@@ -159,8 +159,8 @@ class DBOSEngine(WorkflowEngine):
 
     # ── Internal helpers ─────────────────────────────────────────────
 
-    _workflow_registry: dict[Callable, Callable] = {}
-    _step_registry: dict[Callable, Callable] = {}
+    _workflow_registry: ClassVar[dict[Callable, Callable]] = {}
+    _step_registry: ClassVar[dict[Callable, Callable]] = {}
 
     def _ensure_workflow(self, fn: Callable) -> Callable:
         """Wrap *fn* with @DBOS.workflow() exactly once."""

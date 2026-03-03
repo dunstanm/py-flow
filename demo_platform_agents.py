@@ -29,7 +29,6 @@ Usage::
 """
 
 import asyncio
-import json
 import os
 import sys
 import tempfile
@@ -121,7 +120,7 @@ def main():
 
     # Wait for simulator to produce some ticks
     step("Waiting for simulator feed to accumulate ticks...")
-    for attempt in range(30):
+    for _attempt in range(30):
         time.sleep(1)
         try:
             resp = httpx.get(f"{md.url}/md/latest/equity", timeout=2)

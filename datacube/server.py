@@ -163,7 +163,7 @@ def _build_tree_result(dc: Datacube, expanded_keys: set, source_schema: pa.Schem
     source_cols = [f.name for f in source_schema]
 
     # Target column order and schema
-    all_cols = ["__tree__"] + source_cols
+    all_cols = ["__tree__", *source_cols]
     fields = [pa.field("__tree__", pa.string())]
     for col_name in source_cols:
         fields.append(source_schema.field(col_name))
@@ -208,7 +208,7 @@ def _build_tree_result(dc: Datacube, expanded_keys: set, source_schema: pa.Schem
 
         for i in range(parents.num_rows):
             row_value = parents.column(current_field)[i].as_py()
-            key = tuple(v for _, v in parent_filters) + (row_value,)
+            key = (*tuple(v for _, v in parent_filters), row_value)
             is_expanded = key in expanded_keys
 
             prefix = "▾ " if is_expanded else "▸ "
@@ -226,7 +226,7 @@ def _build_tree_result(dc: Datacube, expanded_keys: set, source_schema: pa.Schem
 
             # LAZY: only recurse into children if this node is expanded
             if is_expanded:
-                _build_level(depth + 1, parent_filters + [(current_field, row_value)])
+                _build_level(depth + 1, [*parent_filters, (current_field, row_value)])
 
     _build_level(0, [])
 

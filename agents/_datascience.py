@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 import math
+from typing import Any
 
 from ai import Agent, tool
 
@@ -310,12 +310,12 @@ def create_datascience_tools(ctx: _PlatformContext) -> list:
             feature_list = [f.strip() for f in features.split(",")]
 
             # Validate columns
-            missing = [c for c in [target] + feature_list if c not in df.columns]
+            missing = [c for c in [target, *feature_list] if c not in df.columns]
             if missing:
                 return json.dumps({"error": f"Columns not found: {missing}"})
 
             # Drop rows with any NaN in relevant columns
-            df_clean = df[[target] + feature_list].dropna()
+            df_clean = df[[target, *feature_list]].dropna()
             n = len(df_clean)
             k = len(feature_list)
 

@@ -626,8 +626,8 @@ class StoreClient:
 
     def _row_to_object(self, cls: type, row: tuple) -> Any:
         """Convert a database row to a typed Python object with bi-temporal metadata."""
-        (event_id, entity_id, version, type_name, owner,
-         updated_by, readers, writers, data, state, event_type,
+        (_event_id, entity_id, version, _type_name, owner,
+         updated_by, _readers, _writers, data, state, event_type,
          tx_time, valid_from, valid_to) = row
 
         # data is already a dict (psycopg2 auto-parses JSONB)

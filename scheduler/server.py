@@ -141,7 +141,7 @@ class SchedulerServer:
         from scheduler._registry import register_alias
         register_alias(name, server=self)
 
-    def __enter__(self) -> "SchedulerServer":
+    def __enter__(self) -> SchedulerServer:
         self.start()
         return self
 

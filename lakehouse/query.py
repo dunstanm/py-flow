@@ -17,10 +17,13 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import duckdb
 import pyarrow as pa
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +165,7 @@ class Lakehouse:
                 result = conn.execute(sql)
             columns = [desc[0] for desc in result.description]
             rows = result.fetchall()
-            return [dict(zip(columns, row)) for row in rows]
+            return [dict(zip(columns, row, strict=False)) for row in rows]
         except Exception as e:
             logger.error("Query failed: %s — %s", sql[:200], e)
             raise
@@ -519,7 +522,7 @@ class Lakehouse:
         result = conn.execute(f"DESCRIBE lakehouse.default.{table_name}")
         columns = [desc[0] for desc in result.description]
         rows = result.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        return [dict(zip(columns, row, strict=False)) for row in rows]
 
     def row_count(self, table_name: str) -> int:
         """Get the row count for a specific table."""

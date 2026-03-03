@@ -7,13 +7,13 @@ EvalRunner, and eval datasets. Integration tests require GEMINI_API_KEY.
 
 import json
 import os
-import pytest
 import tempfile
 
-from ai._types import Tool, Message, ToolCall, LLMResponse
-from ai._tools import tool, ToolRegistry, _schema_from_function, _parse_param_docs
-from ai.agent import Agent, AgentResult, AgentStep
-from ai.eval import EvalRunner, EvalCase, EvalResult
+import pytest
+from ai._tools import ToolRegistry, _parse_param_docs, _schema_from_function, tool
+from ai._types import Message, Tool
+from ai.agent import Agent, AgentResult
+from ai.eval import EvalCase, EvalRunner
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -269,8 +269,8 @@ class TestAgentMemory:
 
     @pytest.fixture
     def pg_and_memory(self):
-        from store.server import StoreServer
         from ai.memory import AgentMemory, bootstrap_conversations_table
+        from store.server import StoreServer
 
         server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_agent_mem_"))
         server.start()

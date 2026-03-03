@@ -33,14 +33,14 @@ Usage::
 
 import asyncio
 import json
+import logging
 import math
 import os
 import tempfile
 import textwrap
 import threading
-import logging
 import time as _time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import httpx
 
@@ -51,13 +51,13 @@ logging.basicConfig(
 )
 
 from dataclasses import dataclass, field
-from store.base import Storable
-from reactive.computed import computed, effect
-from reactive.agg import group_by, rank_by
 
-from ai import Agent, tool, AI
+from ai import AI, Agent, tool
+from ai.eval import EvalCase, EvalRunner
 from ai.team import AgentTeam
-from ai.eval import EvalRunner, EvalCase
+from reactive.agg import group_by, rank_by
+from reactive.computed import computed, effect
+from store.base import Storable
 
 
 def section(title: str):
@@ -754,7 +754,7 @@ def main():
     print("  ✓ StoreServer (embedded PG)")
 
     # Bootstrap media + conversation schemas
-    from media.models import bootstrap_search_schema, bootstrap_chunks_schema
+    from media.models import bootstrap_chunks_schema, bootstrap_search_schema
     admin = store.admin_conn()
     bootstrap_search_schema(admin, embedding_dim=768)
     admin.close()
@@ -801,7 +801,7 @@ def main():
     )
     asyncio.run(lh_server.start())
     lh_server.register_alias("demo-agent")
-    print(f"  ✓ LakehouseServer (Lakekeeper + Iceberg + MinIO on 9082)")
+    print("  ✓ LakehouseServer (Lakekeeper + Iceberg + MinIO on 9082)")
 
     # Create Lakehouse client + portfolio_snapshots table
     from lakehouse import Lakehouse
@@ -903,7 +903,7 @@ def main():
     print("  All reading from reactive graph + MediaStore RAG")
     print()
 
-    team, market_agent, risk_agent, research_agent = build_team()
+    team, _market_agent, _risk_agent, research_agent = build_team()
 
     result = team.run(
         "Analyze my portfolio's current risk exposure. "

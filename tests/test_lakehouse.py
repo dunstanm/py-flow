@@ -7,31 +7,27 @@ sync watermarks. Integration tests require Lakekeeper + object store (marked sep
 
 import json
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pyarrow as pa
-import pytest
-
 from lakehouse.models import SyncState, TableInfo
-from lakehouse.tables import (
-    BARS_PARTITION,
-    BARS_SCHEMA,
-    EVENTS_PARTITION,
-    EVENTS_SCHEMA,
-    NAMESPACE,
-    POSITIONS_PARTITION,
-    POSITIONS_SCHEMA,
-    TABLE_DEFS,
-    TICKS_PARTITION,
-    TICKS_SCHEMA,
-)
 from lakehouse.sync import (
     _bars_to_arrow,
     _ensure_tz,
     _pg_rows_to_events_arrow,
     _tick_rows_to_arrow,
 )
-
+from lakehouse.tables import (
+    BARS_PARTITION,
+    BARS_SCHEMA,
+    EVENTS_PARTITION,
+    EVENTS_SCHEMA,
+    POSITIONS_PARTITION,
+    POSITIONS_SCHEMA,
+    TABLE_DEFS,
+    TICKS_PARTITION,
+    TICKS_SCHEMA,
+)
 
 # ── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -114,7 +110,7 @@ class TestIcebergSchemas:
 
     def test_table_defs_registry(self):
         assert set(TABLE_DEFS.keys()) == {"events", "ticks", "bars_daily", "positions"}
-        for name, (schema, partition) in TABLE_DEFS.items():
+        for _name, (schema, partition) in TABLE_DEFS.items():
             assert len(schema.fields) > 0
             assert len(partition.fields) > 0
 

@@ -6,28 +6,27 @@ RLS enforcement, trust boundary, sharing, and admin access.
 Run with: pytest tests/test_store.py -v
 """
 
+import json
 import os
 import sys
-import json
+import tempfile
 import time
 import uuid
-import tempfile
-import pytest
-import psycopg2.errors
 from dataclasses import dataclass
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+
+import psycopg2.errors
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from store.base import Storable, _json_decoder_hook, _JSONEncoder
+from store.client import QueryResult, StoreClient, VersionConflict
+from store.permissions import list_shared_with, share_read, share_write, unshare_read, unshare_write
 from store.server import StoreServer
-from store.base import Storable, _JSONEncoder, _json_decoder_hook
-from store.client import StoreClient
-from store.state_machine import StateMachine, Transition, InvalidTransition, GuardFailure, TransitionNotPermitted
-from store.client import VersionConflict, QueryResult
-from store.permissions import share_read, share_write, unshare_read, unshare_write, list_shared_with
-from store.subscriptions import EventBus, ChangeEvent, SubscriptionListener
-
+from store.state_machine import GuardFailure, InvalidTransition, StateMachine, Transition, TransitionNotPermitted
+from store.subscriptions import ChangeEvent, EventBus, SubscriptionListener
 
 # ── Test models ──────────────────────────────────────────────────────────────
 
@@ -372,9 +371,9 @@ class TestBiTemporal:
     def test_valid_from_defaults_to_now(self, alice):
         """When valid_from is not specified, it defaults to now()."""
         w = Widget(name="default_vf", color="a", weight=1.0)
-        before = datetime.now(timezone.utc)
+        _before = datetime.now(timezone.utc)
         alice.write(w)
-        after = datetime.now(timezone.utc)
+        _after = datetime.now(timezone.utc)
 
         assert w._store_valid_from is not None
         # valid_from should be roughly between before and after
@@ -1290,7 +1289,8 @@ class TestEventBus:
     def test_off_unsubscribes(self):
         bus = EventBus()
         events = []
-        cb = lambda e: events.append(e)
+        def cb(e):
+            events.append(e)
         bus.on("Widget", cb)
         bus.off("Widget", cb)
         bus.emit(ChangeEvent(

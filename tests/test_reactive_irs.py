@@ -8,14 +8,10 @@ Proves that a single market data tick (e.g. a curve rate bump) recalculates
 all the way up through swap NPV to portfolio aggregates.
 """
 
-import math
-import pytest
 from dataclasses import dataclass, field
-from typing import Optional
 
-from store.base import Storable
 from reactive.computed import computed, effect
-
+from store.base import Storable
 
 # ===========================================================================
 # Domain models
@@ -580,9 +576,9 @@ class TestEndToEndCascade:
 
         # Snapshot before
         npv_5y_before = swap_5y.npv
-        npv_10y_before = swap_10y.npv
+        _npv_10y_before = swap_10y.npv
         total_before = book.total_npv
-        slope_before = curve.curve_slope
+        _slope_before = curve.curve_slope
 
         # ── Shock: bump 5Y rate +100bp ──
         p5y.rate = 0.05
@@ -608,7 +604,7 @@ class TestEndToEndCascade:
         p2y = YieldCurvePoint(tenor_years=2.0, rate=0.03)
         p5y = YieldCurvePoint(tenor_years=5.0, rate=0.035)
         p10y = YieldCurvePoint(tenor_years=10.0, rate=0.04)
-        curve = YieldCurve(curve_points=[p2y, p5y, p10y])
+        _curve = YieldCurve(curve_points=[p2y, p5y, p10y])
 
         swap_2y = InterestRateSwap(
             symbol="2Y", notional=5_000_000,
@@ -687,12 +683,12 @@ class TestMultiCurrencySwaps:
             fixed_rate=0.005, float_rate=0.01, tenor_years=5.0,
             currency="JPY",
         )
-        book = SwapPortfolio(swaps=[usd_swap, jpy_swap])
+        _book = SwapPortfolio(swaps=[usd_swap, jpy_swap])
 
         # Only bump USD swap
         usd_swap.float_rate = 0.06
-        usd_npv = usd_swap.npv
-        jpy_npv = jpy_swap.npv
+        _usd_npv = usd_swap.npv
+        _jpy_npv = jpy_swap.npv
 
         # USD swap changed, JPY didn't
         assert usd_swap.pnl_status == "PROFIT"
@@ -816,7 +812,7 @@ class TestSwapEffects:
 
     def test_alert_includes_npv_value(self):
         _npv_alerts.clear()
-        swap = SwapWithAlert(
+        _swap = SwapWithAlert(
             symbol="ALERT-003", notional=50_000_000,
             fixed_rate=0.02, float_rate=0.06, tenor_years=10.0,
         )

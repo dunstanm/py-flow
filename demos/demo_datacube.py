@@ -70,9 +70,9 @@ def ingest_taxi_data(lh):
         FROM '{TAXI_URL}'
     """
 
-    print(f"\n📥 Ingesting into Lakehouse (S3/Iceberg)...")
+    print("\n📥 Ingesting into Lakehouse (S3/Iceberg)...")
     print(f"   Source: {TAXI_URL}")
-    print(f"   Path:  HTTPS Parquet → DuckDB → Iceberg (zero Python transit)")
+    print("   Path:  HTTPS Parquet → DuckDB → Iceberg (zero Python transit)")
 
     t0 = time.perf_counter()
     n = lh.ingest("yellow_taxi", ingest_sql, mode="append")
@@ -99,7 +99,7 @@ def run_queries(lh, row_count):
 
     print(f"\n{'='*70}")
     print(f"  DATACUBE QUERIES — {row_count:,} rows in Iceberg")
-    print(f"  Path: S3 Parquet → DuckDB Iceberg extension → result")
+    print("  Path: S3 Parquet → DuckDB Iceberg extension → result")
     print(f"{'='*70}\n")
 
     dc = lh.datacube("yellow_taxi")

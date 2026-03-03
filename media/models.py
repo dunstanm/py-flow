@@ -406,13 +406,13 @@ def search_documents(conn: psycopg2.extensions.connection, query: str, content_t
         LIMIT %s
     """
     # First param is for ts_rank, then the where params, then limit
-    all_params = [query] + params
+    all_params = [query, *params]
 
     with conn.cursor() as cur:
         cur.execute(sql, all_params)
         columns = [desc[0] for desc in cur.description]
         rows = cur.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        return [dict(zip(columns, row, strict=False)) for row in rows]
 
 
 def upsert_document_chunks(conn: psycopg2.extensions.connection, entity_id: str, chunks: list, embeddings: list) -> None:
@@ -430,7 +430,7 @@ def upsert_document_chunks(conn: psycopg2.extensions.connection, entity_id: str,
         cur.execute("DELETE FROM document_chunks WHERE entity_id = %s", (entity_id,))
 
         # Insert new chunks with embeddings
-        for chunk, embedding in zip(chunks, embeddings):
+        for chunk, embedding in zip(chunks, embeddings, strict=False):
             cur.execute("""
                 INSERT INTO document_chunks
                     (entity_id, chunk_index, chunk_text, start_char, end_char,
@@ -497,7 +497,7 @@ def semantic_search_documents(conn: psycopg2.extensions.connection, query_embedd
         cur.execute(sql, (query_vec, limit))
         columns = [desc[0] for desc in cur.description]
         rows = cur.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        return [dict(zip(columns, row, strict=False)) for row in rows]
 
 
 def hybrid_search_documents(

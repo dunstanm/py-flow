@@ -177,7 +177,7 @@ class Agent:
         self._history.append(Message(role="user", content=prompt))
 
         # Build messages: system + history
-        messages = [Message(role="system", content=self._system_prompt)] + list(self._history)
+        messages = [Message(role="system", content=self._system_prompt), *self._history]
 
         tool_decls = self._registry.list_declarations() if self._registry.tool_names else None
         steps: list[AgentStep] = []
@@ -269,7 +269,7 @@ class Agent:
             Partial content strings.
         """
         self._history.append(Message(role="user", content=prompt))
-        messages = [Message(role="system", content=self._system_prompt)] + list(self._history)
+        messages = [Message(role="system", content=self._system_prompt), *self._history]
         tool_decls = self._registry.list_declarations() if self._registry.tool_names else None
 
         for _ in range(self._max_iterations):

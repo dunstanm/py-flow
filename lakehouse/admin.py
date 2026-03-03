@@ -103,7 +103,7 @@ class LakehouseServer:
             s3_endpoint=self.s3_endpoint,
         )
 
-    async def __aenter__(self) -> "LakehouseServer":
+    async def __aenter__(self) -> LakehouseServer:
         await self.start()
         return self
 

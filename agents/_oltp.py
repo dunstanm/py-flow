@@ -355,7 +355,7 @@ def create_oltp_tools(ctx: _PlatformContext) -> list:
         except RuntimeError:
             # Try to connect using context
             if ctx.store_alias:
-                conn = ctx.get_store_connection()
+                conn = ctx.get_store_connection()  # noqa: F841
             else:
                 return json.dumps({"error": "No store connection. Set store_alias in _PlatformContext."})
 
@@ -483,7 +483,7 @@ def create_oltp_tools(ctx: _PlatformContext) -> list:
     codegen_tools = create_codegen_tools(ctx)
 
     return [list_storable_types, describe_type, create_dataset,
-            insert_records, query_dataset, ingest_from_file] + codegen_tools
+            insert_records, query_dataset, ingest_from_file, *codegen_tools]
 
 
 # ── Agent factory ──────────────────────────────────────────────────────

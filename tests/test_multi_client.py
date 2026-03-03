@@ -5,15 +5,14 @@ Auto-starts StreamingServer via conftest, publishes tables via public client API
 Run with: pytest tests/test_multi_client.py -v
 """
 
-import time
 import pytest
-
 from streaming import StreamingClient
+
 
 def _publish_tables():
     """Publish prices_live + portfolio_summary to DH query scope."""
-    from deephaven import new_table, agg
-    from deephaven.column import string_col, double_col, long_col
+    from deephaven import agg, new_table
+    from deephaven.column import double_col, long_col, string_col
     from deephaven.execution_context import get_exec_ctx
 
     prices_live = new_table([

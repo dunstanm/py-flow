@@ -5,9 +5,7 @@ Tests the sentence-aware chunking logic, overlap, boundary handling,
 and edge cases.
 """
 
-import pytest
-from media.chunking import chunk_text, TextChunk, _estimate_tokens, _split_sentences
-
+from media.chunking import _estimate_tokens, _split_sentences, chunk_text
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 

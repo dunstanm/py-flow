@@ -66,7 +66,7 @@ greeks_monitor = risk_live.update([
         # If the quant client published a watchlist, we can read it
         if "quant_watchlist" in all_tables:
             df = client.open_table("quant_watchlist").to_arrow().to_pandas()
-            print(f"\n  Found quant_watchlist (published by quant client):")
+            print("\n  Found quant_watchlist (published by quant client):")
             print(df[["Symbol", "Price", "ChangePct"]].to_string(index=False))
 
         # ── 4. Periodic risk report ──────────────────────────────────
@@ -90,7 +90,7 @@ greeks_monitor = risk_live.update([
 
                 # Direction breakdown
                 direction = client.open_table("risk_by_direction").to_arrow().to_pandas()
-                print(f"\n  Long vs Short:")
+                print("\n  Long vs Short:")
                 print(direction.to_string(index=False))
 
                 print("-" * 60)

@@ -144,7 +144,7 @@ class Datacube:
         result = self._conn.execute(sql)
         columns = [desc[0] for desc in result.description]
         rows = result.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        return [dict(zip(columns, row, strict=False)) for row in rows]
 
     def sql(self) -> str:
         """Return the compiled SQL without executing."""
@@ -185,7 +185,7 @@ class Datacube:
     def add_filter(self, field: str, op: str, value: Any = None) -> Datacube:
         """Add a filter predicate."""
         f = Filter(field=field, op=op, value=value)
-        return self._evolve(filters=self._snapshot.filters + (f,))
+        return self._evolve(filters=(*self._snapshot.filters, f))
 
     def clear_filters(self) -> Datacube:
         """Remove all filters."""
@@ -228,7 +228,7 @@ class Datacube:
             join_type=join_type,
             alias=alias,
         )
-        return self._evolve(joins=self._snapshot.joins + (j,))
+        return self._evolve(joins=(*self._snapshot.joins, j))
 
     def add_leaf_extend(self, name: str, expression: str, type: str = "float") -> Datacube:
         """Add a leaf-level extended column (pre-aggregation).
@@ -248,18 +248,18 @@ class Datacube:
                 excluded_from_pivot=(kind == "dimension"),
             )
             return self._evolve(
-                leaf_extended_columns=self._snapshot.leaf_extended_columns + (e,),
-                columns=self._snapshot.columns + (new_col,),
+                leaf_extended_columns=(*self._snapshot.leaf_extended_columns, e),
+                columns=(*self._snapshot.columns, new_col),
             )
         return self._evolve(
-            leaf_extended_columns=self._snapshot.leaf_extended_columns + (e,),
+            leaf_extended_columns=(*self._snapshot.leaf_extended_columns, e),
         )
 
     def add_group_extend(self, name: str, expression: str, type: str = "float") -> Datacube:
         """Add a group-level extended column (post-aggregation)."""
         e = ExtendedColumn(name=name, expression=expression, type=type)
         return self._evolve(
-            group_extended_columns=self._snapshot.group_extended_columns + (e,),
+            group_extended_columns=(*self._snapshot.group_extended_columns, e),
         )
 
     def set_limit(self, limit: int | None, offset: int | None = None) -> Datacube:
@@ -277,7 +277,7 @@ class Datacube:
 
         Example: ``dc.drill_down(sector="Tech")``
         """
-        new_path = self._snapshot.drill_path + (dict(row_values),)
+        new_path = (*self._snapshot.drill_path, dict(row_values))
         return self._evolve(drill_path=new_path)
 
     def drill_up(self) -> Datacube:

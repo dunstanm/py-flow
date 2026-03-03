@@ -97,7 +97,7 @@ class TsdbServer:
             pg_port=self._pg_port,
         )
 
-    async def __aenter__(self) -> "TsdbServer":
+    async def __aenter__(self) -> TsdbServer:
         await self.start()
         return self
 

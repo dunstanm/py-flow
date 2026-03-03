@@ -164,7 +164,7 @@ class WorkflowServer:
             self._pg.cleanup()
             self._pg = None
 
-    def __enter__(self) -> "WorkflowServer":
+    def __enter__(self) -> WorkflowServer:
         self.start()
         return self
 

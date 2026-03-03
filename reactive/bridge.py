@@ -47,7 +47,7 @@ def auto_persist_effect(obj: Any, store_client: StoreClient | None = None) -> li
 
         def make_effect(computed_name: str, comp: _ComputeSignal) -> Callable[[], None]:
             def effect_fn() -> None:
-                value = comp()
+                _value = comp()
                 try:
                     store_client.update(obj)
                 except Exception:

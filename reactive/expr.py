@@ -12,7 +12,7 @@ Operator overloading builds the tree — no computation happens at definition ti
 import json
 import math
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
 # ---------------------------------------------------------------------------
 # Base
@@ -244,36 +244,36 @@ class BinOp(Expr):
         self.right = right
 
     def eval(self, ctx: dict) -> Any:
-        l = self.left.eval(ctx)
-        r = self.right.eval(ctx)
+        left_val = self.left.eval(ctx)
+        right_val = self.right.eval(ctx)
         if self.op == "+":
-            return l + r
+            return left_val + right_val
         if self.op == "-":
-            return l - r
+            return left_val - right_val
         if self.op == "*":
-            return l * r
+            return left_val * right_val
         if self.op == "/":
-            return l / r
+            return left_val / right_val if right_val != 0 else 0
         if self.op == "%":
-            return l % r
+            return left_val % right_val
         if self.op == "**":
-            return l ** r
+            return left_val ** right_val
         if self.op == ">":
-            return l > r
+            return left_val > right_val
         if self.op == "<":
-            return l < r
+            return left_val < right_val
         if self.op == ">=":
-            return l >= r
+            return left_val >= right_val
         if self.op == "<=":
-            return l <= r
+            return left_val <= right_val
         if self.op == "==":
-            return l == r
+            return left_val == right_val
         if self.op == "!=":
-            return l != r
+            return left_val != right_val
         if self.op == "and":
-            return l and r
+            return left_val and right_val
         if self.op == "or":
-            return l or r
+            return left_val or right_val
         raise ValueError(f"Unknown binary op: {self.op}")
 
     def to_sql(self, col: str = "data") -> str:
@@ -349,7 +349,7 @@ class UnaryOp(Expr):
 class Func(Expr):
     """Named function call: sqrt, ceil, floor, round, min, max, log, exp."""
 
-    _PYTHON_FUNCS = {
+    _PYTHON_FUNCS: ClassVar[dict] = {
         "sqrt": math.sqrt,
         "ceil": math.ceil,
         "floor": math.floor,
@@ -360,12 +360,12 @@ class Func(Expr):
         "max": max,
     }
 
-    _SQL_FUNCS = {
+    _SQL_FUNCS: ClassVar[dict] = {
         "sqrt": "SQRT", "ceil": "CEIL", "floor": "FLOOR", "round": "ROUND",
         "log": "LN", "exp": "EXP", "min": "LEAST", "max": "GREATEST",
     }
 
-    _PURE_FUNCS = {
+    _PURE_FUNCS: ClassVar[dict] = {
         "sqrt": "sqrt", "ceil": "ceiling", "floor": "floor", "round": "round",
         "log": "log", "exp": "exp", "min": "min", "max": "max",
     }

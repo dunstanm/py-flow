@@ -12,6 +12,7 @@ Requires a ``.env`` file at the project root with::
 
 import os
 from pathlib import Path
+
 import pytest
 
 # ── Load .env ────────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ def market_data_server(tmp_path_factory):
     """Start MarketDataServer with its own QuestDB on test-specific ports."""
     import asyncio
     import time
+
     import httpx
     from marketdata.admin import MarketDataServer
 
@@ -72,7 +74,7 @@ def market_data_server(tmp_path_factory):
     # Wait for QuestDB to accumulate tick data from the simulator
     url = server.url
     ready = False
-    for attempt in range(45):
+    for _attempt in range(45):
         time.sleep(1)
         try:
             resp = httpx.get(f"{url}/md/latest/equity", timeout=2)

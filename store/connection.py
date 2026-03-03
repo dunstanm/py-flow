@@ -102,7 +102,7 @@ class UserConnection:
         self._client.close()
 
     # Context-manager support
-    def __enter__(self) -> "UserConnection":
+    def __enter__(self) -> UserConnection:
         self.activate()
         return self
 

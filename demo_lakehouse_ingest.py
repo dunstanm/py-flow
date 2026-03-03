@@ -16,7 +16,6 @@ Usage:
 import asyncio
 import logging
 import tempfile
-import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +47,7 @@ def show(lh, sql: str, label: str = ""):
     print(header)
     print("    " + "  ".join("─" * widths[c] for c in cols))
     for r in rows:
-        print("    " + "  ".join(f"{str(r.get(c, '')):<{widths[c]}}" for c in cols))
+        print("    " + "  ".join(f"{r.get(c, '')!s:<{widths[c]}}" for c in cols))
     return rows
 
 

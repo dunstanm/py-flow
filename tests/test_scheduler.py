@@ -12,10 +12,8 @@ Covers:
 """
 
 import tempfile
-import time
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -26,7 +24,7 @@ class TestEmbedded:
     """Test the Embedded base class."""
 
     def test_embedded_is_storable_subclass(self):
-        from store.base import Storable, Embedded
+        from store.base import Embedded, Storable
         assert issubclass(Embedded, Storable)
 
     def test_embedded_subclass_has_reactive_signals(self):
@@ -124,7 +122,7 @@ class TestModels:
         assert r3.task_results["load"].error == "timeout"
 
     def test_state_machines_and_lifecycles(self):
-        from scheduler.models import Schedule, Run, RunLifecycle
+        from scheduler.models import Run, RunLifecycle, Schedule
         assert Schedule._state_machine is not None and Schedule._state_machine.initial == "ACTIVE"
         assert Run._state_machine is not None and Run._state_machine.initial == "PENDING"
         assert "RUNNING" in RunLifecycle.allowed_transitions("PENDING")
@@ -204,8 +202,8 @@ class TestDAGGraph:
     """Test DAG graph helpers (acyclicity, execution order)."""
 
     def test_validate_acyclic_linear(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import validate_acyclic
+        from scheduler.models import Schedule, Task
         s = Schedule(name="linear", tasks=[
             Task(name="a", fn="fn_a"),
             Task(name="b", fn="fn_b", depends_on=["a"]),
@@ -215,8 +213,8 @@ class TestDAGGraph:
         assert order == ["a", "b", "c"]
 
     def test_validate_acyclic_parallel(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import validate_acyclic
+        from scheduler.models import Schedule, Task
         s = Schedule(name="parallel", tasks=[
             Task(name="a", fn="fn_a"),
             Task(name="b", fn="fn_b"),
@@ -227,8 +225,8 @@ class TestDAGGraph:
         assert set(order[:2]) == {"a", "b"}
 
     def test_validate_acyclic_cycle(self):
+        from scheduler.dag import CycleError, validate_acyclic
         from scheduler.models import Schedule, Task
-        from scheduler.dag import validate_acyclic, CycleError
         s = Schedule(name="cycle", tasks=[
             Task(name="a", fn="fn_a", depends_on=["c"]),
             Task(name="b", fn="fn_b", depends_on=["a"]),
@@ -238,8 +236,8 @@ class TestDAGGraph:
             validate_acyclic(s)
 
     def test_execution_order_levels(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import execution_order
+        from scheduler.models import Schedule, Task
         s = Schedule(name="diamond", tasks=[
             Task(name="a", fn="fn_a"),
             Task(name="b", fn="fn_b", depends_on=["a"]),
@@ -252,8 +250,8 @@ class TestDAGGraph:
         assert levels[2] == ["d"]
 
     def test_execution_order_skips_disabled(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import execution_order
+        from scheduler.models import Schedule, Task
         s = Schedule(name="partial", tasks=[
             Task(name="a", fn="fn_a"),
             Task(name="b", fn="fn_b", depends_on=["a"], enabled=False),
@@ -266,14 +264,14 @@ class TestDAGGraph:
         assert "c" in all_names
 
     def test_execution_order_empty(self):
-        from scheduler.models import Schedule
         from scheduler.dag import execution_order
+        from scheduler.models import Schedule
         s = Schedule(name="empty", tasks=[])
         assert execution_order(s) == []
 
     def test_get_task_found(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import get_task
+        from scheduler.models import Schedule, Task
         s = Schedule(name="test", tasks=[
             Task(name="a", fn="fn_a"),
             Task(name="b", fn="fn_b"),
@@ -283,8 +281,8 @@ class TestDAGGraph:
         assert t.name == "b"
 
     def test_get_task_not_found(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag import get_task
+        from scheduler.models import Schedule, Task
         s = Schedule(name="test", tasks=[Task(name="a", fn="fn_a")])
         assert get_task(s, "missing") is None
 
@@ -298,8 +296,8 @@ class TestDAGRunner:
     FX = "tests._sched_fixtures"
 
     def test_run_linear(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
         from tests._sched_fixtures import call_log, reset_log
 
         reset_log()
@@ -316,8 +314,8 @@ class TestDAGRunner:
         assert call_log == ["a", "b"]
 
     def test_run_parallel(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
 
         s = Schedule(name="parallel", tasks=[
             Task(name="a", fn=f"{self.FX}:fn_return_a"),
@@ -334,8 +332,8 @@ class TestDAGRunner:
         assert run.result == "all_succeeded"
 
     def test_run_failure_skips_dependents(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
 
         s = Schedule(name="fail", tasks=[
             Task(name="a", fn=f"{self.FX}:fn_boom"),
@@ -350,8 +348,8 @@ class TestDAGRunner:
         assert run.task_results["b"].status == "SKIPPED"
 
     def test_run_bad_fn(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
 
         s = Schedule(name="missing", tasks=[
             Task(name="a", fn="nonexistent.module:fn"),
@@ -363,8 +361,8 @@ class TestDAGRunner:
         assert run.task_results["a"].status == "ERROR"
 
     def test_run_disabled_task_skipped(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
 
         s = Schedule(name="disabled", tasks=[
             Task(name="a", fn=f"{self.FX}:fn_return_a"),
@@ -380,8 +378,8 @@ class TestDAGRunner:
         assert "c" in run.task_results
 
     def test_run_records_duration(self):
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
 
         s = Schedule(name="timed", tasks=[
             Task(name="slow", fn=f"{self.FX}:fn_slow"),
@@ -393,8 +391,8 @@ class TestDAGRunner:
         assert run.task_results["slow"].duration_ms >= 40  # at least 40ms
 
     def test_run_empty(self):
-        from scheduler.models import Schedule
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule
 
         s = Schedule(name="empty", tasks=[])
         runner = DAGRunner(engine=None, client=None)
@@ -558,8 +556,8 @@ class TestSchedulerIntegration:
 
     def test_scheduler_register_and_fire(self, client):
         """Full round-trip: register schedule, fire, check Run."""
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
         from scheduler.server import SchedulerServer
 
         # Lightweight: inject client directly (no full start())
@@ -584,8 +582,8 @@ class TestSchedulerIntegration:
 
     def test_scheduler_tick_fires_due(self, client):
         """Tick should fire schedules that are due."""
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
         from scheduler.server import SchedulerServer
 
         server = SchedulerServer.__new__(SchedulerServer)
@@ -610,8 +608,8 @@ class TestSchedulerIntegration:
 
     def test_scheduler_pipeline_fire(self, client):
         """Fire a multi-task schedule."""
-        from scheduler.models import Schedule, Task
         from scheduler.dag_runner import DAGRunner
+        from scheduler.models import Schedule, Task
         from scheduler.server import SchedulerServer
 
         server = SchedulerServer.__new__(SchedulerServer)

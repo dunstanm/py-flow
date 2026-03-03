@@ -449,7 +449,7 @@ class LakekeeperManager:
             stderr=subprocess.PIPE,
         )
 
-        for attempt in range(20):
+        for _attempt in range(30):
             await asyncio.sleep(1)
             if await self.health():
                 logger.info("Lakekeeper started on port %d", self._port)

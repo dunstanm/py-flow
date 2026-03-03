@@ -15,12 +15,11 @@ import asyncio
 import logging
 import tempfile
 
-import pyarrow as pa
 import pandas as pd
+import pyarrow as pa
 import pytest
-
 from datacube.config import PIVOT_COLUMN_NAME_SEPARATOR
-from datacube.engine import Datacube, _is_lakehouse, _columns_from_lakehouse
+from datacube.engine import Datacube, _columns_from_lakehouse, _is_lakehouse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

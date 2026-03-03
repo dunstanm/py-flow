@@ -237,12 +237,12 @@ class ColumnRegistry:
 
             # Resolve column
             try:
-                col_def, prefix = self.resolve(field_name)
+                col_def, _prefix = self.resolve(field_name)
             except RegistryError:
                 raise RegistryError(
                     f"{cls.__name__}.{field_name}: column '{field_name}' "
                     f"is not defined in the column registry"
-                )
+                ) from None
 
             # Type check
             if field_type != col_def.python_type:
@@ -265,7 +265,7 @@ class ColumnRegistry:
                     raise RegistryError(
                         f"{cls.__name__}.{attr_name}: @computed column "
                         f"'{attr_name}' is not defined in the column registry"
-                    )
+                    ) from None
                 field_names.append(attr_name)
 
         self._entities[cls] = field_names

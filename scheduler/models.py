@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from store.base import Embedded, Storable
 from store.state_machine import StateMachine, Transition
@@ -77,7 +78,7 @@ class Schedule(Storable):
 class ScheduleLifecycle(StateMachine):
     """Schedule config lifecycle."""
     initial = "ACTIVE"
-    transitions = [
+    transitions: ClassVar[list] = [
         Transition("ACTIVE", "PAUSED"),
         Transition("PAUSED", "ACTIVE"),
         Transition("ACTIVE", "DELETED"),
@@ -143,7 +144,7 @@ class Run(Storable):
 class RunLifecycle(StateMachine):
     """Execution lifecycle — the important state machine."""
     initial = "PENDING"
-    transitions = [
+    transitions: ClassVar[list] = [
         Transition("PENDING", "RUNNING"),
         Transition("RUNNING", "SUCCESS"),
         Transition("RUNNING", "PARTIAL"),

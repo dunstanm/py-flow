@@ -24,15 +24,13 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-import psycopg2
 import pytest
-
+from marketdata.models import CurveTick, FXTick, Tick
 from store.base import Storable
 from store.connection import connect
 from store.server import StoreServer
-from marketdata.models import Tick, FXTick, CurveTick
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -205,7 +203,8 @@ def seeded_ticks(tsdb):
 
     asyncio.run(tsdb.flush())
     # QuestDB WAL needs time to commit ILP writes across all tables
-    import time; time.sleep(4)
+    import time
+    time.sleep(4)
 
     total = len(equity_ticks) + len(fx_ticks) + len(curve_ticks)
     yield {
@@ -494,6 +493,7 @@ class TestLakehouseRoundTrip:
     def test_ingest_append(self, stack):
         """Ingest mode=append: raw append with _batch_id and _batch_ts."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_append_{_uuid.uuid4().hex[:8]}"
@@ -527,6 +527,7 @@ class TestLakehouseRoundTrip:
     def test_ingest_snapshot(self, stack):
         """Ingest mode=snapshot: batch versioning with _is_current."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_snap_{_uuid.uuid4().hex[:8]}"
@@ -575,6 +576,7 @@ class TestLakehouseRoundTrip:
     def test_ingest_incremental(self, stack):
         """Ingest mode=incremental: upsert by PK, soft delete, full audit trail."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_incr_{_uuid.uuid4().hex[:8]}"
@@ -625,6 +627,7 @@ class TestLakehouseRoundTrip:
     def test_ingest_bitemporal(self, stack):
         """Ingest mode=bitemporal: system time + business time."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_bitemp_{_uuid.uuid4().hex[:8]}"
@@ -667,6 +670,7 @@ class TestLakehouseRoundTrip:
     def test_transform_append(self, stack, seeded):
         """Transform mode=append: SQL result written to new table."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_xform_append_{_uuid.uuid4().hex[:8]}"
@@ -691,6 +695,7 @@ class TestLakehouseRoundTrip:
     def test_transform_snapshot(self, stack, seeded):
         """Transform mode=snapshot: SQL materialized view with batch history."""
         import uuid as _uuid
+
         from lakehouse import Lakehouse
 
         tbl = f"test_xform_snap_{_uuid.uuid4().hex[:8]}"

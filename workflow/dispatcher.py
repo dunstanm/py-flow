@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from store.client import StoreClient
+
     from workflow.engine import WorkflowEngine
 
 

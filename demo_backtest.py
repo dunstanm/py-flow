@@ -25,8 +25,6 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from datetime import datetime, timezone
-from typing import Optional
 
 import httpx
 
@@ -38,7 +36,7 @@ POLL_INTERVAL = 3  # seconds between progress checks
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get(path: str, params: Optional[dict] = None) -> dict | list:
+def _get(path: str, params: dict | None = None) -> dict | list:
     """GET from market data server, raise on failure."""
     resp = httpx.get(f"{MD_BASE}{path}", params=params or {}, timeout=5)
     resp.raise_for_status()
@@ -291,7 +289,7 @@ def print_summary(result: dict, symbol: str, interval: str, total_ticks: int):
     print(f"  BACKTEST RESULTS — {symbol} {result['fast_period']}/{result['slow_period']} MA Crossover")
     print(f"{'═' * 70}\n")
 
-    print(f"  Data Source:     TSDB (via Market Data Server REST API)")
+    print("  Data Source:     TSDB (via Market Data Server REST API)")
     print(f"  Symbol:          {symbol}")
     print(f"  Bar Interval:    {interval}")
     print(f"  Bars Used:       {result['bars_used']:,}")
@@ -309,8 +307,8 @@ def print_summary(result: dict, symbol: str, interval: str, total_ticks: int):
     print(f"  Total P&L:       {pnl_color}${pnl:>+,.2f}{reset}")
 
     print(f"\n{'═' * 70}")
-    print(f"  Pipeline: SimulatorFeed → TickBus → TSDBConsumer → TSDB Backend")
-    print(f"           → REST /md/bars → MA Crossover Backtest")
+    print("  Pipeline: SimulatorFeed → TickBus → TSDBConsumer → TSDB Backend")
+    print("           → REST /md/bars → MA Crossover Backtest")
     print(f"{'═' * 70}\n")
 
 
@@ -319,7 +317,7 @@ def print_summary(result: dict, symbol: str, interval: str, total_ticks: int):
 def show_tsdb_snapshot():
     """Show a summary of all data in the TSDB across asset types."""
     print(f"\n{'─' * 70}")
-    print(f"  TSDB Snapshot — All Asset Types")
+    print("  TSDB Snapshot — All Asset Types")
     print(f"{'─' * 70}\n")
 
     for msg_type in ("equity", "fx", "curve"):
@@ -352,7 +350,7 @@ def show_fx_bars_if_available():
         if not bars or len(bars) < 3:
             return
         print(f"\n{'─' * 70}")
-        print(f"  Bonus: EUR/USD 5s Bars (from TSDB)")
+        print("  Bonus: EUR/USD 5s Bars (from TSDB)")
         print(f"{'─' * 70}\n")
         print(f"  {'Time':>23}  {'Open':>9}  {'High':>9}  {'Low':>9}  {'Close':>9}")
         print(f"  {'─' * 23}  {'─' * 9}  {'─' * 9}  {'─' * 9}  {'─' * 9}")

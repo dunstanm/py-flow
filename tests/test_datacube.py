@@ -7,22 +7,19 @@ These tests are organized into:
 3. Engine integration tests (real DuckDB with in-memory data)
 """
 
-import json
-import pytest
 import duckdb
-
+import pytest
+from datacube.compiler import compile, discover_pivot_values
 from datacube.config import (
-    DatacubeSnapshot,
+    PIVOT_COLUMN_NAME_SEPARATOR,
     DatacubeColumnConfig,
+    DatacubeSnapshot,
     ExtendedColumn,
     Filter,
-    Sort,
     JoinSpec,
-    PIVOT_COLUMN_NAME_SEPARATOR,
+    Sort,
 )
-from datacube.compiler import compile, discover_pivot_values
 from datacube.engine import Datacube
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Config Model Tests

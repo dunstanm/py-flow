@@ -5,13 +5,11 @@ Tests _to_snake_case and _resolve_column_specs which don't need Deephaven.
 The full @ticking decorator and tick() are integration-tested via the demos.
 """
 
-import pytest
 from dataclasses import dataclass, field
 
-from streaming.decorator import _to_snake_case, _resolve_column_specs
-from store.base import Storable
 from reactive.computed import computed
-
+from store.base import Storable
+from streaming.decorator import _resolve_column_specs, _to_snake_case
 
 # ── snake_case tests ──────────────────────────────────────────────────────
 
@@ -110,7 +108,7 @@ class TestResolveColumnSpecs:
                 return "OK" if self.value > 0 else "BAD"
 
         specs = _resolve_column_specs(WithStatus)
-        status_spec = [s for s in specs if s[0] == "status"][0]
+        status_spec = next(s for s in specs if s[0] == "status")
         assert status_spec[2] is str
 
     def test_computed_return_annotation_int(self):
@@ -124,7 +122,7 @@ class TestResolveColumnSpecs:
                 return len(self.items)
 
         specs = _resolve_column_specs(WithCount)
-        count_spec = [s for s in specs if s[0] == "count"][0]
+        count_spec = next(s for s in specs if s[0] == "count")
         assert count_spec[2] is int
 
     def test_computed_no_annotation_defaults_float(self):
@@ -138,7 +136,7 @@ class TestResolveColumnSpecs:
                 return self.x * 2
 
         specs = _resolve_column_specs(WithCalc)
-        doubled_spec = [s for s in specs if s[0] == "doubled"][0]
+        doubled_spec = next(s for s in specs if s[0] == "doubled")
         assert doubled_spec[2] is float
 
     def test_computed_sorted_alphabetically(self):

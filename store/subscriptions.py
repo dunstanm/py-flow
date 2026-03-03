@@ -10,6 +10,8 @@ Internal:
     SubscriptionListener  — PG LISTEN/NOTIFY thread (used by EventListener + StoreBridge).
 """
 
+from __future__ import annotations
+
 import json
 import select
 import threading
@@ -339,7 +341,7 @@ class EventListener:
             self._listener = None
         self._started = False
 
-    def __enter__(self) -> "SubscriptionManager":
+    def __enter__(self) -> EventListener:
         return self
 
     def __exit__(self, *args: Any) -> None:

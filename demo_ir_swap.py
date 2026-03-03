@@ -25,11 +25,11 @@ Usage:
   Open http://localhost:10000 in your browser
 """
 
+import asyncio
+import json
+import logging
 import os
 import sys
-import json
-import asyncio
-import logging
 import threading
 from collections import deque
 from datetime import datetime, timezone
@@ -58,13 +58,12 @@ _md_server = MarketDataServer(port=8000)
 asyncio.run(_md_server.start())
 print(f"  Market data server started on port {_md_server.port}")
 
-from streaming import flush, agg
-
 # ── 2. Domain models — fully reactive (@computed + @effect) ──────────────
 from dataclasses import dataclass, field
-from store.base import Storable
-from streaming import ticking, get_tables
+
 from reactive.computed import computed, effect
+from store.base import Storable
+from streaming import agg, flush, get_tables, ticking
 
 # Publish queue: @effect on YieldCurvePoint.rate enqueues CurveTicks here;
 # the WS consumer drains them and sends back to the market data hub.

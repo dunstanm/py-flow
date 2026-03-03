@@ -5,21 +5,19 @@ These test the server.py functions directly with real DuckDB data,
 without starting a Tornado server or Perspective.
 """
 
-import pytest
-import pyarrow as pa
 import duckdb
-
+import pyarrow as pa
+import pytest
 from datacube.config import PIVOT_COLUMN_NAME_SEPARATOR
 from datacube.engine import Datacube
 from datacube.server import (
-    _normalize_arrow,
     _arrow_to_ipc,
-    _pad_table,
-    _get_source_schema,
     _build_tree_result,
+    _get_source_schema,
+    _normalize_arrow,
+    _pad_table,
     _snapshot_state,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -256,10 +254,10 @@ class TestBuildTreeResult:
         result = _build_tree_result(dc2, expanded, schema)
         trees = result.column("__tree__").to_pylist()
         # Tech row (depth 0) should have no indent
-        tech_row = [t for t in trees if "Tech" in t and "▾" in t][0]
+        tech_row = next(t for t in trees if "Tech" in t and "▾" in t)
         assert not tech_row.startswith("\u00a0")
         # AAPL row (depth 1) should have indent
-        aapl_row = [t for t in trees if "AAPL" in t][0]
+        aapl_row = next(t for t in trees if "AAPL" in t)
         assert aapl_row.startswith("\u00a0")
 
     def test_tree_aggregation_values(self, dc):

@@ -52,15 +52,15 @@ def run_demo():
     # ── Platform setup ──────────────────────────────────────────────
     section("Starting infrastructure")
 
-    from store.admin import StoreServer
     from media.admin import MediaServer
+    from store.admin import StoreServer
 
     store = StoreServer(data_dir=tempfile.mkdtemp(prefix="demo_rag_store_"))
     store.start()
     store.register_alias("demo-rag")
     store.provision_user("demo_user", "demo_pw")
 
-    from media.models import bootstrap_search_schema, bootstrap_chunks_schema
+    from media.models import bootstrap_chunks_schema, bootstrap_search_schema
     admin_conn = store.admin_conn()
     bootstrap_search_schema(admin_conn, embedding_dim=768)
     admin_conn.close()
@@ -83,14 +83,14 @@ def run_demo():
     # ── Create AI + MediaStore ────────────────────────────────────────
     section("Initializing AI + MediaStore")
 
-    from ai import AI, Message
+    from ai import AI
     from media import MediaStore
 
     ai = AI()  # reads GEMINI_API_KEY from env
     ms = MediaStore("demo-rag", ai=ai)
 
-    print(f"  AI initialized (provider: gemini)")
-    print(f"  MediaStore with AI-powered embeddings")
+    print("  AI initialized (provider: gemini)")
+    print("  MediaStore with AI-powered embeddings")
 
     try:
         # ── 1. Upload documents ───────────────────────────────────────
@@ -270,7 +270,7 @@ def run_demo():
         )
 
         print(f"  Input: {text.strip()[:80]}...")
-        print(f"\n  Extracted:")
+        print("\n  Extracted:")
         for k, v in result.data.items():
             print(f"    {k:30s} = {v}")
 
@@ -285,7 +285,7 @@ def run_demo():
         wrapped = textwrap.fill(response.content, width=66, initial_indent="  ", subsequent_indent="  ")
         print(wrapped)
 
-        print(f"\n  Streaming:")
+        print("\n  Streaming:")
         print("  ", end="")
         for chunk in ai.stream("What is convexity in fixed income? Answer in one sentence."):
             print(chunk, end="", flush=True)
@@ -302,17 +302,17 @@ def run_demo():
             tools=tools,
         )
         wrapped = textwrap.fill(response.content, width=66, initial_indent="  ", subsequent_indent="  ")
-        print(f"\n  LLM response (after tool use):")
+        print("\n  LLM response (after tool use):")
         print(wrapped)
 
         # ── Summary ──────────────────────────────────────────────────
         section("Summary")
         print(f"  Documents: {len(docs)} uploaded, chunked, and embedded")
-        print(f"  Search:    3 modes (full-text, semantic, hybrid)")
+        print("  Search:    3 modes (full-text, semantic, hybrid)")
         print(f"  RAG:       {len(questions)} questions answered with citations")
         print(f"  Extract:   {len(result.data)} fields from earnings report")
         print(f"  Tools:     {len(tools)} search tools available to LLM")
-        print(f"\n  All through: from ai import AI")
+        print("\n  All through: from ai import AI")
 
     finally:
         print("\n  Shutting down...")

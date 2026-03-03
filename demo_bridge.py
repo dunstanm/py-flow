@@ -15,15 +15,15 @@ Usage:
   Open http://localhost:10000 in your browser
 """
 
-import os
-import sys
-import time
-import json
 import asyncio
+import json
 import logging
+import os
 import random
+import sys
 import tempfile
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -45,13 +45,15 @@ asyncio.run(_md_server.start())
 print(f"  Market data server started on port {_md_server.port}")
 
 # Now safe to import streaming modules
-from streaming import flush, agg, ticking, get_tables
+from streaming import agg, flush, get_tables, ticking
 
 # ── 2. Start store server ───────────────────────────────────────────
 print("  Starting store server...")
-from store.admin import StoreServer
-from store import connect, Storable
 from dataclasses import dataclass
+
+from store.admin import StoreServer
+
+from store import Storable, connect
 
 tmp_dir = tempfile.mkdtemp(prefix="demo_bridge_")
 store = StoreServer(data_dir=tmp_dir, admin_password="demo_pw")
@@ -106,7 +108,9 @@ portfolio = trades_live.agg_by(
 
 # ── 5. In-memory @computed positions → DH direct push (NO persistence) ───
 print("  Wiring @computed positions → DH (in-memory, no store)...")
-from reactive.computed import computed, effect as reactive_effect
+from reactive.computed import computed
+from reactive.computed import effect as reactive_effect
+
 
 @ticking
 @dataclass

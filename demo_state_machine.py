@@ -14,15 +14,15 @@ Usage:
 
 import tempfile
 from dataclasses import dataclass
+from typing import ClassVar
 
 # ── Platform imports (admin tier) ────────────────────────────────────────
 from store.admin import StoreServer
-from workflow.admin import WorkflowServer
 from workflow import create_engine
+from workflow.admin import WorkflowServer
 
 # ── User imports ─────────────────────────────────────────────────────────
-from store import Storable, connect, StateMachine, Transition
-
+from store import StateMachine, Storable, Transition, connect
 
 # ---------------------------------------------------------------------------
 # 1. Define a settlement workflow (Tier 3)
@@ -35,9 +35,9 @@ def settlement_workflow(entity_id):
     """Durable workflow: runs to completion even if process restarts."""
     _settlement_log.append(f"[TIER 3] Settlement workflow started for {entity_id}")
     # In production, each of these would be engine.step() for exactly-once:
-    _settlement_log.append(f"[TIER 3]   → Step 1: Notify clearing house")
-    _settlement_log.append(f"[TIER 3]   → Step 2: Update position book")
-    _settlement_log.append(f"[TIER 3]   → Step 3: Send confirmation")
+    _settlement_log.append("[TIER 3]   → Step 1: Notify clearing house")
+    _settlement_log.append("[TIER 3]   → Step 2: Update position book")
+    _settlement_log.append("[TIER 3]   → Step 3: Send confirmation")
     _settlement_log.append(f"[TIER 3] Settlement complete for {entity_id}")
 
 
@@ -69,7 +69,7 @@ def _log_enter(obj, from_state, to_state):
 
 class OrderLifecycle(StateMachine):
     initial = "PENDING"
-    transitions = [
+    transitions: ClassVar[list] = [
         Transition("PENDING", "FILLED",
                    guard=lambda obj: obj.quantity > 0,
                    action=_book_settlement,                # Tier 1: atomic
@@ -82,9 +82,9 @@ class OrderLifecycle(StateMachine):
                    allowed_by=["risk_manager"]),
         Transition("FILLED", "SETTLED",
                    action=lambda obj, f, t: _action_log.append(
-                       f"[TIER 1] Final settlement recorded"),
+                       "[TIER 1] Final settlement recorded"),
                    on_enter=lambda obj, f, t: _hook_log.append(
-                       f"[TIER 2] on_enter: Trade fully settled")),
+                       "[TIER 2] on_enter: Trade fully settled")),
     ]
 
 
@@ -160,7 +160,7 @@ def main():
 
     class FailLifecycle(StateMachine):
         initial = "NEW"
-        transitions = [
+        transitions: ClassVar[list] = [
             Transition("NEW", "DONE",
                        action=lambda obj, f, t: (_ for _ in ()).throw(
                            ValueError("Settlement system unavailable!"))),
@@ -187,7 +187,7 @@ def main():
 
     class FragileLifecycle(StateMachine):
         initial = "ALPHA"
-        transitions = [
+        transitions: ClassVar[list] = [
             Transition("ALPHA", "BETA",
                        on_enter=lambda obj, f, t: (_ for _ in ()).throw(
                            RuntimeError("Notification service down!"))),

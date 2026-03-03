@@ -7,17 +7,24 @@ No Deephaven dependency required.
 
 import asyncio
 import math
-import pytest
 
-from marketdata.models import (
-    Tick, RiskTick, FXTick, CurveTick, Subscription, SnapshotResponse,
-    MarketDataMessage, get_symbol_key,
-)
+import pytest
 from marketdata.bus import TickBus
 from marketdata.feeds.simulator import (
-    SimulatorFeed, SYMBOLS, BASE_PRICES, POSITIONS, FX_PAIRS, FX_BASE,
+    BASE_PRICES,
+    FX_BASE,
+    FX_PAIRS,
+    POSITIONS,
+    SYMBOLS,
+    SimulatorFeed,
 )
-
+from marketdata.models import (
+    CurveTick,
+    FXTick,
+    MarketDataMessage,
+    Tick,
+    get_symbol_key,
+)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -279,7 +286,7 @@ class TestSimulatorFeedConfig:
     def test_fx_config_consistent(self):
         assert len(FX_PAIRS) == 3
         assert set(FX_BASE.keys()) == set(FX_PAIRS)
-        for pair, data in FX_BASE.items():
+        for _pair, data in FX_BASE.items():
             assert "mid" in data and "spread" in data and "currency" in data
             assert data["mid"] > 0
 

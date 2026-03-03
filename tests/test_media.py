@@ -6,15 +6,14 @@ No external services needed (no S3, no PG).
 
 import pytest
 from media.extraction import (
-    extract_text,
-    detect_content_type,
-    _extract_plain,
-    _extract_markdown,
     _extract_html,
+    _extract_markdown,
     _extract_pdf,
+    _extract_plain,
+    detect_content_type,
+    extract_text,
 )
 from media.models import Document
-
 
 # ── Content type detection ────────────────────────────────────────────────
 

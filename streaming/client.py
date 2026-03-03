@@ -88,7 +88,7 @@ class StreamingClient:
         self.session.close()
         print("Session closed.")
 
-    def __enter__(self) -> "StreamingClient":
+    def __enter__(self) -> StreamingClient:
         return self
 
     def __exit__(self, *args: Any) -> None:

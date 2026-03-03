@@ -12,17 +12,15 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
-
-from marketdata.models import Tick, FXTick, CurveTick
+from marketdata.models import CurveTick, FXTick, Tick
 from timeseries.backends.memory import MemoryBackend
 from timeseries.consumer import TSDBConsumer
 from timeseries.factory import create_backend
 from timeseries.models import Bar
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -318,7 +316,7 @@ class TestGetLatest:
 
         latest = backend.get_latest("equity")
         assert len(latest) == 2
-        aapl = [r for r in latest if r["symbol"] == "AAPL"][0]
+        aapl = next(r for r in latest if r["symbol"] == "AAPL")
         assert aapl["price"] == 155  # latest, not first
 
     @pytest.mark.asyncio

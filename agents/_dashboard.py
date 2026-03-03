@@ -72,7 +72,7 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
             from streaming import get_tables
             tables = get_tables()
             result = []
-            for name, (writer, raw, live) in tables.items():
+            for name, (_writer, _raw, _live) in tables.items():
                 result.append({
                     "name": name,
                     "raw_table": f"{name}_raw",
@@ -113,9 +113,9 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
                     return json.dumps({"error": f"Unknown type '{col_type}' for column '{col_name}'. Supported: {list(type_map.keys())}"})
                 typed_schema[col_name] = py_type
 
-            table = TickingTable(typed_schema)
+            _table = TickingTable(typed_schema)
             # Create a live table (last_by first column as default key)
-            first_col = list(typed_schema.keys())[0]
+            first_col = next(iter(typed_schema.keys()))
 
             return json.dumps({
                 "status": "created",
@@ -238,7 +238,6 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
         # Check which columns need defining
         from store.columns import REGISTRY
         type_map = {"str": "str", "int": "int", "float": "float", "bool": "bool"}
-        type_map_py = {"str": str, "int": int, "float": float, "bool": bool}
 
         all_col_names = [f["name"] for f in fields]
         if computeds:
@@ -371,7 +370,7 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
     codegen_tools = create_codegen_tools(ctx)
 
     return [list_ticking_tables, create_ticking_table, create_derived_table,
-            setup_store_bridge, create_reactive_model, publish_table] + codegen_tools
+            setup_store_bridge, create_reactive_model, publish_table, *codegen_tools]
 
 
 def create_dashboard_agent(ctx: _PlatformContext, **kwargs: Any) -> Agent:

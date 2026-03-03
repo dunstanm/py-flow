@@ -7,14 +7,12 @@ the framework is domain-agnostic.
 
 import json
 import math
-import pytest
 from dataclasses import dataclass, field
-from typing import Optional
 
+import pytest
+from reactive.computed import ComputedParseError, computed, effect
+from reactive.expr import Coalesce, Const, Field, Func, If, IsNull, from_json
 from store.base import Storable
-from reactive.expr import Const, Field, BinOp, UnaryOp, Func, If, Coalesce, IsNull, StrOp, from_json
-from reactive.computed import computed, effect, ComputedParseError
-
 
 # ---------------------------------------------------------------------------
 # Test domain classes — intentionally NOT trading-related
@@ -70,7 +68,7 @@ class Rectangle(Storable):
 @dataclass
 class Config(Storable):
     """A config with override/default pattern."""
-    override: Optional[float] = None
+    override: float | None = None
     default: float = 10.0
 
     @computed
@@ -713,7 +711,7 @@ class TestCrossEntityEffect:
         _portfolio_log.clear()
         p1 = Position(symbol="AAPL", quantity=100, price=228.0)
         p2 = Position(symbol="GOOG", quantity=50, price=192.0)
-        book = PortfolioWithEffect(positions=[p1, p2])
+        _book = PortfolioWithEffect(positions=[p1, p2])
         initial = len(_portfolio_log)
 
         p1.price = 230.0
@@ -801,11 +799,12 @@ class TestComputedASTValidation:
         with pytest.raises(ComputedParseError, match="Import"):
             @dataclass
             class Bad(Storable):
+                _registry = None
                 value: float = 0.0
                 @computed
                 def bad(self):
-                    import os
-                    return self.value
+                    import math
+                    return math.sqrt(self.value)
 
     def test_yield_rejected(self):
         with pytest.raises(ComputedParseError, match="yield"):
@@ -1074,7 +1073,6 @@ class TestComputedPropertyDescriptor:
         assert isinstance(desc, ComputedProperty)
 
     def test_descriptor_get_on_instance(self):
-        from reactive.computed import ComputedProperty
         pos = Position(symbol="AAPL", quantity=100, price=228.0)
         desc = type(pos).__dict__['mv']
         # Direct descriptor call (bypasses __getattribute__)

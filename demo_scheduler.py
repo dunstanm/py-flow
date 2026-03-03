@@ -23,9 +23,9 @@ Usage::
     python3 demo_scheduler.py
 """
 
+import logging
 import tempfile
 import time
-import logging
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -105,6 +105,7 @@ def heartbeat():
 
 from scheduler import schedule as _schedule
 
+
 @_schedule("*/5 * * * *")
 def ingest_events():
     print("    ✓ ingest_events: pulled latest events")
@@ -133,8 +134,8 @@ def etl_load():
 
 
 def main():
+    from scheduler import Schedule, Scheduler, Task
     from scheduler.admin import SchedulerServer
-    from scheduler import Scheduler, Schedule, Task
 
     MODULE = "demo_scheduler"
 

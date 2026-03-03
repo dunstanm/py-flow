@@ -9,17 +9,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-from marketdata.models import Tick, FXTick, CurveTick
+from marketdata.models import CurveTick, FXTick, Tick
 from timeseries.base import TSDBBackend
-from timeseries.models import Bar, HistoryQuery, BarQuery
-from timeseries.factory import create_backend
 from timeseries.consumer import TSDBConsumer
-
+from timeseries.factory import create_backend
+from timeseries.models import Bar, BarQuery, HistoryQuery
 
 # ── ABC Contract Tests ────────────────────────────────────────────────────────
 
@@ -231,9 +228,9 @@ async def test_consumer_stop_flushes():
 
 def test_questdb_table_and_column_maps():
     """Writer/Reader map message types to correct tables and columns."""
-    from timeseries.backends.questdb.writer import _TABLE_MAP as W_TABLE
+    from timeseries.backends.questdb.reader import _PRICE_COL, _SYMBOL_COL
     from timeseries.backends.questdb.reader import _TABLE_MAP as R_TABLE
-    from timeseries.backends.questdb.reader import _SYMBOL_COL, _PRICE_COL
+    from timeseries.backends.questdb.writer import _TABLE_MAP as W_TABLE
 
     for tmap in (W_TABLE, R_TABLE):
         assert tmap["equity"] == "equity_ticks"

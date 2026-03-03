@@ -4,13 +4,12 @@ Integration tests for LLM client — real Gemini API calls.
 Requires GEMINI_API_KEY env var. Tests skip if not set.
 """
 
-import os
 import json
+import os
+
 import pytest
-
-from ai._llm import LLMClient, GeminiLLM
-from ai._types import Message, LLMResponse, ToolCall
-
+from ai._llm import GeminiLLM, LLMClient
+from ai._types import LLMResponse, Message, ToolCall
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")

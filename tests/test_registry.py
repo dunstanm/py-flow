@@ -11,14 +11,10 @@ Covers:
 - Type mismatch detection
 """
 
-import re
-import pytest
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
 
-from store.registry import ColumnRegistry, ColumnDef, RegistryError, _MISSING
-
+import pytest
+from store.registry import ColumnDef, ColumnRegistry, RegistryError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -84,19 +80,19 @@ class TestDefine:
             reg.define("x", str, description="X again", role="dimension")
 
     def test_define_requires_role(self, reg):
-        with pytest.raises(RegistryError, match="role.*required"):
+        with pytest.raises(RegistryError, match=r"role.*required"):
             reg.define("x", str, description="X")
 
     def test_define_invalid_role(self, reg):
-        with pytest.raises(RegistryError, match="role must be"):
+        with pytest.raises(RegistryError, match=r"role must be"):
             reg.define("x", str, description="X", role="bogus")
 
     def test_define_requires_description(self, reg):
-        with pytest.raises(RegistryError, match="description.*required"):
+        with pytest.raises(RegistryError, match=r"description.*required"):
             reg.define("x", str, role="dimension")
 
     def test_measure_requires_unit(self, reg):
-        with pytest.raises(RegistryError, match="measures require.*unit"):
+        with pytest.raises(RegistryError, match=r"measures require.*unit"):
             reg.define("val", float, description="Value", role="measure")
 
     def test_measure_with_unit_ok(self, reg):
@@ -193,7 +189,7 @@ class TestPrefixResolution:
         assert prefix == "client"
 
     def test_resolve_unapproved_prefix_raises(self, trading_reg):
-        with pytest.raises(RegistryError, match="not defined.*allowed prefix"):
+        with pytest.raises(RegistryError, match=r"not defined.*allowed prefix"):
             trading_reg.resolve("random_name")
 
     def test_resolve_unknown_column_raises(self, trading_reg):
@@ -249,14 +245,14 @@ class TestClassValidation:
         @dataclass
         class Bad:
             __annotations__ = {"foo": str}
-        with pytest.raises(RegistryError, match="column 'foo'.*not defined"):
+        with pytest.raises(RegistryError, match=r"column 'foo'.*not defined"):
             trading_reg.validate_class(Bad)
 
     def test_type_mismatch_raises(self, trading_reg):
         @dataclass
         class Bad:
             __annotations__ = {"price": str}  # should be float
-        with pytest.raises(RegistryError, match="type str.*does not match.*float"):
+        with pytest.raises(RegistryError, match=r"type str.*does not match.*float"):
             trading_reg.validate_class(Bad)
 
     def test_prefixed_field_accepted(self, trading_reg):
@@ -277,7 +273,7 @@ class TestClassValidation:
         """Optional[str] should match a str column."""
         @dataclass
         class WithNotes:
-            __annotations__ = {"notes": Optional[str]}
+            __annotations__ = {"notes": str | None}
         trading_reg.validate_class(WithNotes)
 
     def test_private_fields_skipped(self, trading_reg):
@@ -373,7 +369,7 @@ class TestInstanceValidation:
     def test_nullable_allows_none(self, trading_reg):
         @dataclass
         class WithNotes:
-            notes: Optional[str] = None
+            notes: str | None = None
         trading_reg.validate_class(WithNotes)
         errors = trading_reg.validate_instance(WithNotes(notes=None))
         assert errors == []
@@ -465,9 +461,9 @@ class TestIntrospection:
 class TestGlobalRegistry:
 
     def test_global_registry_loaded_and_wired(self):
-        from store.columns import REGISTRY
         from store.base import Storable
-        from store.models import Trade, Order, Signal
+        from store.columns import REGISTRY
+        from store.models import Order, Signal, Trade
         cols = REGISTRY.all_columns()
         assert len(cols) >= 40
         assert Storable._registry is not None

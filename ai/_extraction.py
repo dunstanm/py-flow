@@ -96,7 +96,7 @@ def extract(
     if raw.startswith("```"):
         lines = raw.split("\n")
         # Remove first and last lines (```json and ```)
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [line for line in lines if not line.strip().startswith("```")]
         raw = "\n".join(lines).strip()
 
     # Parse JSON

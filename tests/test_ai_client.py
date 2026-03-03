@@ -5,12 +5,12 @@ Tests the clean API: AI(api_key=...) as the single entry point.
 Requires GEMINI_API_KEY env var. Tests skip if not set.
 """
 
-import os
-import json
-import pytest
 import asyncio
+import json
+import os
 
-from ai import AI, Message, LLMResponse, RAGResult, ExtractionResult, Tool
+import pytest
+from ai import AI, ExtractionResult, LLMResponse, Message, RAGResult
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -80,10 +80,10 @@ class TestExtraction:
 
 @pytest.fixture(scope="module")
 def pg_server():
-    from store.server import StoreServer
-    from media.models import bootstrap_search_schema, bootstrap_chunks_schema
-
     import tempfile
+
+    from media.models import bootstrap_chunks_schema, bootstrap_search_schema
+    from store.server import StoreServer
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_ai_client_"))
     server.start()
     server.provision_user("ai_user", "ai_pw")
@@ -102,8 +102,9 @@ def pg_server():
 
 @pytest.fixture(scope="module")
 def s3_server():
-    import objectstore
     import tempfile
+
+    import objectstore
     loop = asyncio.new_event_loop()
     store = loop.run_until_complete(objectstore.configure(
         "minio",

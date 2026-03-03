@@ -119,7 +119,7 @@ class Timeseries:
     def get_latest(self, msg_type: str, symbol: str) -> dict | None:
         return self._backend.get_latest(msg_type, symbol)
 
-    async def __aenter__(self) -> "TSDBClient":
+    async def __aenter__(self) -> Timeseries:
         await self.start()
         return self
 

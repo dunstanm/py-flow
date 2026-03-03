@@ -11,18 +11,16 @@ Run with: pytest tests/test_connection.py -v
 import os
 import sys
 import tempfile
-import pytest
 from dataclasses import dataclass
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from store.server import StoreServer
 from store.base import Storable
-from store.connection import connect, register_alias, get_connection, _set_active
-from store.client import VersionConflict
+from store.connection import _set_active, connect, get_connection
+from store.server import StoreServer
 from store.state_machine import StateMachine, Transition
-from reactive.expr import Field, Const
-
 
 # ── Test models ──────────────────────────────────────────────────────────────
 

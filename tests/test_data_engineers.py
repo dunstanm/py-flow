@@ -9,47 +9,56 @@ Four tiers:
 """
 
 import asyncio
-import dataclasses
 import json
 import os
 import tempfile
-import time
 import uuid
 
-import pytest
-
 import agents._codegen as _cg
-from agents._context import _PlatformContext
-from store.columns import REGISTRY
-from store.base import Storable
-from agents._oltp import create_oltp_tools, create_oltp_agent
-from agents._lakehouse import create_lakehouse_tools
-from agents._feed import create_feed_tools
-from agents._timeseries import create_timeseries_tools
-from agents._document import create_document_tools
-from agents._dashboard import create_dashboard_tools
-from agents._query import create_query_tools
-from agents._datascience import create_datascience_tools
+import pytest
 from agents._codegen import create_codegen_tools
-from agents._team import PlatformAgents, _AGENT_DESCRIPTIONS
-from agents._eval.framework import (
-    AgentEval, AgentEvalCase, EvalPhase,
-    _score_tool_selection, _score_output_contains, _score_schema_quality,
-    _score_table_creation, _score_metadata_completeness,
-    _score_query_correctness, DEFAULT_DIMENSIONS,
+from agents._context import _PlatformContext
+from agents._dashboard import create_dashboard_tools
+from agents._datascience import create_datascience_tools
+from agents._document import create_document_tools
+from agents._eval.datasets import (
+    ALL_EVAL_CASES,
+    DATASCIENCE_EVAL_CASES,
+    LAKEHOUSE_EVAL_CASES,
+    OLTP_EVAL_CASES,
+    QUERY_EVAL_CASES,
 )
-from agents._eval.scorers import (
-    score_naming_conventions, score_type_appropriateness,
-    score_schema_completeness, score_star_schema_design, score_sql_validity,
+from agents._eval.framework import (
+    DEFAULT_DIMENSIONS,
+    AgentEval,
+    AgentEvalCase,
+    EvalPhase,
+    _score_output_contains,
+    _score_query_correctness,
+    _score_schema_quality,
+    _score_table_creation,
+    _score_tool_selection,
 )
 from agents._eval.judges import (
-    DATA_MODEL_RUBRIC, CURATION_QUALITY_RUBRIC, STAR_SCHEMA_RUBRIC,
-    METADATA_QUALITY_RUBRIC, ANALYSIS_QUALITY_RUBRIC,
+    ANALYSIS_QUALITY_RUBRIC,
+    CURATION_QUALITY_RUBRIC,
+    DATA_MODEL_RUBRIC,
+    METADATA_QUALITY_RUBRIC,
+    STAR_SCHEMA_RUBRIC,
 )
-from agents._eval.datasets import (
-    OLTP_EVAL_CASES, LAKEHOUSE_EVAL_CASES, QUERY_EVAL_CASES,
-    DATASCIENCE_EVAL_CASES, ALL_EVAL_CASES,
+from agents._eval.scorers import (
+    score_naming_conventions,
+    score_sql_validity,
+    score_star_schema_design,
 )
+from agents._feed import create_feed_tools
+from agents._lakehouse import create_lakehouse_tools
+from agents._oltp import create_oltp_tools
+from agents._query import create_query_tools
+from agents._team import _AGENT_DESCRIPTIONS, PlatformAgents
+from agents._timeseries import create_timeseries_tools
+from store.base import Storable
+from store.columns import REGISTRY
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
@@ -170,7 +179,7 @@ class TestCodegenIntegration:
         assert REGISTRY.has("cg_test_col")
 
     def test_define_model_module(self, codegen_env):
-        _, mod_dir = codegen_env
+        _, _mod_dir = codegen_env
         ctx = _PlatformContext()
         define_fn = _get_tool(create_codegen_tools(ctx), "define_module")
         for n in ["cg_mod_a", "cg_mod_b"]:
@@ -299,8 +308,8 @@ def media_s3():
 @pytest.fixture(scope="module")
 def media_store_fixture(store_server, media_s3):
     """MediaStore backed by real StoreServer + real MinIO."""
-    from media.models import bootstrap_search_schema
     from media import MediaStore
+    from media.models import bootstrap_search_schema
 
     # Bootstrap search schema
     admin_conn = store_server.admin_conn()
@@ -341,7 +350,7 @@ class TestOLTPEndToEnd:
     """Real StoreServer → create dataset → insert records → query back."""
 
     def test_create_and_query_round_trip(self, store_server, codegen_env):
-        col_dir, mod_dir = codegen_env
+        _col_dir, _mod_dir = codegen_env
 
         ctx = _PlatformContext(
             alias="agent_test",
@@ -506,7 +515,7 @@ class TestLakehouseAgentE2E:
         create_fn = _get_tool(tools, "create_lakehouse_table")
         result = json.loads(create_fn(
             table_name=tbl,
-            sql=f"SELECT 'AAPL' as symbol, 228.5 as price, 100 as qty UNION ALL SELECT 'GOOGL', 192.3, 50",
+            sql="SELECT 'AAPL' as symbol, 228.5 as price, 100 as qty UNION ALL SELECT 'GOOGL', 192.3, 50",
             mode="append",
         ))
         assert result.get("status") == "created", f"Create failed: {result}"
@@ -752,7 +761,7 @@ class TestQueryAgentE2E:
         ctx = _PlatformContext(alias="agent_test")
         tools = create_query_tools(ctx)
         result = json.loads(_get_tool(tools, "query_lakehouse")(
-            sql=f"SELECT 1 as test_col",
+            sql="SELECT 1 as test_col",
         ))
         assert "error" not in result
         assert result["row_count"] == 1

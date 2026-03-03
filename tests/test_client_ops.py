@@ -6,7 +6,6 @@ Run with: pytest tests/test_client_ops.py -v
 """
 
 import pytest
-
 from streaming import StreamingClient
 
 # Script to publish minimal demo tables for testing

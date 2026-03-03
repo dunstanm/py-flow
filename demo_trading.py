@@ -28,13 +28,12 @@ import asyncio
 import json
 import logging
 import threading
-from typing import Optional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 _log = logging.getLogger("demo_trading")
 
 # ── Module state (populated by publish_tables) ────────────────────────────────
-_feed_thread: Optional[threading.Thread] = None
+_feed_thread: threading.Thread | None = None
 _feed_stop = threading.Event()
 
 

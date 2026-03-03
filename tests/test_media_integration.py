@@ -5,9 +5,9 @@ Requires: embedded PG (via StoreServer) + S3-compatible object store.
 Tests the full upload → extract → search → download → delete flow.
 """
 
-import os
-import pytest
 import asyncio
+
+import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -15,9 +15,9 @@ import asyncio
 @pytest.fixture(scope="session")
 def pg_server():
     """Start an embedded PG server for the media tests."""
-    from store.server import StoreServer
-
     import tempfile
+
+    from store.server import StoreServer
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_media_store_"))
     server.start()
     server.provision_user("media_user", "media_pw")
@@ -29,8 +29,9 @@ def pg_server():
 @pytest.fixture(scope="session")
 def s3_server():
     """Start S3-compatible object store."""
-    import objectstore
     import tempfile
+
+    import objectstore
     loop = asyncio.new_event_loop()
     store = loop.run_until_complete(objectstore.configure(
         "minio",

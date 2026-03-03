@@ -32,9 +32,9 @@ from ai._types import Message
 
 if TYPE_CHECKING:
     import psycopg2.extensions
+    from store.client import StoreClient
 
     from ai.client import AI
-    from store.client import StoreClient
 
 logger = logging.getLogger(__name__)
 

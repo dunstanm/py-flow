@@ -4,11 +4,11 @@ Integration tests for platform tools — real PG + S3 object store + Gemini.
 Tests tool registry, built-in search tools, and LLM → tool execution loop.
 """
 
-import os
-import json
-import pytest
 import asyncio
+import json
+import os
 
+import pytest
 from ai._tools import ToolRegistry, create_search_tools
 from ai._types import Tool
 
@@ -21,10 +21,10 @@ requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY 
 
 @pytest.fixture(scope="module")
 def pg_server():
-    from store.server import StoreServer
-    from media.models import bootstrap_search_schema, bootstrap_chunks_schema
-
     import tempfile
+
+    from media.models import bootstrap_chunks_schema, bootstrap_search_schema
+    from store.server import StoreServer
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_tools_"))
     server.start()
     server.provision_user("tools_user", "tools_pw")
@@ -43,8 +43,9 @@ def pg_server():
 
 @pytest.fixture(scope="module")
 def s3_server():
-    import objectstore
     import tempfile
+
+    import objectstore
     loop = asyncio.new_event_loop()
     store = loop.run_until_complete(objectstore.configure(
         "minio",
@@ -70,8 +71,8 @@ def media_store(s3_server, store_conn):
     if not GEMINI_API_KEY:
         pytest.skip("GEMINI_API_KEY not set")
 
-    from media import MediaStore
     from ai._embeddings import GeminiEmbeddings
+    from media import MediaStore
 
     embedder = GeminiEmbeddings(api_key=GEMINI_API_KEY, dimension=768)
     ms = MediaStore(

@@ -111,7 +111,7 @@ class QuestDBManager:
         )
 
         # Wait for health
-        for attempt in range(30):
+        for _attempt in range(30):
             await asyncio.sleep(1)
             if await self.health():
                 logger.info(

@@ -66,7 +66,7 @@ class MarketDataServer:
         )
 
         # Wait for health
-        for attempt in range(30):
+        for _attempt in range(30):
             await asyncio.sleep(1)
             if await self.health():
                 logger.info("Market data server started on port %d", self._port)
@@ -117,7 +117,7 @@ class MarketDataServer:
         """Register this server under an alias name."""
         _register_alias(name, url=self.url, port=self._port)
 
-    async def __aenter__(self) -> "MarketDataServer":
+    async def __aenter__(self) -> MarketDataServer:
         await self.start()
         return self
 

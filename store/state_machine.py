@@ -27,7 +27,7 @@ Three tiers of side-effects on each Transition:
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -109,7 +109,7 @@ class StateMachine:
     """
 
     initial: str = None
-    transitions: list = []
+    transitions: ClassVar[list] = []
 
     @classmethod
     def get_transition(cls, from_state: str, to_state: str) -> Transition | None:

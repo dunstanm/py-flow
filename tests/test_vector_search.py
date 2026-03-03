@@ -8,12 +8,10 @@ Requires: embedded PG via StoreServer (real pgserver, no mocks).
 """
 
 import uuid
-import math
+
 import pytest
-
+from media.models import bootstrap_chunks_schema, bootstrap_search_schema
 from store.server import StoreServer
-from media.models import bootstrap_search_schema, bootstrap_chunks_schema
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -127,7 +125,7 @@ class TestVectorOperations:
         ids = [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()]
 
         with db.cursor() as cur:
-            for eid, vec in zip(ids, [v1, v2, v3]):
+            for eid, vec in zip(ids, [v1, v2, v3], strict=False):
                 cur.execute("""
                     INSERT INTO document_search (entity_id, owner, embedding)
                     VALUES (%s, 'vec_user', %s::vector)

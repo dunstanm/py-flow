@@ -21,7 +21,6 @@ from lakehouse.models import SyncState
 
 if TYPE_CHECKING:
     import psycopg2.extensions
-
     from timeseries.base import TSDBBackend
 
 logger = logging.getLogger(__name__)

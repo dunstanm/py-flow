@@ -214,7 +214,7 @@ Always respond with exactly one JSON object per turn. No other text."""
         clean = text.strip()
         if clean.startswith("```"):
             lines = clean.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
+            lines = [line for line in lines if not line.strip().startswith("```")]
             clean = "\n".join(lines).strip()
 
         try:

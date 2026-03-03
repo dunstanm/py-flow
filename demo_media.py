@@ -43,10 +43,10 @@ def run_demo():
     # ── Start infrastructure ──────────────────────────────────────────
     section("Starting object store + PG")
 
-    from store.server import StoreServer
-    from store.connection import connect
     from media.admin import MediaServer
     from media.models import bootstrap_search_schema
+    from store.connection import connect
+    from store.server import StoreServer
 
     # PG for Storable metadata
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="demo_media_store_"))

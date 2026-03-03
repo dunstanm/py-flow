@@ -6,14 +6,11 @@ with @computed decorators for pure OO reactive properties.
 """
 
 import math
-import pytest
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
-from store.base import Storable
-from reactive.expr import Const, Field, BinOp, Func, If, Coalesce, IsNull, from_json
 from reactive.computed import computed, effect
-
+from reactive.expr import Const, Field, If, from_json
+from store.base import Storable
 
 # ---------------------------------------------------------------------------
 # Finance domain models with @computed

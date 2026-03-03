@@ -5,9 +5,9 @@ Requires GEMINI_API_KEY env var. Tests skip if not set.
 """
 
 import os
-import pytest
 from dataclasses import dataclass
 
+import pytest
 from ai._extraction import extract
 from ai._types import ExtractionResult
 

@@ -14,9 +14,8 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from marketdata.models import CurveTick, FXTick, Tick, get_symbol_key
+from marketdata.models import CurveTick, FXTick, Tick
 
 from timeseries.base import TSDBBackend
 from timeseries.models import Bar

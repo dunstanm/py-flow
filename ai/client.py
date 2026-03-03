@@ -48,8 +48,9 @@ from ai._types import (
 )
 
 if TYPE_CHECKING:
-    from ai._embeddings import EmbeddingProvider
     from media.store import MediaStore
+
+    from ai._embeddings import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 

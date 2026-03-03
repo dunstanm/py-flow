@@ -21,7 +21,7 @@ from collections import namedtuple
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 from reaktiv import Computed, Effect, Signal, batch
 from reaktiv.signal import ComputeSignal as _ComputeSignal
@@ -107,8 +107,8 @@ class Storable:
     _registry = None
 
     # Reactive internals — class-level defaults, overwritten per-instance
-    _reactive = {}      # name → _RNode(read, write)
-    _effects = []       # Effect objects (prevent GC)
+    _reactive: ClassVar[dict] = {}      # name → _RNode(read, write)
+    _effects: ClassVar[list] = []       # Effect objects (prevent GC)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

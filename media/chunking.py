@@ -108,7 +108,6 @@ def chunk_text(
     chunks: list[TextChunk] = []
     current_sentences: list[str] = []
     current_tokens = 0
-    chunk_start_char = 0
 
     # Track character positions in the original text
     # Build a map of sentence → start position in original text
@@ -159,7 +158,7 @@ def chunk_text(
                 overlap_start_idx = sent_start_idx + j
 
             # Start new chunk with overlap + current sentence
-            current_sentences = overlap_sentences + [sent]
+            current_sentences = [*overlap_sentences, sent]
             current_tokens = overlap_tokens + sent_tokens
             sent_start_idx = overlap_start_idx
         else:

@@ -12,26 +12,24 @@ Covers:
 
 import os
 import sys
-import time
 import tempfile
-import pytest
+import time
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from typing import Optional
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # DH JVM is started by conftest.py before test collection — safe to import.
-from streaming import flush as streaming_flush
-
-from store.base import Storable
-from store.server import StoreServer
-from store.client import StoreClient
-from store.subscriptions import EventBus, ChangeEvent
-from bridge.type_mapping import infer_schema, extract_row
 from bridge.store_bridge import StoreBridge
-from reactive.expr import Field, Const
+from bridge.type_mapping import extract_row, infer_schema
+from reactive.expr import Const, Field
+from store.base import Storable
+from store.client import StoreClient
+from store.server import StoreServer
+from store.subscriptions import ChangeEvent
+from streaming import flush as streaming_flush
 
 
 def _flush_dh():
@@ -60,9 +58,9 @@ class Gadget(Storable):
 class RichItem(Storable):
     title: str = ""
     amount: float = 0.0
-    created: Optional[datetime] = None
+    created: datetime | None = None
     active: bool = True
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -105,22 +103,22 @@ class TestTypeMapping:
     def test_infer_schema_basic_types(self):
         schema = infer_schema(Widget)
         # Domain columns
-        assert schema["name"] == str
-        assert schema["color"] == str
-        assert schema["weight"] == float
+        assert schema["name"] is str
+        assert schema["color"] is str
+        assert schema["weight"] is float
 
     def test_infer_schema_int_type(self):
         schema = infer_schema(Gadget)
-        assert schema["quantity"] == int
-        assert schema["price"] == float
-        assert schema["label"] == str
+        assert schema["quantity"] is int
+        assert schema["price"] is float
+        assert schema["label"] is str
 
     def test_infer_schema_optional_decimal_datetime(self):
         schema = infer_schema(RichItem)
-        assert schema["amount"] == float               # field is float, not Decimal
-        assert schema["created"] == datetime          # Optional[datetime] → datetime
-        assert schema["active"] == bool
-        assert schema["notes"] == str                  # Optional[str] → str
+        assert schema["amount"] is float               # field is float, not Decimal
+        assert schema["created"] is datetime          # Optional[datetime] → datetime
+        assert schema["active"] is bool
+        assert schema["notes"] is str                  # Optional[str] → str
 
     def test_infer_schema_metadata_columns(self):
         schema = infer_schema(Widget)

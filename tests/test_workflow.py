@@ -7,17 +7,16 @@ Covers:
 - Integration with StoreClient (durable multi-step mutations)
 """
 
-import time
 import tempfile
-import pytest
+import time
 from dataclasses import dataclass
 
+import pytest
 from store.base import Storable
-from store.server import StoreServer
 from store.client import StoreClient
+from store.server import StoreServer
 from workflow.engine import WorkflowEngine, WorkflowHandle, WorkflowStatus
 from workflow.factory import create_engine
-
 
 # ---------------------------------------------------------------------------
 # Module-level references (used by workflow functions via closures)
@@ -287,7 +286,7 @@ class TestStoreIntegration:
 
         def create_and_increment():
             eid = _engine.step(create_counter, "hits", 0)
-            v1 = _engine.step(increment_counter, eid, 10)
+            _v1 = _engine.step(increment_counter, eid, 10)
             v2 = _engine.step(increment_counter, eid, 5)
             return {"entity_id": eid, "final_value": v2}
 

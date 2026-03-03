@@ -15,13 +15,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
-
-from marketdata.models import Tick, FXTick, CurveTick
+from marketdata.models import CurveTick, FXTick, Tick
 from timeseries.factory import create_backend
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

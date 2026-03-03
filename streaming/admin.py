@@ -85,7 +85,7 @@ class StreamingServer:
         """Register this server under an alias name."""
         _register_alias(name, port=self._port)
 
-    def __enter__(self) -> "StreamingServer":
+    def __enter__(self) -> StreamingServer:
         self.start()
         return self
 

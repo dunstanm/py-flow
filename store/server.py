@@ -4,6 +4,8 @@ Uses pgserver for pip-installable PostgreSQL binaries.
 Configures pg_hba.conf for scram-sha-256 authentication.
 """
 
+from __future__ import annotations
+
 import os
 import urllib.parse
 from typing import Any
@@ -43,7 +45,7 @@ class StoreServer:
         self._pg = None
         self._superuser = None  # detected from pgserver URI
 
-    def start(self) -> "StoreServer":
+    def start(self) -> StoreServer:
         """Start the embedded PostgreSQL server and bootstrap if needed."""
         os.makedirs(self.data_dir, exist_ok=True)
         self._pg = pgserver.get_server(self.data_dir)
@@ -94,7 +96,7 @@ class StoreServer:
         parsed = urllib.parse.urlparse(uri)
         self._superuser = parsed.username or os.getenv("USER", "postgres")
 
-    def _superuser_conn(self) -> "psycopg2.extensions.connection":
+    def _superuser_conn(self) -> psycopg2.extensions.connection:
         """Get a superuser connection (local socket, trust auth)."""
         return psycopg2.connect(self._pg.get_uri())
 
@@ -177,7 +179,7 @@ class StoreServer:
 
     # ── Public API ───────────────────────────────────────────────────
 
-    def admin_conn(self) -> "psycopg2.extensions.connection":
+    def admin_conn(self) -> psycopg2.extensions.connection:
         """Get a connection as app_admin (password auth)."""
         info = self.conn_info()
         return psycopg2.connect(
@@ -233,7 +235,7 @@ class StoreServer:
             self._pg.cleanup()
             self._pg = None
 
-    def __enter__(self) -> "ObjectStoreServer":
+    def __enter__(self) -> StoreServer:
         self.start()
         return self
 

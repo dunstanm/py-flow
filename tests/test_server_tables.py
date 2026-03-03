@@ -6,11 +6,11 @@ using the DH Python API directly (same process as JVM).
 Run with: pytest tests/test_server_tables.py -v
 """
 
-import time
 import random
 import threading
-import pytest
+import time
 
+import pytest
 from streaming import StreamingClient
 
 # Constants
