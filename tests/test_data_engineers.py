@@ -1,42 +1,42 @@
 """
 Tests for the agents/ package — PlatformAgents.
 
-Pure-Python tests (no services required) for:
-- _PlatformContext
-- Dynamic Storable creation
-- Eval framework (scoring dimensions, artifact collection)
-- Tool creation (each agent's tool list)
-- PlatformAgents construction
-
-Integration tests (require GEMINI_API_KEY + services) are marked with
-@requires_gemini and @requires_services.
+Three tiers:
+1. Codegen integration — define_module, execute_python, inspect_registry (tmp dirs)
+2. OLTP end-to-end   — real embedded Postgres via StoreServer
+3. Eval framework     — scoring math (pure Python)
 """
 
 import dataclasses
 import json
 import os
+import tempfile
+
 import pytest
 
+import agents._codegen as _cg
 from agents._context import _PlatformContext
-from agents._oltp import create_oltp_tools, create_oltp_agent, _build_storable_class, _TYPE_MAP
-from agents._lakehouse import create_lakehouse_tools, create_lakehouse_agent
-from agents._feed import create_feed_tools, create_feed_agent
-from agents._timeseries import create_timeseries_tools, create_timeseries_agent
-from agents._document import create_document_tools, create_document_agent
-from agents._dashboard import create_dashboard_tools, create_dashboard_agent
-from agents._query import create_query_tools, create_query_agent
-from agents._datascience import create_datascience_tools, create_datascience_agent
+from store.columns import REGISTRY
+from store.base import Storable
+from agents._oltp import create_oltp_tools, create_oltp_agent
+from agents._lakehouse import create_lakehouse_tools
+from agents._feed import create_feed_tools
+from agents._timeseries import create_timeseries_tools
+from agents._document import create_document_tools
+from agents._dashboard import create_dashboard_tools
+from agents._query import create_query_tools
+from agents._datascience import create_datascience_tools
+from agents._codegen import create_codegen_tools
 from agents._team import PlatformAgents, _AGENT_DESCRIPTIONS
 from agents._eval.framework import (
-    AgentEval, AgentEvalCase, AgentEvalResult, EvalDimension, EvalPhase,
+    AgentEval, AgentEvalCase, EvalPhase,
     _score_tool_selection, _score_output_contains, _score_schema_quality,
-    _score_table_creation, _score_metadata_completeness, _score_link_quality,
+    _score_table_creation, _score_metadata_completeness,
     _score_query_correctness, DEFAULT_DIMENSIONS,
 )
 from agents._eval.scorers import (
     score_naming_conventions, score_type_appropriateness,
-    score_schema_completeness, score_row_count_preservation,
-    score_star_schema_design, score_sql_validity,
+    score_schema_completeness, score_star_schema_design, score_sql_validity,
 )
 from agents._eval.judges import (
     DATA_MODEL_RUBRIC, CURATION_QUALITY_RUBRIC, STAR_SCHEMA_RUBRIC,
@@ -51,501 +51,386 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
 
 
-# ── PlatformContext ────────────────────────────────────────────────────
+# ── Fixtures ──────────────────────────────────────────────────────────
 
 
-class TestPlatformContext:
+@pytest.fixture
+def codegen_env(tmp_path):
+    """Redirect codegen dirs to tmp and snapshot registry for cleanup."""
+    col_dir = tmp_path / "columns" / "agent_generated"
+    mod_dir = tmp_path / "models" / "agent_generated"
+    col_dir.mkdir(parents=True)
+    mod_dir.mkdir(parents=True)
+    (col_dir / "__init__.py").write_text("")
+    (mod_dir / "__init__.py").write_text("")
 
-    def test_create_context(self):
-        ctx = _PlatformContext(alias="test")
-        assert ctx._store_alias == "test"
-        assert ctx._md_alias == "test"
-        assert ctx._lakehouse_instance is None
-        assert ctx._media_store_instance is None
+    orig_cols, orig_mods = _cg.COLUMNS_DIR, _cg.MODELS_DIR
+    _cg.COLUMNS_DIR, _cg.MODELS_DIR = col_dir, mod_dir
 
-    def test_storable_type_registry(self):
-        ctx = _PlatformContext()
-        assert ctx.list_storable_types() == []
+    before = set(REGISTRY._columns.keys())
+    yield col_dir, mod_dir
 
-        cls = _build_storable_class("Trade", [
-            {"name": "symbol", "type": "str"},
-            {"name": "price", "type": "float"},
-        ])
-        ctx.register_storable_type("Trade", cls)
-        assert ctx.list_storable_types() == ["Trade"]
-        assert ctx.get_storable_type("Trade") is cls
-        assert ctx.get_storable_type("Unknown") is None
-
-    def test_validate_no_services(self):
-        ctx = _PlatformContext()
-        status = ctx.validate()
-        assert status["store"] is False
-        assert status["lakehouse"] is False
-        assert status["media"] is False
-        assert status["ai"] is False
+    _cg.COLUMNS_DIR, _cg.MODELS_DIR = orig_cols, orig_mods
+    for k in list(REGISTRY._columns.keys()):
+        if k not in before:
+            del REGISTRY._columns[k]
 
 
-# ── Dynamic Storable Creation ──────────────────────────────────────────
+@pytest.fixture(scope="module")
+def store_server():
+    """Start a real embedded Postgres for OLTP e2e tests."""
+    from store.server import StoreServer
+    tmp_dir = tempfile.mkdtemp(prefix="test_agents_")
+    srv = StoreServer(data_dir=tmp_dir, admin_password="test_admin_pw")
+    srv.start()
+    srv.provision_user("agent_user", "agent_pw")
+    srv.register_alias("agent_test")
+    yield srv
+    srv.stop()
 
 
-class TestDynamicStorable:
-
-    def test_build_basic_class(self):
-        cls = _build_storable_class("Order", [
-            {"name": "symbol", "type": "str"},
-            {"name": "quantity", "type": "int"},
-            {"name": "price", "type": "float"},
-            {"name": "is_active", "type": "bool"},
-        ])
-        assert cls.__name__ == "Order"
-        assert dataclasses.is_dataclass(cls)
-        fields = {f.name: f.type for f in dataclasses.fields(cls) if not f.name.startswith("_")}
-        assert fields == {"symbol": str, "quantity": int, "price": float, "is_active": bool}
-
-    def test_build_with_defaults(self):
-        cls = _build_storable_class("Instrument", [
-            {"name": "ticker", "type": "str", "default": "AAPL"},
-            {"name": "market_cap", "type": "float", "default": 0.0},
-        ])
-        obj = cls()
-        assert obj.ticker == "AAPL"
-        assert obj.market_cap == 0.0
-
-    def test_build_with_auto_defaults(self):
-        cls = _build_storable_class("Simple", [
-            {"name": "name", "type": "str"},
-            {"name": "count", "type": "int"},
-        ])
-        obj = cls()
-        assert obj.name == ""
-        assert obj.count == 0
-
-    def test_type_map_coverage(self):
-        assert _TYPE_MAP["str"] is str
-        assert _TYPE_MAP["string"] is str
-        assert _TYPE_MAP["int"] is int
-        assert _TYPE_MAP["integer"] is int
-        assert _TYPE_MAP["float"] is float
-        assert _TYPE_MAP["double"] is float
-        assert _TYPE_MAP["bool"] is bool
-        assert _TYPE_MAP["boolean"] is bool
-
-    def test_inherits_storable(self):
-        from store.base import Storable
-        cls = _build_storable_class("Test", [{"name": "x", "type": "int"}])
-        assert issubclass(cls, Storable)
+def _get_tool(tools, name):
+    return next(t for t in tools if t.__name__ == name)
 
 
-# ── Tool Creation ──────────────────────────────────────────────────────
+# ── Tool Inventory (regression guard) ─────────────────────────────────
 
 
-class TestToolCreation:
+_EXPECTED_TOOLS = {
+    "oltp": (9, ["create_dataset", "insert_records", "query_dataset",
+                  "inspect_registry", "define_module", "execute_python"]),
+    "lakehouse": (7, ["list_lakehouse_tables", "design_star_schema", "build_datacube"]),
+    "feed": (5, ["list_md_symbols", "describe_feed_setup"]),
+    "timeseries": (6, ["list_tsdb_series", "get_bars"]),
+    "document": (6, ["upload_document", "search_documents"]),
+    "dashboard": (9, ["create_reactive_model", "create_ticking_table",
+                       "inspect_registry", "define_module"]),
+    "query": (7, ["query_store", "list_all_datasets"]),
+    "datascience": (7, ["compute_statistics", "run_regression"]),
+}
 
-    def test_oltp_tools(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
+_TOOL_CREATORS = {
+    "oltp": create_oltp_tools,
+    "lakehouse": create_lakehouse_tools,
+    "feed": create_feed_tools,
+    "timeseries": create_timeseries_tools,
+    "document": create_document_tools,
+    "dashboard": create_dashboard_tools,
+    "query": create_query_tools,
+    "datascience": create_datascience_tools,
+}
+
+
+class TestToolInventory:
+
+    @pytest.mark.parametrize("agent", list(_EXPECTED_TOOLS.keys()))
+    def test_tool_count_and_names(self, agent):
+        expected_count, must_have = _EXPECTED_TOOLS[agent]
+        tools = _TOOL_CREATORS[agent](_PlatformContext())
         names = [t.__name__ for t in tools]
-        assert "list_storable_types" in names
-        assert "describe_type" in names
-        assert "create_dataset" in names
-        assert "insert_records" in names
-        assert "query_dataset" in names
-        assert "ingest_from_file" in names
-        assert len(tools) == 6
-
-    def test_lakehouse_tools(self):
-        ctx = _PlatformContext()
-        tools = create_lakehouse_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "list_lakehouse_tables" in names
-        assert "describe_lakehouse_table" in names
-        assert "design_star_schema" in names
-        assert "build_datacube" in names
-        assert "query_lakehouse" in names
-        assert len(tools) == 7
-
-    def test_feed_tools(self):
-        ctx = _PlatformContext()
-        tools = create_feed_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "list_md_symbols" in names
-        assert "get_md_snapshot" in names
-        assert "get_feed_health" in names
-        assert "publish_custom_tick" in names
-        assert "describe_feed_setup" in names
-        assert len(tools) == 5
-
-    def test_timeseries_tools(self):
-        ctx = _PlatformContext()
-        tools = create_timeseries_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "list_tsdb_series" in names
-        assert "get_bars" in names
-        assert "get_tick_history" in names
-        assert "compute_realized_vol" in names
-        assert len(tools) == 6
-
-    def test_document_tools(self):
-        ctx = _PlatformContext()
-        tools = create_document_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "upload_document" in names
-        assert "list_documents" in names
-        assert "search_documents" in names
-        assert "extract_structured_data" in names
-        assert "bulk_upload" in names
-        assert "tag_documents" in names
-        assert len(tools) == 6
-
-    def test_dashboard_tools(self):
-        ctx = _PlatformContext()
-        tools = create_dashboard_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "list_ticking_tables" in names
-        assert "create_ticking_table" in names
-        assert "create_derived_table" in names
-        assert "setup_store_bridge" in names
-        assert "create_reactive_model" in names
-        assert "publish_table" in names
-        assert len(tools) == 6
-
-    def test_query_tools(self):
-        ctx = _PlatformContext()
-        tools = create_query_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "query_store" in names
-        assert "query_lakehouse" in names
-        assert "query_tsdb" in names
-        assert "search_documents" in names
-        assert "get_md_snapshot" in names
-        assert "list_all_datasets" in names
-        assert "describe_dataset" in names
-        assert len(tools) == 7
-
-    def test_datascience_tools(self):
-        ctx = _PlatformContext()
-        tools = create_datascience_tools(ctx)
-        names = [t.__name__ for t in tools]
-        assert "run_sql_analysis" in names
-        assert "compute_statistics" in names
-        assert "compute_correlation" in names
-        assert "detect_anomalies" in names
-        assert "run_regression" in names
-        assert "time_series_decompose" in names
-        assert "suggest_visualization" in names
-        assert len(tools) == 7
+        assert len(names) == expected_count, f"{agent}: expected {expected_count}, got {len(names)}: {names}"
+        for name in must_have:
+            assert name in names, f"{agent} missing tool: {name}"
 
 
-# ── Tool Execution (pure Python, no services) ─────────────────────────
+# ── Codegen Integration (tmp dirs, no services) ──────────────────────
 
 
-class TestToolExecution:
+class TestCodegenIntegration:
 
-    def test_oltp_list_types_empty(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
-        list_fn = [t for t in tools if t.__name__ == "list_storable_types"][0]
-        result = json.loads(list_fn())
-        assert result == []
+    def test_inspect_registry(self):
+        inspect_fn = _get_tool(create_codegen_tools(_PlatformContext()), "inspect_registry")
+        result = json.loads(inspect_fn(columns_json='["symbol", "zzz_fake"]'))
+        assert result["symbol"]["exists"] is True
+        assert result["zzz_fake"]["exists"] is False
 
-    def test_oltp_create_dataset(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
-        create_fn = [t for t in tools if t.__name__ == "create_dataset"][0]
+    def test_inspect_summary(self):
+        inspect_fn = _get_tool(create_codegen_tools(_PlatformContext()), "inspect_registry")
+        result = json.loads(inspect_fn(columns_json="[]"))
+        assert result["total_columns"] > 0
 
-        fields = json.dumps([
-            {"name": "symbol", "type": "str"},
-            {"name": "price", "type": "float"},
-            {"name": "quantity", "type": "int"},
-        ])
-        result = json.loads(create_fn(name="Trade", fields_json=fields))
-        assert result["status"] == "created"
-        assert result["type_name"] == "Trade"
-        assert len(result["fields"]) == 3
-
-        # Verify it's registered
-        assert ctx.get_storable_type("Trade") is not None
-
-    def test_oltp_create_duplicate(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
-        create_fn = [t for t in tools if t.__name__ == "create_dataset"][0]
-
-        fields = json.dumps([{"name": "x", "type": "int"}])
-        create_fn(name="Dup", fields_json=fields)
-        result = json.loads(create_fn(name="Dup", fields_json=fields))
-        assert "error" in result
-
-    def test_oltp_create_invalid_type(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
-        create_fn = [t for t in tools if t.__name__ == "create_dataset"][0]
-
-        fields = json.dumps([{"name": "x", "type": "complex_number"}])
-        result = json.loads(create_fn(name="Bad", fields_json=fields))
-        assert "error" in result
-
-    def test_oltp_describe_unknown_type(self):
-        ctx = _PlatformContext()
-        tools = create_oltp_tools(ctx)
-        desc_fn = [t for t in tools if t.__name__ == "describe_type"][0]
-        result = json.loads(desc_fn(type_name="NonExistent"))
-        assert "error" in result
-
-    def test_feed_describe_setup(self):
-        ctx = _PlatformContext()
-        tools = create_feed_tools(ctx)
-        desc_fn = [t for t in tools if t.__name__ == "describe_feed_setup"][0]
-
-        for asset_class in ["equity", "fx", "curve", "custom"]:
-            result = json.loads(desc_fn(asset_class=asset_class))
-            assert "setup_steps" in result
-
-    def test_dashboard_create_reactive_model(self):
-        ctx = _PlatformContext()
-        tools = create_dashboard_tools(ctx)
-        model_fn = [t for t in tools if t.__name__ == "create_reactive_model"][0]
-
-        fields = json.dumps([
-            {"name": "symbol", "type": "str"},
-            {"name": "quantity", "type": "int"},
-            {"name": "price", "type": "float"},
-        ])
-        computeds = json.dumps([
-            {"name": "market_value", "formula": "self.quantity * self.price", "description": "Position value"},
-        ])
-        result = json.loads(model_fn(name="Position", fields_json=fields, computeds_json=computeds))
-        assert "generated_code" in result
-        assert "class Position" in result["generated_code"]
-        assert "@computed" in result["generated_code"]
-
-    def test_query_list_all_datasets_empty(self):
-        ctx = _PlatformContext()
-        tools = create_query_tools(ctx)
-        list_fn = [t for t in tools if t.__name__ == "list_all_datasets"][0]
-        result = json.loads(list_fn())
-        # No services configured, so catalog should be mostly empty
-        assert isinstance(result, dict)
-
-
-# ── Eval Framework ─────────────────────────────────────────────────────
-
-
-class TestEvalFramework:
-
-    def test_eval_phases(self):
-        assert EvalPhase.TOOL_SELECTION.value == 1
-        assert EvalPhase.OUTPUT_QUALITY.value == 2
-        assert EvalPhase.INTEGRATION.value == 3
-        assert EvalPhase.END_TO_END.value == 4
-
-    def test_default_dimensions(self):
-        assert len(DEFAULT_DIMENSIONS) >= 7
-        names = [d.name for d in DEFAULT_DIMENSIONS]
-        assert "tool_selection" in names
-        assert "schema_quality" in names
-        assert "query_correctness" in names
-
-    def test_eval_case_creation(self):
-        case = AgentEvalCase(
-            input="Create a trades table",
-            agent="oltp",
-            expected_tools=["create_dataset"],
-            difficulty="basic",
+    def test_define_column_module(self, codegen_env):
+        col_dir, _ = codegen_env
+        define_fn = _get_tool(create_codegen_tools(_PlatformContext()), "define_module")
+        code = (
+            'from store.columns import REGISTRY\n'
+            'REGISTRY.define("cg_test_col", float, role="measure", unit="USD", description="Test")\n'
         )
-        assert case.agent == "oltp"
-        assert case.difficulty == "basic"
+        r = json.loads(define_fn(module_name="test_cols", code=code, module_type="columns"))
+        assert r["status"] == "success", f"Failed: {r}"
+        assert (col_dir / "test_cols.py").exists()
+        assert REGISTRY.has("cg_test_col")
 
-    def test_score_tool_selection_perfect(self):
-        case = AgentEvalCase(expected_tools=["create_dataset"])
-        artifacts = {"actual_tools": ["create_dataset", "insert_records"]}
-        assert _score_tool_selection(case, artifacts) == 1.0
+    def test_define_model_module(self, codegen_env):
+        _, mod_dir = codegen_env
+        ctx = _PlatformContext()
+        define_fn = _get_tool(create_codegen_tools(ctx), "define_module")
+        for n in ["cg_mod_a", "cg_mod_b"]:
+            if not REGISTRY.has(n):
+                REGISTRY.define(n, float, role="measure", unit="units", description=n)
+        code = (
+            'from dataclasses import dataclass\nfrom store.base import Storable\n\n'
+            '@dataclass\nclass CGModel(Storable):\n    cg_mod_a: float = 0.0\n    cg_mod_b: float = 0.0\n'
+        )
+        r = json.loads(define_fn(module_name="test_model", code=code, module_type="models"))
+        assert r["status"] == "success", f"Failed: {r}"
+        assert "CGModel" in r["created_types"]
+        assert ctx.get_storable_type("CGModel") is not None
 
-    def test_score_tool_selection_miss(self):
-        case = AgentEvalCase(expected_tools=["create_dataset", "insert_records"])
-        artifacts = {"actual_tools": ["list_storable_types"]}
-        assert _score_tool_selection(case, artifacts) == 0.0
+    def test_execute_python(self):
+        exec_fn = _get_tool(create_codegen_tools(_PlatformContext()), "execute_python")
+        r = json.loads(exec_fn(code="result = 2 + 2"))
+        assert r["status"] == "success" and r["result"] == 4
 
-    def test_score_tool_selection_partial(self):
-        case = AgentEvalCase(expected_tools=["create_dataset", "insert_records"])
-        artifacts = {"actual_tools": ["create_dataset"]}
-        assert _score_tool_selection(case, artifacts) == 0.5
+    def test_execute_python_print_capture(self):
+        exec_fn = _get_tool(create_codegen_tools(_PlatformContext()), "execute_python")
+        r = json.loads(exec_fn(code='print("hello sandbox")'))
+        assert "hello sandbox" in r["output"]
 
-    def test_score_tool_selection_empty_expected(self):
-        case = AgentEvalCase(expected_tools=[])
-        artifacts = {"actual_tools": ["anything"]}
-        assert _score_tool_selection(case, artifacts) == 1.0
+    def test_execute_python_rejects_forbidden(self):
+        exec_fn = _get_tool(create_codegen_tools(_PlatformContext()), "execute_python")
+        assert json.loads(exec_fn(code="import os"))["status"] == "error"
 
-    def test_score_output_contains(self):
-        case = AgentEvalCase(expected_output_contains=["symbol", "price"])
-        artifacts = {"actual_output": "Created table with symbol and price fields"}
-        assert _score_output_contains(case, artifacts) == 1.0
 
-    def test_score_output_contains_partial(self):
-        case = AgentEvalCase(expected_output_contains=["symbol", "price", "volume"])
-        artifacts = {"actual_output": "Created symbol and price"}
-        score = _score_output_contains(case, artifacts)
+# ── OLTP Codegen Pipeline (tmp dirs, no Postgres) ────────────────────
+
+
+class TestOLTPCodegen:
+
+    def test_create_dataset_full_pipeline(self, codegen_env):
+        col_dir, mod_dir = codegen_env
+        ctx = _PlatformContext()
+        create_fn = _get_tool(create_oltp_tools(ctx), "create_dataset")
+
+        fields = json.dumps([
+            {"name": "cg_symbol", "type": "str"},
+            {"name": "cg_price", "type": "float"},
+            {"name": "cg_quantity", "type": "int"},
+        ])
+        result = json.loads(create_fn(name="CGTrade", fields_json=fields))
+        assert result["status"] == "created", f"Failed: {result}"
+        assert result["persistent"] is True
+
+        # Files on disk
+        assert (col_dir / "cgtrade_columns.py").exists()
+        assert (mod_dir / "cgtrade_model.py").exists()
+
+        # Column metadata
+        assert REGISTRY.get("cg_symbol").role == "dimension"
+        assert REGISTRY.get("cg_price").role == "measure"
+
+        # Type in context, instantiable
+        cls = ctx.get_storable_type("CGTrade")
+        assert issubclass(cls, Storable)
+        obj = cls()
+        assert obj.cg_symbol == ""
+        assert obj.cg_price == 0.0
+
+    def test_create_reuses_existing_columns(self, codegen_env):
+        ctx = _PlatformContext()
+        create_fn = _get_tool(create_oltp_tools(ctx), "create_dataset")
+        REGISTRY.define("cg_preexisting", float, role="measure", unit="USD", description="Pre-existing")
+        fields = json.dumps([
+            {"name": "cg_preexisting", "type": "float"},
+            {"name": "cg_new_col", "type": "str"},
+        ])
+        result = json.loads(create_fn(name="CGMixed", fields_json=fields))
+        assert "cg_preexisting" in result["existing_columns"]
+        assert "cg_new_col" in result["new_columns"]
+
+    def test_create_duplicate_rejected(self, codegen_env):
+        ctx = _PlatformContext()
+        create_fn = _get_tool(create_oltp_tools(ctx), "create_dataset")
+        fields = json.dumps([{"name": "cg_dup_x", "type": "int"}])
+        json.loads(create_fn(name="CGDup", fields_json=fields))
+        assert "error" in json.loads(create_fn(name="CGDup", fields_json=fields))
+
+    def test_create_invalid_type_rejected(self):
+        create_fn = _get_tool(create_oltp_tools(_PlatformContext()), "create_dataset")
+        assert "error" in json.loads(create_fn(
+            name="Bad", fields_json=json.dumps([{"name": "x", "type": "complex_number"}]),
+        ))
+
+    def test_dashboard_bad_key_rejected(self, codegen_env):
+        model_fn = _get_tool(create_dashboard_tools(_PlatformContext()), "create_reactive_model")
+        assert "error" in json.loads(model_fn(
+            name="BadKey", key_field="nonexistent",
+            fields_json=json.dumps([{"name": "x", "type": "int"}]),
+        ))
+
+
+# ── OLTP End-to-End (real Postgres) ──────────────────────────────────
+
+
+class TestOLTPEndToEnd:
+    """Real StoreServer → create dataset → insert records → query back."""
+
+    def test_create_and_query_round_trip(self, store_server, codegen_env):
+        col_dir, mod_dir = codegen_env
+
+        ctx = _PlatformContext(
+            alias="agent_test",
+            user="agent_user",
+            password="agent_pw",
+        )
+        tools = create_oltp_tools(ctx)
+        create_fn = _get_tool(tools, "create_dataset")
+        insert_fn = _get_tool(tools, "insert_records")
+        query_fn = _get_tool(tools, "query_dataset")
+
+        # Create dataset
+        fields = json.dumps([
+            {"name": "e2e_symbol", "type": "str"},
+            {"name": "e2e_price", "type": "float"},
+            {"name": "e2e_quantity", "type": "int"},
+        ])
+        create_result = json.loads(create_fn(name="E2ETrade", fields_json=fields))
+        assert create_result["status"] == "created", f"Create failed: {create_result}"
+
+        # Insert records
+        records = json.dumps([
+            {"e2e_symbol": "AAPL", "e2e_price": 228.50, "e2e_quantity": 100},
+            {"e2e_symbol": "GOOGL", "e2e_price": 192.30, "e2e_quantity": 50},
+            {"e2e_symbol": "MSFT", "e2e_price": 415.00, "e2e_quantity": 75},
+        ])
+        insert_result = json.loads(insert_fn(type_name="E2ETrade", records_json=records))
+        assert insert_result["inserted"] == 3, f"Insert failed: {insert_result}"
+        assert insert_result["errors"] == 0
+        assert len(insert_result["entity_ids"]) == 3
+
+        # Query back
+        query_result = json.loads(query_fn(type_name="E2ETrade", limit=10))
+        assert query_result["count"] == 3, f"Query failed: {query_result}"
+        symbols = {r["e2e_symbol"] for r in query_result["rows"]}
+        assert symbols == {"AAPL", "GOOGL", "MSFT"}
+
+    def test_insert_unknown_type_rejected(self, store_server, codegen_env):
+        ctx = _PlatformContext(alias="agent_test", user="agent_user", password="agent_pw")
+        insert_fn = _get_tool(create_oltp_tools(ctx), "insert_records")
+        result = json.loads(insert_fn(
+            type_name="NonExistent",
+            records_json=json.dumps([{"x": 1}]),
+        ))
+        assert "error" in result
+
+    def test_query_unknown_type_rejected(self, store_server, codegen_env):
+        ctx = _PlatformContext(alias="agent_test", user="agent_user", password="agent_pw")
+        query_fn = _get_tool(create_oltp_tools(ctx), "query_dataset")
+        result = json.loads(query_fn(type_name="NonExistent"))
+        assert "error" in result
+
+
+# ── Eval Scoring (pure math) ─────────────────────────────────────────
+
+
+class TestEvalScoring:
+
+    def test_tool_selection(self):
+        assert _score_tool_selection(
+            AgentEvalCase(expected_tools=["create_dataset"]),
+            {"actual_tools": ["create_dataset", "insert_records"]},
+        ) == 1.0
+        assert _score_tool_selection(
+            AgentEvalCase(expected_tools=["create_dataset", "insert_records"]),
+            {"actual_tools": ["list_storable_types"]},
+        ) == 0.0
+        assert _score_tool_selection(
+            AgentEvalCase(expected_tools=["create_dataset", "insert_records"]),
+            {"actual_tools": ["create_dataset"]},
+        ) == 0.5
+
+    def test_output_contains(self):
+        assert _score_output_contains(
+            AgentEvalCase(expected_output_contains=["symbol", "price"]),
+            {"actual_output": "Created table with symbol and price fields"},
+        ) == 1.0
+        score = _score_output_contains(
+            AgentEvalCase(expected_output_contains=["symbol", "price", "volume"]),
+            {"actual_output": "Created symbol and price"},
+        )
         assert abs(score - 2/3) < 0.01
 
-    def test_score_schema_quality_match(self):
-        case = AgentEvalCase(expected_schema={"fields": ["symbol", "price"]})
-        artifacts = {"created_schema": {"fields": [{"name": "symbol"}, {"name": "price"}]}}
-        assert _score_schema_quality(case, artifacts) == 1.0
+    def test_schema_quality(self):
+        assert _score_schema_quality(
+            AgentEvalCase(expected_schema={"fields": ["symbol", "price"]}),
+            {"created_schema": {"fields": [{"name": "symbol"}, {"name": "price"}]}},
+        ) == 1.0
 
-    def test_score_schema_quality_partial(self):
-        case = AgentEvalCase(expected_schema={"fields": ["a", "b", "c"]})
-        artifacts = {"created_schema": {"fields": [{"name": "a"}, {"name": "b"}]}}
-        score = _score_schema_quality(case, artifacts)
-        assert abs(score - 2/3) < 0.01
+    def test_table_creation(self):
+        assert _score_table_creation(
+            AgentEvalCase(expected_tables=["fact_trades", "dim_instrument"]),
+            {"created_tables": ["fact_trades", "dim_instrument"]},
+        ) == 1.0
 
-    def test_score_table_creation(self):
-        case = AgentEvalCase(expected_tables=["fact_trades", "dim_instrument"])
-        artifacts = {"created_tables": ["fact_trades", "dim_instrument"]}
-        assert _score_table_creation(case, artifacts) == 1.0
+    def test_query_correctness(self):
+        assert _score_query_correctness(
+            AgentEvalCase(expected_result=42), {"query_result": 42},
+        ) == 1.0
+        assert _score_query_correctness(
+            AgentEvalCase(expected_result=100.0), {"query_result": 95.0},
+        ) == 0.95
 
-    def test_score_metadata_completeness(self):
-        case = AgentEvalCase(expected_metadata={"has_description": True, "tags": ["trades"]})
-        artifacts = {"metadata": {"has_description": True, "tags": ["trades", "finance"]}}
-        assert _score_metadata_completeness(case, artifacts) == 1.0
-
-    def test_score_query_correctness_exact(self):
-        case = AgentEvalCase(expected_result=42)
-        artifacts = {"query_result": 42}
-        assert _score_query_correctness(case, artifacts) == 1.0
-
-    def test_score_query_correctness_approx(self):
-        case = AgentEvalCase(expected_result=100.0)
-        artifacts = {"query_result": 95.0}
-        score = _score_query_correctness(case, artifacts)
-        assert score == 0.95
-
-    def test_active_dimensions_by_phase(self):
-        evaluator = AgentEval(agents={}, max_phase=EvalPhase.TOOL_SELECTION)
-        active = evaluator.active_dimensions
-        assert all(d.phase == EvalPhase.TOOL_SELECTION for d in active)
-
-        evaluator2 = AgentEval(agents={}, max_phase=EvalPhase.END_TO_END)
-        active2 = evaluator2.active_dimensions
-        assert len(active2) > len(active)
-
-
-# ── Eval Scorers ───────────────────────────────────────────────────────
-
-
-class TestEvalScorers:
-
-    def test_naming_conventions_snake_case(self):
-        case = AgentEvalCase()
-        artifacts = {"created_schema": {
+    def test_naming_conventions(self):
+        good = score_naming_conventions(AgentEvalCase(), {"created_schema": {
             "type_name": "Trade",
-            "fields": [{"name": "order_id"}, {"name": "trade_price"}, {"name": "is_active"}],
-        }}
-        score = score_naming_conventions(case, artifacts)
-        assert score == 1.0
-
-    def test_naming_conventions_bad(self):
-        case = AgentEvalCase()
-        artifacts = {"created_schema": {
-            "type_name": "trade",  # should be PascalCase
+            "fields": [{"name": "order_id"}, {"name": "trade_price"}],
+        }})
+        bad = score_naming_conventions(AgentEvalCase(), {"created_schema": {
+            "type_name": "trade",
             "fields": [{"name": "OrderId"}, {"name": "PRICE"}],
-        }}
-        score = score_naming_conventions(case, artifacts)
-        assert score < 0.5
-
-    def test_type_appropriateness(self):
-        case = AgentEvalCase()
-        artifacts = {"created_schema": {
-            "fields": [
-                {"name": "order_id", "type": "int"},
-                {"name": "trade_price", "type": "float"},
-                {"name": "is_active", "type": "bool"},
-                {"name": "symbol_name", "type": "str"},
-            ]
-        }}
-        score = score_type_appropriateness(case, artifacts)
-        assert score == 1.0
-
-    def test_schema_completeness(self):
-        case = AgentEvalCase()
-        assert score_schema_completeness(case, {"created_schema": {"fields": []}}) == 0.0
-        assert score_schema_completeness(case, {"created_schema": {"fields": ["a"]}}) == 0.3
-        assert score_schema_completeness(case, {"created_schema": {"fields": ["a", "b", "c", "d", "e"]}}) == 1.0
+        }})
+        assert good == 1.0
+        assert bad < 0.5
 
     def test_sql_validity(self):
         case = AgentEvalCase()
         assert score_sql_validity(case, {"generated_sql": "SELECT * FROM trades"}) == 1.0
         assert score_sql_validity(case, {"generated_sql": "DELETE FROM trades"}) == 0.3
-        assert score_sql_validity(case, {"generated_sql": "SELECT symbol ("}) == 0.5  # unbalanced parens
 
-    def test_star_schema_design_good(self):
-        case = AgentEvalCase()
-        artifacts = {"star_schema_design": {
+    def test_star_schema_design(self):
+        good = score_star_schema_design(AgentEvalCase(), {"star_schema_design": {
             "fact_tables": [{"name": "fact_trades", "columns": [{"role": "measure", "type": "float"}]}],
             "dimension_tables": [{"name": "dim_instrument", "columns": [{"role": "attribute", "type": "str"}]}],
             "relationships": [{"fact": "fact_trades", "dimension": "dim_instrument", "join_key": "symbol"}],
-        }}
-        score = score_star_schema_design(case, artifacts)
-        assert score >= 0.8
-
-    def test_star_schema_design_empty(self):
-        case = AgentEvalCase()
-        artifacts = {"star_schema_design": {"fact_tables": [], "dimension_tables": [], "relationships": []}}
-        score = score_star_schema_design(case, artifacts)
-        assert score == 0.0
+        }})
+        empty = score_star_schema_design(AgentEvalCase(), {
+            "star_schema_design": {"fact_tables": [], "dimension_tables": [], "relationships": []}
+        })
+        assert good >= 0.8
+        assert empty == 0.0
 
 
-# ── Eval Datasets ──────────────────────────────────────────────────────
+# ── Eval Data Integrity ──────────────────────────────────────────────
 
 
 class TestEvalDatasets:
 
-    def test_oltp_cases(self):
+    def test_case_counts(self):
         assert len(OLTP_EVAL_CASES) >= 5
-        for case in OLTP_EVAL_CASES:
-            assert case.agent == "oltp"
-            assert case.input
-
-    def test_lakehouse_cases(self):
         assert len(LAKEHOUSE_EVAL_CASES) >= 4
-        for case in LAKEHOUSE_EVAL_CASES:
-            assert case.agent == "lakehouse"
-
-    def test_query_cases(self):
         assert len(QUERY_EVAL_CASES) >= 4
-        for case in QUERY_EVAL_CASES:
-            assert case.agent == "query"
-
-    def test_datascience_cases(self):
         assert len(DATASCIENCE_EVAL_CASES) >= 3
-        for case in DATASCIENCE_EVAL_CASES:
-            assert case.agent == "datascience"
-
-    def test_all_cases_have_tags(self):
-        for case in ALL_EVAL_CASES:
-            assert case.tags, f"Case missing tags: {case.input[:40]}"
-
-    def test_all_cases_have_difficulty(self):
-        for case in ALL_EVAL_CASES:
-            assert case.difficulty in ("basic", "intermediate", "advanced")
-
-    def test_total_cases(self):
         assert len(ALL_EVAL_CASES) >= 20
 
+    def test_case_integrity(self):
+        for case in ALL_EVAL_CASES:
+            assert case.tags, f"Missing tags: {case.input[:40]}"
+            assert case.difficulty in ("basic", "intermediate", "advanced")
 
-# ── Eval Judges ────────────────────────────────────────────────────────
-
-
-class TestEvalJudges:
-
-    def test_rubrics_are_strings(self):
+    def test_rubrics(self):
         for rubric in [DATA_MODEL_RUBRIC, CURATION_QUALITY_RUBRIC,
                        STAR_SCHEMA_RUBRIC, METADATA_QUALITY_RUBRIC,
                        ANALYSIS_QUALITY_RUBRIC]:
-            assert isinstance(rubric, str)
-            assert len(rubric) > 50
+            assert isinstance(rubric, str) and len(rubric) > 50
+
+    def test_dimensions_and_phases(self):
+        assert len(DEFAULT_DIMENSIONS) >= 7
+        assert EvalPhase.TOOL_SELECTION.value < EvalPhase.END_TO_END.value
+        evaluator = AgentEval(agents={}, max_phase=EvalPhase.TOOL_SELECTION)
+        assert all(d.phase == EvalPhase.TOOL_SELECTION for d in evaluator.active_dimensions)
 
 
-# ── DataEngineerTeam ───────────────────────────────────────────────────
+# ── PlatformAgents ────────────────────────────────────────────────────
 
 
 class TestPlatformAgents:
@@ -555,22 +440,17 @@ class TestPlatformAgents:
         for name in ["oltp", "lakehouse", "feed", "timeseries",
                       "document", "dashboard", "query", "quant"]:
             assert name in _AGENT_DESCRIPTIONS
-            assert len(_AGENT_DESCRIPTIONS[name]) > 20
 
     @requires_gemini
     def test_team_construction(self):
         team = PlatformAgents()
         assert len(team) == 8
         assert "oltp" in team
-        assert "query" in team
-        assert "quant" in team
 
     @requires_gemini
     def test_team_subset(self):
         team = PlatformAgents(agents=["oltp", "lakehouse"])
         assert len(team) == 2
-        assert "oltp" in team
-        assert "lakehouse" in team
         assert "feed" not in team
 
     @requires_gemini

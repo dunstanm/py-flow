@@ -139,6 +139,10 @@ class _PlatformContext:
             self._ai_instance = AI()
         return self._ai_instance
 
+    @property
+    def store_alias(self) -> str:
+        return self._store_alias
+
     # ── Service availability checks (no lazy creation) ─────────
 
     def has_store(self) -> bool:

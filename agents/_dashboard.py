@@ -214,13 +214,16 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
         })
 
     @tool
-    def create_reactive_model(name: str, fields_json: str, computeds_json: str = "[]") -> str:
-        """Design a reactive model with @computed properties for a ticking dashboard.
+    def create_reactive_model(name: str, key_field: str, fields_json: str, computeds_json: str = "[]") -> str:
+        """Design and persist a reactive model with @computed properties.
 
-        Generates the code for a @ticking Storable dataclass with reactive computations.
+        Writes a persistent Python module with a @ticking Storable dataclass.
+        The model is immediately available AND survives restarts.
 
         Args:
             name: PascalCase model name (e.g. "PortfolioRisk").
+            key_field: Primary key field name — must be one of the fields.
+                       This is the entity identity for ticking tables (e.g. "symbol", "pair", "swap_id").
             fields_json: JSON array of fields: [{"name": str, "type": str}].
             computeds_json: JSON array of computed properties: [{"name": str, "formula": str, "description": str}].
         """
@@ -230,42 +233,116 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
         except json.JSONDecodeError as e:
             return json.dumps({"error": f"Invalid JSON: {e}"})
 
-        # Generate code
+        # Check which columns need defining
+        from store.columns import REGISTRY
+        type_map = {"str": "str", "int": "int", "float": "float", "bool": "bool"}
+        type_map_py = {"str": str, "int": int, "float": float, "bool": bool}
+
+        all_col_names = [f["name"] for f in fields]
+        if computeds:
+            all_col_names += [c["name"] for c in computeds]
+
+        new_cols = [n for n in all_col_names if not REGISTRY.has(n)]
+
+        # Generate column definitions for new columns
+        if new_cols:
+            col_lines = ["from store.columns import REGISTRY", ""]
+            for col_name in new_cols:
+                # Find type from fields or default to float for computeds
+                field_match = next((f for f in fields if f["name"] == col_name), None)
+                comp_match = next((c for c in computeds if c["name"] == col_name), None)
+                if field_match:
+                    py_type = type_map.get(field_match["type"], "str")
+                else:
+                    py_type = "float"  # computeds are typically numeric
+                role = "measure" if py_type in ("int", "float") else "dimension"
+                col_lines.append(f'REGISTRY.define("{col_name}", {py_type},')
+                col_lines.append(f'    role="{role}",')
+                if role == "measure":
+                    col_lines.append(f'    unit="units",')
+                desc = comp_match["description"] if comp_match and comp_match.get("description") else f"{col_name} for {name}"
+                col_lines.append(f'    description="{desc}")')
+                col_lines.append("")
+
+            from agents._codegen import create_codegen_tools
+            cg = create_codegen_tools(ctx)
+            define_fn = cg[1]
+            col_result = json.loads(define_fn(
+                module_name=f"{name.lower()}_columns",
+                code="\n".join(col_lines),
+                module_type="columns",
+                description=f"Column definitions for {name}",
+            ))
+            if col_result.get("status") == "error":
+                return json.dumps({
+                    "error": f"Failed to define columns: {col_result.get('error', col_result.get('errors'))}"
+                })
+
+        # Validate key_field
+        all_field_names = [f["name"] for f in fields]
+        if key_field not in all_field_names:
+            return json.dumps({
+                "error": f"key_field '{key_field}' is not in fields: {all_field_names}"
+            })
+
+        # Generate model code
         lines = [
             "from dataclasses import dataclass",
-            "from store import Storable",
-            "from reactive import computed, effect",
-            "from streaming import ticking",
+            "from store.base import Storable",
+            "from reactive.computed import computed",
+            "try:",
+            "    from streaming.decorator import ticking",
+            "except Exception:",
+            "    ticking = lambda cls: cls  # no-op when Deephaven not running",
             "",
-            f"@ticking",
-            f"@dataclass",
+            "@ticking",
+            "@dataclass",
             f"class {name}(Storable):",
+            f'    __key__ = "{key_field}"',
         ]
 
-        # Fields
-        type_map = {"str": "str", "int": "int", "float": "float", "bool": "bool"}
         for f in fields:
             py_type = type_map.get(f["type"], "str")
             default = '""' if py_type == "str" else "0" if py_type == "int" else "0.0" if py_type == "float" else "False"
             lines.append(f"    {f['name']}: {py_type} = {default}")
 
-        # Computeds
         if computeds:
             lines.append("")
             for c in computeds:
-                lines.append(f"    @computed")
+                lines.append("    @computed")
                 lines.append(f"    def {c['name']}(self):")
                 if c.get("description"):
                     lines.append(f'        """{c["description"]}"""')
                 lines.append(f"        return {c['formula']}")
 
         code = "\n".join(lines)
+
+        # Write via define_module
+        from agents._codegen import create_codegen_tools
+        cg = create_codegen_tools(ctx)
+        define_fn = cg[1]
+        model_result = json.loads(define_fn(
+            module_name=f"{name.lower()}_model",
+            code=code,
+            module_type="models",
+            description=f"{name} reactive model",
+        ))
+
+        if model_result.get("status") == "error":
+            return json.dumps({
+                "error": f"Failed to define model: {model_result.get('error', model_result.get('errors'))}"
+            })
+
         return json.dumps({
+            "status": "created",
             "name": name,
             "fields": fields,
             "computeds": computeds,
+            "new_columns": new_cols,
+            "persistent": True,
             "generated_code": code,
-            "message": f"Reactive model '{name}' designed. Copy the code to your module and the @ticking decorator will auto-create ticking tables.",
+            "message": f"Reactive model '{name}' created and persisted. "
+                       f"Survives restart. @ticking will auto-create ticking tables.",
         })
 
     @tool
@@ -287,8 +364,12 @@ def create_dashboard_tools(ctx: _PlatformContext) -> list:
             "message": f"Table will be visible as '{pub_name}' in the Deephaven web UI.",
         })
 
+    # Add codegen tools
+    from agents._codegen import create_codegen_tools
+    codegen_tools = create_codegen_tools(ctx)
+
     return [list_ticking_tables, create_ticking_table, create_derived_table,
-            setup_store_bridge, create_reactive_model, publish_table]
+            setup_store_bridge, create_reactive_model, publish_table] + codegen_tools
 
 
 def create_dashboard_agent(ctx: _PlatformContext, **kwargs) -> Agent:

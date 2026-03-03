@@ -41,12 +41,18 @@ You can:
 3. Insert seed records into datasets.
 4. Query datasets with filters.
 5. Bulk-load data from CSV or Parquet files.
+6. Inspect the column registry to see what columns already exist.
+7. Write persistent Python modules (column definitions + Storable classes) via define_module.
+8. Execute ephemeral Python code for ad-hoc analysis via execute_python.
 
 When creating datasets:
+- ALWAYS call inspect_registry first to check which columns already exist.
+- Reuse existing columns (symbol, price, etc.) — do NOT redefine them.
+- Only call REGISTRY.define() for genuinely NEW columns.
 - Choose appropriate Python types (str, int, float, bool, datetime).
 - Use clear, descriptive field names in snake_case.
-- Consider which fields should be used for grouping/filtering.
-- Add reasonable defaults where appropriate.
+- For complex models with @computed properties, use define_module.
+- For simple flat datasets, create_dataset works fine.
 
 Always confirm what you've created by describing the schema back to the user.
 """
@@ -213,28 +219,111 @@ def create_oltp_tools(ctx: _PlatformContext) -> list:
         if ctx.get_storable_type(name):
             return json.dumps({"error": f"Type '{name}' already exists."})
 
-        # Build the class
-        cls = _build_storable_class(name, fields)
-        ctx.register_storable_type(name, cls)
+        # Check which columns already exist in the registry
+        from store.columns import REGISTRY
 
-        # Return confirmation
-        schema = []
-        for f in dataclasses.fields(cls):
-            if not f.name.startswith("_"):
-                schema.append({
-                    "name": f.name,
-                    "type": f.type.__name__ if isinstance(f.type, type) else str(f.type),
+        new_columns = []
+        existing_columns = []
+        for f in fields:
+            col_name = f["name"]
+            if REGISTRY.has(col_name):
+                existing_columns.append(col_name)
+            else:
+                new_columns.append(f)
+
+        # Generate column definition code for new columns
+        col_lines = []
+        if new_columns:
+            col_lines.append("from store.columns import REGISTRY")
+            col_lines.append("")
+            for f in new_columns:
+                py_type = _TYPE_MAP.get(f["type"].lower(), str).__name__
+                # Infer role from type
+                role = "measure" if py_type in ("int", "float") else "dimension"
+                unit = '"units"' if role == "measure" else None
+                col_lines.append(f'REGISTRY.define("{f["name"]}", {py_type},')
+                col_lines.append(f'    role="{role}",')
+                if unit:
+                    col_lines.append(f'    unit={unit},')
+                col_lines.append(f'    description="{f["name"]} field for {name}")')
+                col_lines.append("")
+
+        # Generate Storable class code
+        model_lines = [
+            "from dataclasses import dataclass",
+            "from store.base import Storable",
+            "",
+            "@dataclass",
+            f"class {name}(Storable):",
+        ]
+        if description:
+            model_lines.append(f'    """{description}"""')
+        for f in fields:
+            py_type = _TYPE_MAP.get(f["type"].lower(), str).__name__
+            default = f.get("default")
+            if default is None:
+                if py_type == "str":
+                    default = '""'
+                elif py_type == "int":
+                    default = "0"
+                elif py_type == "float":
+                    default = "0.0"
+                elif py_type == "bool":
+                    default = "False"
+                else:
+                    default = '""'
+            model_lines.append(f"    {f['name']}: {py_type} = {default}")
+
+        # Write column definitions via define_module
+        from agents._codegen import create_codegen_tools
+        codegen_tools = create_codegen_tools(ctx)
+        define_module_fn = codegen_tools[1]  # define_module is second tool
+
+        if col_lines:
+            col_result = json.loads(define_module_fn(
+                module_name=f"{name.lower()}_columns",
+                code="\n".join(col_lines),
+                module_type="columns",
+                description=f"Column definitions for {name}",
+            ))
+            if col_result.get("status") == "error":
+                return json.dumps({
+                    "error": f"Failed to define columns: {col_result.get('error', col_result.get('errors'))}"
                 })
+
+        # Write model via define_module
+        model_result = json.loads(define_module_fn(
+            module_name=f"{name.lower()}_model",
+            code="\n".join(model_lines),
+            module_type="models",
+            description=f"{name} Storable model",
+        ))
+        if model_result.get("status") == "error":
+            return json.dumps({
+                "error": f"Failed to define model: {model_result.get('error', model_result.get('errors'))}"
+            })
+
+        # Register in context for other tools
+        created_types = model_result.get("created_types", [])
+        if created_types:
+            logger.info("Created Storable type via codegen: %s", name)
+
+        schema = [{"name": f["name"], "type": _TYPE_MAP.get(f["type"].lower(), str).__name__} for f in fields]
 
         result = {
             "status": "created",
             "type_name": name,
-            "class_name": cls.__name__,
+            "class_name": name,
             "fields": schema,
+            "new_columns": [f["name"] for f in new_columns],
+            "existing_columns": existing_columns,
+            "persistent": True,
             "description": description,
-            "message": f"Dataset '{name}' created with {len(schema)} fields. Ready for insert_records().",
+            "message": f"Dataset '{name}' created with {len(schema)} fields "
+                       f"({len(new_columns)} new columns defined, "
+                       f"{len(existing_columns)} reused from registry). "
+                       f"Persistent — survives restart.",
         }
-        logger.info("Created Storable type: %s with %d fields", name, len(schema))
         return json.dumps(result)
 
     @tool
@@ -388,8 +477,12 @@ def create_oltp_tools(ctx: _PlatformContext) -> list:
             "error_samples": errors,
         })
 
+    # Add codegen tools
+    from agents._codegen import create_codegen_tools
+    codegen_tools = create_codegen_tools(ctx)
+
     return [list_storable_types, describe_type, create_dataset,
-            insert_records, query_dataset, ingest_from_file]
+            insert_records, query_dataset, ingest_from_file] + codegen_tools
 
 
 # ── Agent factory ──────────────────────────────────────────────────────

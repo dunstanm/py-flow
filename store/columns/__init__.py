@@ -15,3 +15,29 @@ from store.columns import trading   # noqa: F401, E402
 from store.columns import finance   # noqa: F401, E402
 from store.columns import media     # noqa: F401, E402
 from store.columns import scheduler # noqa: F401, E402
+
+# Auto-import agent-generated column modules (no agent dependency)
+def _load_agent_columns():
+    import importlib.util, sys, logging
+    from pathlib import Path
+    d = Path(__file__).parent / "agent_generated"
+    if not d.exists():
+        return
+    for f in sorted(d.glob("*.py")):
+        if f.name.startswith("_"):
+            continue
+        mod_name = f"_agent_col_{f.stem}"
+        if mod_name in sys.modules:
+            del sys.modules[mod_name]
+        spec = importlib.util.spec_from_file_location(mod_name, f)
+        if spec and spec.loader:
+            try:
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = mod
+                spec.loader.exec_module(mod)
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "Failed to load agent column module %s: %s", f, e)
+
+_load_agent_columns()
+del _load_agent_columns
