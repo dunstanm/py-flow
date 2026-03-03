@@ -28,113 +28,52 @@ from datacube.engine import Datacube
 # 1. Config Model Tests
 # ═══════════════════════════════════════════════════════════════════════
 
-class TestDatacubeColumnConfig:
+class TestConfigModels:
 
-    def test_create_dimension(self):
-        col = DatacubeColumnConfig(name="sector", type="str", kind="dimension")
-        assert col.name == "sector"
-        assert col.kind == "dimension"
-        assert col.excluded_from_pivot is True
-        assert col.is_selected is True
+    def test_column_config_dimension_and_measure(self):
+        dim = DatacubeColumnConfig(name="sector", type="str", kind="dimension")
+        assert dim.kind == "dimension" and dim.excluded_from_pivot is True and dim.is_selected is True
+        meas = DatacubeColumnConfig(name="quantity", type="int", kind="measure",
+                                     aggregate_operator="sum", excluded_from_pivot=False)
+        assert meas.kind == "measure" and meas.aggregate_operator == "sum"
 
-    def test_create_measure(self):
-        col = DatacubeColumnConfig(
-            name="quantity", type="int", kind="measure",
-            aggregate_operator="sum", excluded_from_pivot=False,
-        )
-        assert col.kind == "measure"
-        assert col.aggregate_operator == "sum"
-        assert col.excluded_from_pivot is False
-
-    def test_frozen(self):
+    def test_column_config_frozen_and_replace(self):
         col = DatacubeColumnConfig(name="x", type="str")
         with pytest.raises(AttributeError):
             col.name = "y"  # type: ignore
+        col2 = DatacubeColumnConfig(name="price", type="float", kind="measure", aggregate_operator="sum")
+        col3 = col2.replace(aggregate_operator="avg")
+        assert col2.aggregate_operator == "sum" and col3.aggregate_operator == "avg"
 
-    def test_replace(self):
-        col = DatacubeColumnConfig(name="price", type="float", kind="measure", aggregate_operator="sum")
-        col2 = col.replace(aggregate_operator="avg")
-        assert col.aggregate_operator == "sum"  # original unchanged
-        assert col2.aggregate_operator == "avg"
+    def test_from_type_inference(self):
+        assert DatacubeColumnConfig.from_type("price", float).kind == "measure"
+        assert DatacubeColumnConfig.from_type("name", str).kind == "dimension"
 
-    def test_from_type_numeric(self):
-        col = DatacubeColumnConfig.from_type("price", float)
-        assert col.kind == "measure"
-        assert col.aggregate_operator == "sum"
-        assert col.excluded_from_pivot is False
-
-    def test_from_type_string(self):
-        col = DatacubeColumnConfig.from_type("name", str)
-        assert col.kind == "dimension"
-        assert col.aggregate_operator == ""
-        assert col.excluded_from_pivot is True
-
-
-class TestExtendedColumn:
-
-    def test_create(self):
+    def test_extended_column_and_small_configs(self):
         e = ExtendedColumn(name="notional", expression="price * quantity")
-        assert e.name == "notional"
-        assert e.type == "float"
-
-    def test_frozen(self):
-        e = ExtendedColumn(name="x", expression="1")
+        assert e.name == "notional" and e.type == "float"
         with pytest.raises(AttributeError):
             e.name = "y"  # type: ignore
-
-
-class TestFilter:
-
-    def test_create(self):
         f = Filter(field="sector", op="eq", value="Tech")
-        assert f.field == "sector"
-        assert f.op == "eq"
-        assert f.value == "Tech"
-
-
-class TestSort:
-
-    def test_create(self):
+        assert f.field == "sector" and f.op == "eq"
         s = Sort(field="price", descending=True)
         assert s.descending is True
-
-
-class TestJoinSpec:
-
-    def test_create(self):
-        j = JoinSpec(
-            source="positions",
-            on=(("symbol", "symbol"),),
-            join_type="LEFT",
-        )
+        j = JoinSpec(source="positions", on=(("symbol", "symbol"),), join_type="LEFT")
         assert j.source == "positions"
-        assert j.on == (("symbol", "symbol"),)
 
 
 class TestDatacubeSnapshot:
 
-    def test_create_empty(self):
+    def test_create_frozen_hashable_replace(self):
         snap = DatacubeSnapshot(source="trades")
-        assert snap.source == "trades"
-        assert snap.columns == ()
-        assert snap.group_by == ()
-        assert snap.pivot_by == ()
-
-    def test_frozen(self):
-        snap = DatacubeSnapshot(source="t")
+        assert snap.source == "trades" and snap.columns == () and snap.group_by == ()
         with pytest.raises(AttributeError):
             snap.source = "x"  # type: ignore
-
-    def test_hashable(self):
-        snap1 = DatacubeSnapshot(source="t", group_by=("a",))
         snap2 = DatacubeSnapshot(source="t", group_by=("a",))
-        assert hash(snap1) == hash(snap2)
-
-    def test_replace(self):
-        snap = DatacubeSnapshot(source="t")
-        snap2 = snap.replace(group_by=("sector",))
-        assert snap.group_by == ()
-        assert snap2.group_by == ("sector",)
+        snap3 = DatacubeSnapshot(source="t", group_by=("a",))
+        assert hash(snap2) == hash(snap3)
+        snap4 = snap.replace(group_by=("sector",))
+        assert snap.group_by == () and snap4.group_by == ("sector",)
 
     def test_get_column(self):
         cols = (

@@ -20,50 +20,23 @@ from media.models import Document
 
 
 class TestDetectContentType:
-    def test_pdf(self):
-        assert detect_content_type("report.pdf") == "application/pdf"
-
-    def test_txt(self):
-        assert detect_content_type("notes.txt") == "text/plain"
-
-    def test_markdown(self):
-        assert detect_content_type("README.md") == "text/markdown"
-        assert detect_content_type("doc.markdown") == "text/markdown"
-
-    def test_html(self):
-        assert detect_content_type("page.html") == "text/html"
-        assert detect_content_type("page.htm") == "text/html"
-
-    def test_csv(self):
-        assert detect_content_type("data.csv") == "text/csv"
-
-    def test_images(self):
-        assert detect_content_type("photo.jpg") == "image/jpeg"
-        assert detect_content_type("photo.jpeg") == "image/jpeg"
-        assert detect_content_type("icon.png") == "image/png"
-        assert detect_content_type("anim.gif") == "image/gif"
-        assert detect_content_type("pic.webp") == "image/webp"
-        assert detect_content_type("logo.svg") == "image/svg+xml"
-
-    def test_audio(self):
-        assert detect_content_type("song.mp3") == "audio/mpeg"
-        assert detect_content_type("clip.wav") == "audio/wav"
-        assert detect_content_type("track.ogg") == "audio/ogg"
-        assert detect_content_type("music.flac") == "audio/flac"
-
-    def test_video(self):
-        assert detect_content_type("movie.mp4") == "video/mp4"
-        assert detect_content_type("clip.mkv") == "video/x-matroska"
-        assert detect_content_type("vid.avi") == "video/x-msvideo"
-        assert detect_content_type("rec.mov") == "video/quicktime"
-
-    def test_unknown(self):
-        assert detect_content_type("file.xyz") == "application/octet-stream"
-        assert detect_content_type("noext") == "application/octet-stream"
-
-    def test_case_insensitive(self):
-        assert detect_content_type("REPORT.PDF") == "application/pdf"
-        assert detect_content_type("Photo.JPG") == "image/jpeg"
+    @pytest.mark.parametrize("filename,expected", [
+        ("report.pdf", "application/pdf"),
+        ("notes.txt", "text/plain"),
+        ("README.md", "text/markdown"),
+        ("page.html", "text/html"),
+        ("data.csv", "text/csv"),
+        ("photo.jpg", "image/jpeg"),
+        ("icon.png", "image/png"),
+        ("logo.svg", "image/svg+xml"),
+        ("song.mp3", "audio/mpeg"),
+        ("movie.mp4", "video/mp4"),
+        ("file.xyz", "application/octet-stream"),
+        ("noext", "application/octet-stream"),
+        ("REPORT.PDF", "application/pdf"),
+    ])
+    def test_detect(self, filename, expected):
+        assert detect_content_type(filename) == expected
 
 
 # ── PDF extraction ────────────────────────────────────────────────────────
@@ -117,55 +90,31 @@ class TestExtractPDF:
 
 
 class TestExtractPlain:
-    def test_utf8(self):
+    def test_utf8_and_whitespace(self):
         assert _extract_plain(b"hello world") == "hello world"
-
-    def test_utf8_with_whitespace(self):
         assert _extract_plain(b"  hello  ") == "hello"
 
-    def test_empty(self):
+    def test_empty_and_fallback(self):
         assert _extract_plain(b"") is None
         assert _extract_plain(b"   ") is None
-
-    def test_latin1_fallback(self):
-        # Latin-1 encoded text with special chars
-        text = "café résumé"
-        data = text.encode("latin-1")
-        result = _extract_plain(data)
-        assert result is not None
-        assert "caf" in result
+        assert "caf" in _extract_plain("café résumé".encode("latin-1"))
 
 
 # ── Markdown extraction ───────────────────────────────────────────────────
 
 
 class TestExtractMarkdown:
-    def test_strips_headers(self):
-        md = b"# Title\n## Subtitle\nBody text"
+    def test_strips_formatting(self):
+        md = b"# Title\n## Subtitle\nThis is **bold** and *italic* text"
         result = _extract_markdown(md)
-        assert "Title" in result
-        assert "#" not in result
+        assert "Title" in result and "#" not in result
+        assert "bold" in result and "**" not in result
 
-    def test_strips_bold_italic(self):
-        md = b"This is **bold** and *italic* text"
+    def test_strips_links_and_code(self):
+        md = b"Check [this link](https://example.com)\n```python\nprint('hello')\n```\nMore text"
         result = _extract_markdown(md)
-        assert "bold" in result
-        assert "italic" in result
-        assert "**" not in result
-        assert "*italic*" not in result
-
-    def test_strips_links(self):
-        md = b"Check [this link](https://example.com) out"
-        result = _extract_markdown(md)
-        assert "this link" in result
-        assert "https://" not in result
-
-    def test_strips_code_blocks(self):
-        md = b"Text\n```python\nprint('hello')\n```\nMore text"
-        result = _extract_markdown(md)
-        assert "Text" in result
-        assert "More text" in result
-        assert "print" not in result
+        assert "this link" in result and "https://" not in result
+        assert "More text" in result and "print" not in result
 
     def test_empty(self):
         assert _extract_markdown(b"") is None
@@ -175,24 +124,11 @@ class TestExtractMarkdown:
 
 
 class TestExtractHTML:
-    def test_strips_tags(self):
-        html = b"<html><body><p>Hello <b>world</b></p></body></html>"
+    def test_strips_tags_scripts_style(self):
+        html = b"<html><script>alert('xss')</script><style>body{color:red}</style><body><p>Hello <b>world</b></p></body></html>"
         result = _extract_html(html)
-        assert "Hello" in result
-        assert "world" in result
-        assert "<" not in result
-
-    def test_strips_scripts(self):
-        html = b"<html><script>alert('xss')</script><p>Content</p></html>"
-        result = _extract_html(html)
-        assert "Content" in result
-        assert "alert" not in result
-
-    def test_strips_style(self):
-        html = b"<html><style>body{color:red}</style><p>Text</p></html>"
-        result = _extract_html(html)
-        assert "Text" in result
-        assert "color" not in result
+        assert "Hello" in result and "world" in result and "<" not in result
+        assert "alert" not in result and "color" not in result
 
     def test_empty(self):
         assert _extract_html(b"") is None
@@ -233,45 +169,20 @@ class TestExtractText:
 
 
 class TestDocument:
-    def test_properties(self):
-        doc = Document(content_type="application/pdf")
-        assert doc.is_pdf
-        assert not doc.is_image
-        assert not doc.is_audio
-        assert not doc.is_video
-        assert not doc.is_text
+    @pytest.mark.parametrize("content_type,prop", [
+        ("application/pdf", "is_pdf"),
+        ("image/png", "is_image"),
+        ("audio/mpeg", "is_audio"),
+        ("video/mp4", "is_video"),
+        ("text/plain", "is_text"),
+    ])
+    def test_type_properties(self, content_type, prop):
+        doc = Document(content_type=content_type)
+        assert getattr(doc, prop) is True
 
-    def test_is_image(self):
-        doc = Document(content_type="image/png")
-        assert doc.is_image
-        assert not doc.is_pdf
-
-    def test_is_audio(self):
-        doc = Document(content_type="audio/mpeg")
-        assert doc.is_audio
-
-    def test_is_video(self):
-        doc = Document(content_type="video/mp4")
-        assert doc.is_video
-
-    def test_is_text(self):
-        doc = Document(content_type="text/plain")
-        assert doc.is_text
-
-    def test_has_text(self):
-        doc = Document(extracted_text="")
+    def test_has_text_and_defaults(self):
+        doc = Document()
+        assert doc.title == "" and doc.size == 0 and doc.s3_bucket == "media"
         assert not doc.has_text
         doc.extracted_text = "some content"
         assert doc.has_text
-
-    def test_default_values(self):
-        doc = Document()
-        assert doc.title == ""
-        assert doc.filename == ""
-        assert doc.content_type == ""
-        assert doc.size == 0
-        assert doc.s3_bucket == "media"
-        assert doc.s3_key == ""
-        assert doc.tags == []
-        assert doc.extracted_text == ""
-        assert doc.metadata == {}

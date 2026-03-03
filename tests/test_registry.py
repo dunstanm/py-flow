@@ -464,54 +464,30 @@ class TestIntrospection:
 
 class TestGlobalRegistry:
 
-    def test_global_registry_loaded(self):
+    def test_global_registry_loaded_and_wired(self):
         from store.columns import REGISTRY
-        cols = REGISTRY.all_columns()
-        assert len(cols) >= 40  # we have ~49 columns
-
-    def test_global_registry_on_storable(self):
         from store.base import Storable
-        assert Storable._registry is not None
-
-    def test_production_models_registered(self):
         from store.models import Trade, Order, Signal
-        from store.base import Storable
+        cols = REGISTRY.all_columns()
+        assert len(cols) >= 40
+        assert Storable._registry is not None
         entities = Storable._registry.entities()
-        assert Trade in entities
-        assert Order in entities
-        assert Signal in entities
+        assert Trade in entities and Order in entities and Signal in entities
 
-    def test_registry_has_trading_columns(self):
+    def test_registry_has_expected_columns(self):
         from store.columns import REGISTRY
-        for col_name in ["symbol", "price", "quantity", "side", "pnl"]:
-            assert REGISTRY.has(col_name), f"Missing trading column: {col_name}"
+        expected = ["symbol", "price", "quantity", "side", "pnl",
+                    "bid", "ask", "strike", "volatility", "notional",
+                    "name", "label", "title", "status", "notes"]
+        for col_name in expected:
+            assert REGISTRY.has(col_name), f"Missing column: {col_name}"
 
-    def test_registry_has_finance_columns(self):
-        from store.columns import REGISTRY
-        for col_name in ["bid", "ask", "strike", "volatility", "notional"]:
-            assert REGISTRY.has(col_name), f"Missing finance column: {col_name}"
-
-    def test_registry_has_general_columns(self):
-        from store.columns import REGISTRY
-        for col_name in ["name", "label", "title", "status", "notes"]:
-            assert REGISTRY.has(col_name), f"Missing general column: {col_name}"
-
-    def test_all_measures_have_units(self):
-        """Every measure column must have a unit defined."""
-        from store.columns import REGISTRY
-        for name, col in REGISTRY.all_columns().items():
-            if col.role == "measure":
-                assert col.unit, f"Measure '{name}' missing unit"
-
-    def test_all_columns_have_description(self):
-        """Every column must have a description."""
-        from store.columns import REGISTRY
-        for name, col in REGISTRY.all_columns().items():
-            assert col.description, f"Column '{name}' missing description"
-
-    def test_all_columns_have_role(self):
-        """Every column must have a role."""
+    def test_all_columns_well_formed(self):
+        """Every column must have role, description; measures must have unit."""
         from store.columns import REGISTRY
         for name, col in REGISTRY.all_columns().items():
             assert col.role in ("dimension", "measure", "attribute"), \
                 f"Column '{name}' has invalid role: {col.role}"
+            assert col.description, f"Column '{name}' missing description"
+            if col.role == "measure":
+                assert col.unit, f"Measure '{name}' missing unit"

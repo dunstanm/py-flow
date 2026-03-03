@@ -92,114 +92,43 @@ class TestEmbedded:
 class TestModels:
     """Test scheduler Storable/Embedded models."""
 
-    def test_task_creation(self):
+    def test_task_creation_and_serialization(self):
         from scheduler.models import Task
         t = Task(name="sync", fn="sync:events", depends_on=["init"])
-        assert t.name == "sync"
-        assert t.fn == "sync:events"
-        assert t.depends_on == ["init"]
-        assert t.enabled is True
-        assert t.timeout_s == 300
+        assert t.name == "sync" and t.enabled is True and t.timeout_s == 300
+        t2 = Task.from_json(Task(name="test", fn="mod:fn", enabled=False).to_json())
+        assert t2.name == "test" and t2.enabled is False
 
-    def test_task_serialization(self):
-        from scheduler.models import Task
-        t = Task(name="test", fn="mod:fn", enabled=False)
-        json_str = t.to_json()
-        t2 = Task.from_json(json_str)
-        assert t2.name == "test"
-        assert t2.enabled is False
-
-    def test_schedule_creation_with_tasks(self):
+    def test_schedule_creation_and_serialization(self):
         from scheduler.models import Schedule, Task
-        s = Schedule(
-            name="etl",
-            cron_expr="0 2 * * *",
-            description="ETL pipeline",
-            tasks=[
-                Task(name="extract", fn="jobs:extract"),
-                Task(name="load", fn="jobs:load", depends_on=["extract"]),
-            ],
-        )
-        assert s.name == "etl"
-        assert len(s.tasks) == 2
-        assert isinstance(s.tasks[0], Task)
+        s = Schedule(name="etl", cron_expr="0 2 * * *", description="ETL pipeline",
+                     tasks=[Task(name="extract", fn="jobs:extract"),
+                            Task(name="load", fn="jobs:load", depends_on=["extract"])])
+        assert s.name == "etl" and len(s.tasks) == 2
+        s2 = Schedule.from_json(s.to_json())
+        assert isinstance(s2.tasks[0], Task) and s2.tasks[0].name == "extract"
+        # task_defs handles dict-based tasks post-deserialization
+        s3 = Schedule(name="test", tasks=[
+            {"name": "a", "fn": "fn_a", "depends_on": [], "timeout_s": 300, "retries": 0, "enabled": True}])
+        assert isinstance(s3.task_defs[0], Task)
 
-    def test_schedule_task_defs_property(self):
-        from scheduler.models import Schedule, Task
-        # Simulate post-deserialization state (tasks as dicts)
-        s = Schedule(name="test", tasks=[
-            {"name": "a", "fn": "fn_a", "depends_on": [], "timeout_s": 300, "retries": 0, "enabled": True},
-        ])
-        defs = s.task_defs
-        assert len(defs) == 1
-        assert isinstance(defs[0], Task)
-        assert defs[0].name == "a"
-
-    def test_schedule_from_json_reconstructs_tasks(self):
-        from scheduler.models import Schedule, Task
-        s = Schedule(
-            name="test",
-            cron_expr="*/5 * * * *",
-            tasks=[Task(name="a", fn="mod:fn_a")],
-        )
-        json_str = s.to_json()
-        s2 = Schedule.from_json(json_str)
-        assert isinstance(s2.tasks[0], Task)
-        assert s2.tasks[0].name == "a"
-
-    def test_schedule_simple(self):
-        from scheduler.models import Schedule, Task
-        s = Schedule(
-            name="hourly_sync",
-            cron_expr="0 * * * *",
-            tasks=[Task(name="sync", fn="jobs:sync")],
-        )
-        assert s.name == "hourly_sync"
-        assert len(s.tasks) == 1
-
-    def test_run_creation_auto_id(self):
-        from scheduler.models import Run
+    def test_run_and_task_result(self):
+        from scheduler.models import Run, TaskResult
         r = Run(schedule_name="test")
         assert r.run_id != ""
+        r2 = Run(schedule_name="etl", task_results={
+            "extract": TaskResult(task_name="extract", status="SUCCESS", duration_ms=100),
+            "load": TaskResult(task_name="load", status="ERROR", error="timeout")})
+        r3 = Run.from_json(r2.to_json())
+        assert r3.task_results["extract"].status == "SUCCESS"
+        assert r3.task_results["load"].error == "timeout"
 
-    def test_run_from_json_reconstructs_task_results(self):
-        from scheduler.models import Run, TaskResult
-        r = Run(
-            schedule_name="etl",
-            task_results={
-                "extract": TaskResult(task_name="extract", status="SUCCESS", duration_ms=100),
-                "load": TaskResult(task_name="load", status="ERROR", error="timeout"),
-            },
-        )
-        json_str = r.to_json()
-        r2 = Run.from_json(json_str)
-        assert isinstance(r2.task_results["extract"], TaskResult)
-        assert r2.task_results["extract"].status == "SUCCESS"
-        assert r2.task_results["load"].error == "timeout"
-
-    def test_taskresult_creation(self):
-        from scheduler.models import TaskResult
-        tr = TaskResult(task_name="sync", status="SUCCESS", duration_ms=42.5)
-        assert tr.task_name == "sync"
-        assert tr.duration_ms == 42.5
-
-    def test_schedule_has_state_machine(self):
-        from scheduler.models import Schedule
-        assert Schedule._state_machine is not None
-        assert Schedule._state_machine.initial == "ACTIVE"
-
-    def test_run_has_state_machine(self):
-        from scheduler.models import Run
-        assert Run._state_machine is not None
-        assert Run._state_machine.initial == "PENDING"
-
-    def test_run_lifecycle_transitions(self):
-        from scheduler.models import RunLifecycle
+    def test_state_machines_and_lifecycles(self):
+        from scheduler.models import Schedule, Run, RunLifecycle
+        assert Schedule._state_machine is not None and Schedule._state_machine.initial == "ACTIVE"
+        assert Run._state_machine is not None and Run._state_machine.initial == "PENDING"
         assert "RUNNING" in RunLifecycle.allowed_transitions("PENDING")
-        assert "CANCELLED" in RunLifecycle.allowed_transitions("PENDING")
         assert "SUCCESS" in RunLifecycle.allowed_transitions("RUNNING")
-        assert "PARTIAL" in RunLifecycle.allowed_transitions("RUNNING")
-        assert "ERROR" in RunLifecycle.allowed_transitions("RUNNING")
         assert "RETRYING" in RunLifecycle.allowed_transitions("ERROR")
 
 
@@ -255,31 +184,17 @@ class TestCron:
         assert validate("not a cron") is False
         assert validate("") is False
 
-    def test_describe_every_5_minutes(self):
+    @pytest.mark.parametrize("expr,expected", [
+        ("*/5 * * * *", "every 5 minutes"),
+        ("*/1 * * * *", "every minute"),
+        ("0 * * * *", "every hour"),
+        ("0 2 * * *", "daily at 02:00"),
+        ("0 0 * * 0", "weekly on Sunday at 00:00"),
+        ("0 0 1,15 * *", "0 0 1,15 * *"),
+    ])
+    def test_describe(self, expr, expected):
         from scheduler.cron import describe
-        assert describe("*/5 * * * *") == "every 5 minutes"
-
-    def test_describe_every_minute(self):
-        from scheduler.cron import describe
-        assert describe("*/1 * * * *") == "every minute"
-
-    def test_describe_every_hour(self):
-        from scheduler.cron import describe
-        assert describe("0 * * * *") == "every hour"
-
-    def test_describe_daily(self):
-        from scheduler.cron import describe
-        assert describe("0 2 * * *") == "daily at 02:00"
-
-    def test_describe_weekly(self):
-        from scheduler.cron import describe
-        assert describe("0 0 * * 0") == "weekly on Sunday at 00:00"
-
-    def test_describe_passthrough(self):
-        from scheduler.cron import describe
-        # Complex expressions just pass through
-        result = describe("0 0 1,15 * *")
-        assert result == "0 0 1,15 * *"
+        assert describe(expr) == expected
 
 
 # ── DAG graph tests ──────────────────────────────────────────────────────

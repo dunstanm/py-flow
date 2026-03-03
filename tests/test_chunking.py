@@ -28,36 +28,20 @@ def _sentences(n: int, words_per: int = 30) -> str:
 
 
 class TestTokenEstimation:
-    def test_basic(self):
-        assert _estimate_tokens("hello world") >= 2
-
-    def test_empty(self):
+    def test_estimation(self):
         assert _estimate_tokens("") == 1  # max(1, ...)
-
-    def test_proportional(self):
-        short = _estimate_tokens("one two three")
-        long = _estimate_tokens("one two three four five six seven eight nine ten")
-        assert long > short
+        assert _estimate_tokens("hello world") >= 2
+        assert _estimate_tokens("one two three four five six seven eight nine ten") > _estimate_tokens("one two three")
 
 
 # ── Sentence splitting ───────────────────────────────────────────────────
 
 
 class TestSentenceSplitting:
-    def test_basic_sentences(self):
-        text = "Hello world. This is a test. Another sentence here."
-        sents = _split_sentences(text)
-        assert len(sents) >= 2
-
-    def test_paragraph_fallback(self):
-        text = "first paragraph content\n\nsecond paragraph content"
-        sents = _split_sentences(text)
-        assert len(sents) == 2
-
-    def test_single_line(self):
-        text = "just one line without any sentence endings"
-        sents = _split_sentences(text)
-        assert len(sents) >= 1
+    def test_splitting_modes(self):
+        assert len(_split_sentences("Hello world. This is a test. Another sentence here.")) >= 2
+        assert len(_split_sentences("first paragraph content\n\nsecond paragraph content")) == 2
+        assert len(_split_sentences("just one line without any sentence endings")) >= 1
 
 
 # ── Chunking ─────────────────────────────────────────────────────────────
@@ -138,21 +122,16 @@ class TestChunking:
         # Should be roughly 100-150 tokens for 100 words
         assert 80 <= chunks[0].token_count <= 200
 
-    def test_chunk_indices_sequential(self):
-        """chunk_index should be 0, 1, 2, ..."""
+    def test_indices_sequential_and_all_text_covered(self):
+        """chunk_index should be 0,1,2,... and all text should be covered."""
         text = _sentences(30, words_per=20)
         chunks = chunk_text(text, chunk_size=50, chunk_overlap=10, min_chunk_size=10)
         for i, c in enumerate(chunks):
             assert c.chunk_index == i
-
-    def test_all_text_covered(self):
-        """Chunks should collectively cover all the original text's content."""
-        text = "Alpha bravo charlie. Delta echo foxtrot. Golf hotel india. Juliet kilo lima."
-        chunks = chunk_text(text, chunk_size=15, chunk_overlap=3, min_chunk_size=3)
-        # Every word in the original should appear in at least one chunk
-        original_words = set(text.replace(".", "").split())
+        text2 = "Alpha bravo charlie. Delta echo foxtrot. Golf hotel india. Juliet kilo lima."
+        chunks2 = chunk_text(text2, chunk_size=15, chunk_overlap=3, min_chunk_size=3)
+        original_words = set(text2.replace(".", "").split())
         chunk_words = set()
-        for c in chunks:
+        for c in chunks2:
             chunk_words.update(c.text.replace(".", "").split())
-        missing = original_words - chunk_words
-        assert len(missing) == 0, f"Words missing from chunks: {missing}"
+        assert len(original_words - chunk_words) == 0

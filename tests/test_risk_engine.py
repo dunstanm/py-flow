@@ -12,20 +12,14 @@ from marketdata.risk_engine import calculate_greeks, _norm_cdf
 # ── _norm_cdf tests ─────────────────────────────────────────────────────────
 
 class TestNormCdf:
-    def test_at_zero(self):
+    def test_known_values(self):
         assert _norm_cdf(0) == pytest.approx(0.5)
-
-    def test_large_positive(self):
         assert _norm_cdf(10) == pytest.approx(1.0, abs=1e-10)
-
-    def test_large_negative(self):
         assert _norm_cdf(-10) == pytest.approx(0.0, abs=1e-10)
 
-    def test_symmetry(self):
+    def test_symmetry_and_monotonicity(self):
         for x in [0.5, 1.0, 2.0, 3.0]:
             assert _norm_cdf(x) + _norm_cdf(-x) == pytest.approx(1.0)
-
-    def test_monotonically_increasing(self):
         vals = [_norm_cdf(x) for x in [-3, -2, -1, 0, 1, 2, 3]]
         for i in range(len(vals) - 1):
             assert vals[i] < vals[i + 1]
@@ -36,26 +30,13 @@ class TestNormCdf:
 class TestGreeksRanges:
     """Greeks should always be in valid mathematical ranges."""
 
-    @pytest.fixture(params=[100, 200, 500, 1000])
-    def price(self, request):
-        return request.param
-
-    def test_delta_between_0_and_1(self, price):
-        delta, _, _, _ = calculate_greeks(price)
+    @pytest.mark.parametrize("price", [100, 200, 500, 1000])
+    def test_all_ranges(self, price):
+        delta, gamma, theta, vega = calculate_greeks(price)
         assert 0 <= delta <= 1
-
-    def test_gamma_non_negative(self, price):
-        _, gamma, _, _ = calculate_greeks(price)
         assert gamma >= 0
-
-    def test_vega_non_negative(self, price):
-        _, _, _, vega = calculate_greeks(price)
         assert vega >= 0
-
-    def test_theta_is_negative_for_calls(self, price):
-        _, _, theta, _ = calculate_greeks(price)
-        # Theta for a long call is almost always negative (time decay)
-        assert theta < 0
+        assert theta < 0  # time decay for long calls
 
 
 class TestGreeksKnownValues:
@@ -102,20 +83,15 @@ class TestGreeksKnownValues:
 class TestGreeksDefaults:
     """Test default parameter behavior."""
 
-    def test_default_strike_is_105pct(self):
-        # When strike=None, K = 1.05 * price → slightly OTM
-        delta_default, _, _, _ = calculate_greeks(100)
-        delta_explicit, _, _, _ = calculate_greeks(100, strike=105)
-        assert delta_default == pytest.approx(delta_explicit)
-
-    def test_returns_four_values(self):
+    def test_defaults_and_finiteness(self):
         result = calculate_greeks(100)
         assert len(result) == 4
-
-    def test_all_finite(self):
-        delta, gamma, theta, vega = calculate_greeks(100)
+        delta, gamma, theta, vega = result
         for val in [delta, gamma, theta, vega]:
             assert math.isfinite(val)
+        # When strike=None, K = 1.05 * price → slightly OTM
+        delta_explicit, _, _, _ = calculate_greeks(100, strike=105)
+        assert delta == pytest.approx(delta_explicit)
 
 
 class TestGreeksEdgeCases:

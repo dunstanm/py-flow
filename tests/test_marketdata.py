@@ -17,7 +17,6 @@ from marketdata.bus import TickBus
 from marketdata.feeds.simulator import (
     SimulatorFeed, SYMBOLS, BASE_PRICES, POSITIONS, FX_PAIRS, FX_BASE,
 )
-from marketdata.risk_engine import calculate_greeks, _norm_cdf
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -269,34 +268,19 @@ class TestModels:
 # ── SimulatorFeed Tests ──────────────────────────────────────────────────────
 
 class TestSimulatorFeedConfig:
-    def test_symbols_count(self):
+    def test_equity_config_consistent(self):
         assert len(SYMBOLS) == 8
-
-    def test_base_prices_keys_match_symbols(self):
         assert set(BASE_PRICES.keys()) == set(SYMBOLS)
-
-    def test_all_base_prices_positive(self):
-        for sym, price in BASE_PRICES.items():
-            assert price > 0, f"{sym} has non-positive base price: {price}"
-
-    def test_positions_keys_match_symbols(self):
         assert set(POSITIONS.keys()) == set(SYMBOLS)
+        for sym in SYMBOLS:
+            assert BASE_PRICES[sym] > 0, f"{sym} has non-positive base price"
+            assert isinstance(POSITIONS[sym], int), f"{sym} position is not int"
 
-    def test_positions_are_integers(self):
-        for sym, pos in POSITIONS.items():
-            assert isinstance(pos, int), f"{sym} position is not int: {type(pos)}"
-
-    def test_fx_pairs_count(self):
+    def test_fx_config_consistent(self):
         assert len(FX_PAIRS) == 3
-
-    def test_fx_base_keys_match_pairs(self):
         assert set(FX_BASE.keys()) == set(FX_PAIRS)
-
-    def test_fx_base_has_required_fields(self):
         for pair, data in FX_BASE.items():
-            assert "mid" in data
-            assert "spread" in data
-            assert "currency" in data
+            assert "mid" in data and "spread" in data and "currency" in data
             assert data["mid"] > 0
 
 
@@ -411,58 +395,6 @@ class TestSimulatorFeed:
             pass
         # Should not raise
 
-
-# ── Risk Engine Tests ────────────────────────────────────────────────────────
-
-class TestNormCdf:
-    def test_cdf_at_zero(self):
-        assert _norm_cdf(0) == pytest.approx(0.5, abs=1e-9)
-
-    def test_cdf_symmetry(self):
-        assert _norm_cdf(1.0) + _norm_cdf(-1.0) == pytest.approx(1.0, abs=1e-9)
-
-    def test_cdf_large_positive(self):
-        assert _norm_cdf(10) == pytest.approx(1.0, abs=1e-9)
-
-    def test_cdf_large_negative(self):
-        assert _norm_cdf(-10) == pytest.approx(0.0, abs=1e-9)
-
-
-class TestCalculateGreeks:
-    def test_returns_four_values(self):
-        result = calculate_greeks(100.0)
-        assert len(result) == 4
-
-    def test_delta_between_0_and_1(self):
-        delta, _, _, _ = calculate_greeks(100.0)
-        assert 0 <= delta <= 1
-
-    def test_gamma_positive(self):
-        _, gamma, _, _ = calculate_greeks(100.0)
-        assert gamma > 0
-
-    def test_vega_positive(self):
-        _, _, _, vega = calculate_greeks(100.0)
-        assert vega > 0
-
-    def test_all_greeks_finite(self):
-        for price in [50, 100, 200, 500, 1000]:
-            d, g, t, v = calculate_greeks(float(price))
-            assert math.isfinite(d), f"delta not finite at price={price}"
-            assert math.isfinite(g), f"gamma not finite at price={price}"
-            assert math.isfinite(t), f"theta not finite at price={price}"
-            assert math.isfinite(v), f"vega not finite at price={price}"
-
-    def test_delta_increases_as_itm(self):
-        """Deep ITM call should have higher delta."""
-        d_atm, _, _, _ = calculate_greeks(100.0, strike=100.0)
-        d_itm, _, _, _ = calculate_greeks(150.0, strike=100.0)
-        assert d_itm > d_atm
-
-    def test_custom_strike(self):
-        d, g, t, v = calculate_greeks(100.0, strike=90.0)
-        assert 0 < d <= 1
-        assert g > 0
 
 
 # ── FastAPI Server Tests ─────────────────────────────────────────────────────

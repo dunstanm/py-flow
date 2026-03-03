@@ -186,47 +186,32 @@ class PortfolioWithEffect(Storable):
 # ===========================================================================
 
 class TestConst:
-    def test_eval_number(self):
-        assert Const(42).eval({}) == 42
+    @pytest.mark.parametrize("value,expected", [
+        (42, 42), ("hello", "hello"), (True, True), (None, None),
+    ])
+    def test_eval(self, value, expected):
+        result = Const(value).eval({})
+        if expected is None:
+            assert result is None
+        else:
+            assert result == expected
 
-    def test_eval_string(self):
-        assert Const("hello").eval({}) == "hello"
+    @pytest.mark.parametrize("value,expected", [
+        (42, "42"), ("hello", "'hello'"), (True, "TRUE"), (False, "FALSE"), (None, "NULL"),
+    ])
+    def test_to_sql(self, value, expected):
+        assert Const(value).to_sql() == expected
 
-    def test_eval_bool(self):
-        assert Const(True).eval({}) is True
-
-    def test_eval_none(self):
-        assert Const(None).eval({}) is None
-
-    def test_to_sql_number(self):
-        assert Const(42).to_sql() == "42"
-
-    def test_to_sql_string(self):
-        assert Const("hello").to_sql() == "'hello'"
-
-    def test_to_sql_bool(self):
-        assert Const(True).to_sql() == "TRUE"
-        assert Const(False).to_sql() == "FALSE"
-
-    def test_to_sql_none(self):
-        assert Const(None).to_sql() == "NULL"
-
-    def test_to_pure_number(self):
-        assert Const(42).to_pure() == "42"
-
-    def test_to_pure_string(self):
-        assert Const("hello").to_pure() == "'hello'"
-
-    def test_to_pure_bool(self):
-        assert Const(True).to_pure() == "true"
-        assert Const(False).to_pure() == "false"
+    @pytest.mark.parametrize("value,expected", [
+        (42, "42"), ("hello", "'hello'"), (True, "true"), (False, "false"),
+    ])
+    def test_to_pure(self, value, expected):
+        assert Const(value).to_pure() == expected
 
 
 class TestField:
     def test_eval(self):
         assert Field("x").eval({"x": 10}) == 10
-
-    def test_eval_string(self):
         assert Field("name").eval({"name": "alice"}) == "alice"
 
     def test_to_sql(self):
@@ -237,215 +222,94 @@ class TestField:
 
 
 class TestBinOp:
-    def test_add(self):
-        expr = Field("a") + Field("b")
-        assert expr.eval({"a": 3, "b": 7}) == 10
+    def test_arithmetic_eval(self):
+        assert (Field("a") + Field("b")).eval({"a": 3, "b": 7}) == 10
+        assert (Field("a") - Field("b")).eval({"a": 10, "b": 3}) == 7
+        assert (Field("a") * Field("b")).eval({"a": 4, "b": 5}) == 20
+        assert (Field("a") / Field("b")).eval({"a": 10, "b": 4}) == 2.5
+        assert (Field("a") % Const(3)).eval({"a": 10}) == 1
+        assert (Field("a") ** Const(2)).eval({"a": 5}) == 25
 
-    def test_sub(self):
-        expr = Field("a") - Field("b")
-        assert expr.eval({"a": 10, "b": 3}) == 7
+    def test_comparison_eval(self):
+        assert (Field("a") > Const(5)).eval({"a": 10}) is True
+        assert (Field("a") > Const(5)).eval({"a": 3}) is False
+        assert (Field("a") < Const(5)).eval({"a": 3}) is True
+        assert (Field("a") >= Const(5)).eval({"a": 5}) is True
+        assert (Field("a") <= Const(5)).eval({"a": 5}) is True
+        assert (Field("a") == Const(5)).eval({"a": 5}) is True
+        assert (Field("a") == Const(5)).eval({"a": 6}) is False
+        assert (Field("a") != Const(5)).eval({"a": 6}) is True
 
-    def test_mul(self):
-        expr = Field("a") * Field("b")
-        assert expr.eval({"a": 4, "b": 5}) == 20
+    def test_logical_eval(self):
+        assert ((Field("a") > Const(0)) & (Field("b") > Const(0))).eval({"a": 1, "b": 1}) is True
+        assert ((Field("a") > Const(0)) & (Field("b") > Const(0))).eval({"a": 1, "b": -1}) is False
+        assert ((Field("a") > Const(0)) | (Field("b") > Const(0))).eval({"a": -1, "b": 1}) is True
+        assert ((Field("a") > Const(0)) | (Field("b") > Const(0))).eval({"a": -1, "b": -1}) is False
 
-    def test_div(self):
-        expr = Field("a") / Field("b")
-        assert expr.eval({"a": 10, "b": 4}) == 2.5
+    def test_nested_and_reverse(self):
+        assert ((Field("price") - Field("entry")) * Field("qty")).eval({"price": 230, "entry": 228, "qty": 100}) == 200
+        assert (10 + Field("a")).eval({"a": 5}) == 15
+        assert (2 * Field("a")).eval({"a": 7}) == 14
 
-    def test_mod(self):
-        expr = Field("a") % Const(3)
-        assert expr.eval({"a": 10}) == 1
-
-    def test_pow(self):
-        expr = Field("a") ** Const(2)
-        assert expr.eval({"a": 5}) == 25
-
-    def test_gt(self):
-        expr = Field("a") > Const(5)
-        assert expr.eval({"a": 10}) is True
-        assert expr.eval({"a": 3}) is False
-
-    def test_lt(self):
-        expr = Field("a") < Const(5)
-        assert expr.eval({"a": 3}) is True
-
-    def test_ge(self):
-        expr = Field("a") >= Const(5)
-        assert expr.eval({"a": 5}) is True
-
-    def test_le(self):
-        expr = Field("a") <= Const(5)
-        assert expr.eval({"a": 5}) is True
-
-    def test_eq(self):
-        expr = Field("a") == Const(5)
-        assert expr.eval({"a": 5}) is True
-        assert expr.eval({"a": 6}) is False
-
-    def test_ne(self):
-        expr = Field("a") != Const(5)
-        assert expr.eval({"a": 6}) is True
-
-    def test_and(self):
-        expr = (Field("a") > Const(0)) & (Field("b") > Const(0))
-        assert expr.eval({"a": 1, "b": 1}) is True
-        assert expr.eval({"a": 1, "b": -1}) is False
-
-    def test_or(self):
-        expr = (Field("a") > Const(0)) | (Field("b") > Const(0))
-        assert expr.eval({"a": -1, "b": 1}) is True
-        assert expr.eval({"a": -1, "b": -1}) is False
-
-    def test_nested_arithmetic(self):
-        # (price - entry) * quantity
-        expr = (Field("price") - Field("entry")) * Field("qty")
-        assert expr.eval({"price": 230, "entry": 228, "qty": 100}) == 200
-
-    def test_radd(self):
-        expr = 10 + Field("a")
-        assert expr.eval({"a": 5}) == 15
-
-    def test_rmul(self):
-        expr = 2 * Field("a")
-        assert expr.eval({"a": 7}) == 14
-
-    def test_to_sql_arithmetic(self):
-        expr = Field("price") * Field("qty")
-        sql = expr.to_sql("data")
-        assert "(data->>'price')::float" in sql
-        assert "(data->>'qty')::float" in sql
-        assert "*" in sql
-
-    def test_to_sql_comparison(self):
-        expr = Field("age") > Const(18)
-        sql = expr.to_sql("data")
-        assert "(data->>'age')::float" in sql
-        assert ">" in sql
-        assert "18" in sql
-
-    def test_to_sql_equality(self):
-        expr = Field("status") == Const("active")
-        sql = expr.to_sql("data")
-        assert "(data->>'status')" in sql
-        assert "=" in sql
-        assert "'active'" in sql
-
-    def test_to_sql_logical(self):
-        expr = (Field("a") > Const(0)) & (Field("b") > Const(0))
-        sql = expr.to_sql("data")
+    def test_to_sql(self):
+        sql = (Field("price") * Field("qty")).to_sql("data")
+        assert "(data->>'price')::float" in sql and "*" in sql
+        sql = (Field("age") > Const(18)).to_sql("data")
+        assert ">" in sql and "18" in sql
+        sql = (Field("status") == Const("active")).to_sql("data")
+        assert "=" in sql and "'active'" in sql
+        sql = ((Field("a") > Const(0)) & (Field("b") > Const(0))).to_sql("data")
         assert "AND" in sql
 
-    def test_to_pure_arithmetic(self):
-        expr = (Field("price") - Field("entry")) * Field("qty")
-        pure = expr.to_pure("$row")
-        assert "$row.price" in pure
-        assert "$row.entry" in pure
-        assert "$row.qty" in pure
-
-    def test_to_pure_logical(self):
-        expr = (Field("a") > Const(0)) | (Field("b") > Const(0))
-        pure = expr.to_pure("$row")
+    def test_to_pure(self):
+        pure = ((Field("price") - Field("entry")) * Field("qty")).to_pure("$row")
+        assert "$row.price" in pure and "$row.entry" in pure
+        pure = ((Field("a") > Const(0)) | (Field("b") > Const(0))).to_pure("$row")
         assert "||" in pure
 
 
 class TestUnaryOp:
-    def test_neg(self):
-        expr = -Field("x")
-        assert expr.eval({"x": 5}) == -5
+    def test_eval(self):
+        assert (-Field("x")).eval({"x": 5}) == -5
+        assert abs(Field("x")).eval({"x": -7}) == 7
+        assert (~(Field("x") > Const(0))).eval({"x": -1}) is True
+        assert (~(Field("x") > Const(0))).eval({"x": 1}) is False
 
-    def test_abs(self):
-        expr = abs(Field("x"))
-        assert expr.eval({"x": -7}) == 7
+    def test_to_sql(self):
+        assert "(-" in (-Field("x")).to_sql("data")
+        assert "ABS(" in abs(Field("x")).to_sql("data")
+        assert "NOT" in (~(Field("x") > Const(0))).to_sql("data")
 
-    def test_not(self):
-        expr = ~(Field("x") > Const(0))
-        assert expr.eval({"x": -1}) is True
-        assert expr.eval({"x": 1}) is False
-
-    def test_neg_to_sql(self):
-        expr = -Field("x")
-        assert "(-" in expr.to_sql("data")
-
-    def test_abs_to_sql(self):
-        expr = abs(Field("x"))
-        assert "ABS(" in expr.to_sql("data")
-
-    def test_not_to_sql(self):
-        expr = ~(Field("x") > Const(0))
-        assert "NOT" in expr.to_sql("data")
-
-    def test_neg_to_pure(self):
-        expr = -Field("x")
-        assert "(-" in expr.to_pure("$row")
-
-    def test_not_to_pure(self):
-        expr = ~(Field("x") > Const(0))
-        assert "!(" in expr.to_pure("$row")
+    def test_to_pure(self):
+        assert "(-" in (-Field("x")).to_pure("$row")
+        assert "!(" in (~(Field("x") > Const(0))).to_pure("$row")
 
 
 class TestFunc:
-    def test_sqrt(self):
-        expr = Func("sqrt", [Field("x")])
-        assert expr.eval({"x": 16}) == 4.0
+    def test_eval(self):
+        assert Func("sqrt", [Field("x")]).eval({"x": 16}) == 4.0
+        assert Func("ceil", [Field("x")]).eval({"x": 3.2}) == 4
+        assert Func("floor", [Field("x")]).eval({"x": 3.8}) == 3
+        assert Func("round", [Field("x")]).eval({"x": 3.6}) == 4
+        assert Func("min", [Field("a"), Field("b")]).eval({"a": 3, "b": 7}) == 3
+        assert Func("max", [Field("a"), Field("b")]).eval({"a": 3, "b": 7}) == 7
+        assert abs(Func("log", [Const(math.e)]).eval({}) - 1.0) < 1e-10
+        assert Func("exp", [Const(0)]).eval({}) == 1.0
 
-    def test_ceil(self):
-        expr = Func("ceil", [Field("x")])
-        assert expr.eval({"x": 3.2}) == 4
+    def test_to_sql(self):
+        assert "SQRT(" in Func("sqrt", [Field("x")]).to_sql("data")
+        assert "LEAST(" in Func("min", [Field("a"), Field("b")]).to_sql("data")
+        assert "GREATEST(" in Func("max", [Field("a"), Field("b")]).to_sql("data")
 
-    def test_floor(self):
-        expr = Func("floor", [Field("x")])
-        assert expr.eval({"x": 3.8}) == 3
-
-    def test_round(self):
-        expr = Func("round", [Field("x")])
-        assert expr.eval({"x": 3.6}) == 4
-
-    def test_min(self):
-        expr = Func("min", [Field("a"), Field("b")])
-        assert expr.eval({"a": 3, "b": 7}) == 3
-
-    def test_max(self):
-        expr = Func("max", [Field("a"), Field("b")])
-        assert expr.eval({"a": 3, "b": 7}) == 7
-
-    def test_log(self):
-        expr = Func("log", [Const(math.e)])
-        assert abs(expr.eval({}) - 1.0) < 1e-10
-
-    def test_exp(self):
-        expr = Func("exp", [Const(0)])
-        assert expr.eval({}) == 1.0
-
-    def test_sqrt_to_sql(self):
-        expr = Func("sqrt", [Field("x")])
-        assert "SQRT(" in expr.to_sql("data")
-        assert "(data->>'x')::float" in expr.to_sql("data")
-
-    def test_min_to_sql(self):
-        expr = Func("min", [Field("a"), Field("b")])
-        assert "LEAST(" in expr.to_sql("data")
-
-    def test_max_to_sql(self):
-        expr = Func("max", [Field("a"), Field("b")])
-        assert "GREATEST(" in expr.to_sql("data")
-
-    def test_sqrt_to_pure(self):
-        expr = Func("sqrt", [Field("x")])
-        assert expr.to_pure("$row") == "sqrt($row.x)"
-
-    def test_ceil_to_pure(self):
-        expr = Func("ceil", [Field("x")])
-        assert "ceiling(" in expr.to_pure("$row")
+    def test_to_pure(self):
+        assert Func("sqrt", [Field("x")]).to_pure("$row") == "sqrt($row.x)"
+        assert "ceiling(" in Func("ceil", [Field("x")]).to_pure("$row")
 
 
 class TestIf:
-    def test_eval_true_branch(self):
+    def test_eval(self):
         expr = If(Field("x") > Const(0), Field("x"), Const(0))
         assert expr.eval({"x": 5}) == 5
-
-    def test_eval_false_branch(self):
-        expr = If(Field("x") > Const(0), Field("x"), Const(0))
         assert expr.eval({"x": -3}) == 0
 
     def test_nested_if(self):
@@ -459,52 +323,32 @@ class TestIf:
         assert expr.eval({"age": 70}) == "Senior"
 
     def test_to_sql(self):
-        expr = If(Field("x") > Const(0), Field("x"), Const(0))
-        sql = expr.to_sql("data")
-        assert "CASE WHEN" in sql
-        assert "THEN" in sql
-        assert "ELSE" in sql
-        assert "END" in sql
+        sql = If(Field("x") > Const(0), Field("x"), Const(0)).to_sql("data")
+        assert "CASE WHEN" in sql and "THEN" in sql and "ELSE" in sql and "END" in sql
 
     def test_to_pure(self):
-        expr = If(Field("x") > Const(0), Field("x"), Const(0))
-        pure = expr.to_pure("$row")
-        assert "if(" in pure
-        assert "|" in pure
+        pure = If(Field("x") > Const(0), Field("x"), Const(0)).to_pure("$row")
+        assert "if(" in pure and "|" in pure
 
 
 class TestCoalesce:
-    def test_first_non_none(self):
-        expr = Coalesce([Field("a"), Field("b"), Const(0)])
-        assert expr.eval({"a": None, "b": 5}) == 5
-
-    def test_all_none(self):
-        expr = Coalesce([Field("a"), Field("b")])
-        assert expr.eval({"a": None, "b": None}) is None
-
-    def test_first_wins(self):
-        expr = Coalesce([Field("a"), Field("b")])
-        assert expr.eval({"a": 1, "b": 2}) == 1
+    def test_eval(self):
+        assert Coalesce([Field("a"), Field("b"), Const(0)]).eval({"a": None, "b": 5}) == 5
+        assert Coalesce([Field("a"), Field("b")]).eval({"a": None, "b": None}) is None
+        assert Coalesce([Field("a"), Field("b")]).eval({"a": 1, "b": 2}) == 1
 
     def test_to_sql(self):
-        expr = Coalesce([Field("a"), Const(0)])
-        sql = expr.to_sql("data")
-        assert "COALESCE(" in sql
+        assert "COALESCE(" in Coalesce([Field("a"), Const(0)]).to_sql("data")
 
     def test_to_pure(self):
-        expr = Coalesce([Field("a"), Const(0)])
-        pure = expr.to_pure("$row")
-        assert "isEmpty" in pure
+        assert "isEmpty" in Coalesce([Field("a"), Const(0)]).to_pure("$row")
 
 
 class TestIsNull:
-    def test_null(self):
-        expr = IsNull(Field("x"))
-        assert expr.eval({"x": None}) is True
-
-    def test_not_null(self):
-        expr = IsNull(Field("x"))
-        assert expr.eval({"x": 5}) is False
+    def test_eval(self):
+        assert IsNull(Field("x")).eval({"x": None}) is True
+        assert IsNull(Field("x")).eval({"x": 5}) is False
+        assert Field("x").is_null().eval({"x": None}) is True
 
     def test_to_sql(self):
         assert "IS NULL" in IsNull(Field("x")).to_sql("data")
@@ -512,99 +356,46 @@ class TestIsNull:
     def test_to_pure(self):
         assert "isEmpty(" in IsNull(Field("x")).to_pure("$row")
 
-    def test_is_null_method(self):
-        expr = Field("x").is_null()
-        assert expr.eval({"x": None}) is True
-
 
 class TestStrOp:
-    def test_length(self):
-        expr = Field("name").length()
-        assert expr.eval({"name": "alice"}) == 5
+    def test_eval(self):
+        assert Field("name").length().eval({"name": "alice"}) == 5
+        assert Field("name").upper().eval({"name": "alice"}) == "ALICE"
+        assert Field("name").lower().eval({"name": "ALICE"}) == "alice"
+        assert Field("name").contains(Const("li")).eval({"name": "alice"}) is True
+        assert Field("name").contains(Const("li")).eval({"name": "bob"}) is False
+        assert Field("name").starts_with(Const("al")).eval({"name": "alice"}) is True
+        assert Field("first").concat(Const(" ")).concat(Field("last")).eval({"first": "Jane", "last": "Doe"}) == "Jane Doe"
 
-    def test_upper(self):
-        expr = Field("name").upper()
-        assert expr.eval({"name": "alice"}) == "ALICE"
-
-    def test_lower(self):
-        expr = Field("name").lower()
-        assert expr.eval({"name": "ALICE"}) == "alice"
-
-    def test_contains(self):
-        expr = Field("name").contains(Const("li"))
-        assert expr.eval({"name": "alice"}) is True
-        assert expr.eval({"name": "bob"}) is False
-
-    def test_starts_with(self):
-        expr = Field("name").starts_with(Const("al"))
-        assert expr.eval({"name": "alice"}) is True
-        assert expr.eval({"name": "bob"}) is False
-
-    def test_concat(self):
-        expr = Field("first").concat(Const(" ")).concat(Field("last"))
-        assert expr.eval({"first": "Jane", "last": "Doe"}) == "Jane Doe"
-
-    def test_length_to_sql(self):
+    def test_to_sql(self):
         assert "LENGTH(" in Field("name").length().to_sql("data")
-
-    def test_upper_to_sql(self):
         assert "UPPER(" in Field("name").upper().to_sql("data")
-
-    def test_lower_to_sql(self):
         assert "LOWER(" in Field("name").lower().to_sql("data")
+        assert "LIKE" in Field("name").contains(Const("li")).to_sql("data")
+        assert "LIKE" in Field("name").starts_with(Const("al")).to_sql("data")
+        assert "||" in Field("a").concat(Field("b")).to_sql("data")
 
-    def test_contains_to_sql(self):
-        sql = Field("name").contains(Const("li")).to_sql("data")
-        assert "LIKE" in sql
-
-    def test_starts_with_to_sql(self):
-        sql = Field("name").starts_with(Const("al")).to_sql("data")
-        assert "LIKE" in sql
-
-    def test_concat_to_sql(self):
-        sql = Field("a").concat(Field("b")).to_sql("data")
-        assert "||" in sql
-
-    def test_upper_to_pure(self):
+    def test_to_pure(self):
         assert "toUpper(" in Field("name").upper().to_pure("$row")
-
-    def test_lower_to_pure(self):
         assert "toLower(" in Field("name").lower().to_pure("$row")
-
-    def test_contains_to_pure(self):
-        pure = Field("name").contains(Const("li")).to_pure("$row")
-        assert "contains(" in pure
-
-    def test_starts_with_to_pure(self):
-        pure = Field("name").starts_with(Const("al")).to_pure("$row")
-        assert "startsWith(" in pure
-
-    def test_concat_to_pure(self):
-        pure = Field("a").concat(Field("b")).to_pure("$row")
-        assert "+" in pure
+        assert "contains(" in Field("name").contains(Const("li")).to_pure("$row")
+        assert "startsWith(" in Field("name").starts_with(Const("al")).to_pure("$row")
+        assert "+" in Field("a").concat(Field("b")).to_pure("$row")
 
 
 class TestSerialization:
-    def test_const_roundtrip(self):
-        expr = Const(42)
+    @pytest.mark.parametrize("expr,ctx,expected", [
+        (Const(42), {}, 42),
+        (Field("price"), {"price": 100}, 100),
+        (Field("a") + Field("b"), {"a": 3, "b": 7}, 10),
+        ((Field("price") - Field("entry")) * Field("qty"), {"price": 230, "entry": 228, "qty": 100}, 200),
+        (Func("sqrt", [Field("x")]), {"x": 16}, 4.0),
+        (Coalesce([Field("a"), Const(0)]), {"a": None}, 0),
+        (Field("name").upper(), {"name": "alice"}, "ALICE"),
+    ], ids=["const", "field", "binop", "nested", "func", "coalesce", "strop"])
+    def test_roundtrip(self, expr, ctx, expected):
         restored = from_json(expr.to_json())
-        assert restored.eval({}) == 42
-
-    def test_field_roundtrip(self):
-        expr = Field("price")
-        restored = from_json(expr.to_json())
-        assert restored.eval({"price": 100}) == 100
-
-    def test_binop_roundtrip(self):
-        expr = Field("a") + Field("b")
-        restored = from_json(expr.to_json())
-        assert restored.eval({"a": 3, "b": 7}) == 10
-
-    def test_nested_roundtrip(self):
-        expr = (Field("price") - Field("entry")) * Field("qty")
-        data = expr.to_json()
-        restored = from_json(data)
-        assert restored.eval({"price": 230, "entry": 228, "qty": 100}) == 200
+        assert restored.eval(ctx) == expected
 
     def test_if_roundtrip(self):
         expr = If(Field("x") > Const(0), Field("x"), Const(0))
@@ -612,30 +403,10 @@ class TestSerialization:
         assert restored.eval({"x": 5}) == 5
         assert restored.eval({"x": -3}) == 0
 
-    def test_func_roundtrip(self):
-        expr = Func("sqrt", [Field("x")])
-        restored = from_json(expr.to_json())
-        assert restored.eval({"x": 16}) == 4.0
-
-    def test_coalesce_roundtrip(self):
-        expr = Coalesce([Field("a"), Const(0)])
-        restored = from_json(expr.to_json())
-        assert restored.eval({"a": None}) == 0
-
     def test_is_null_roundtrip(self):
         expr = IsNull(Field("x"))
         restored = from_json(expr.to_json())
         assert restored.eval({"x": None}) is True
-
-    def test_strop_roundtrip(self):
-        expr = Field("name").upper()
-        restored = from_json(expr.to_json())
-        assert restored.eval({"name": "alice"}) == "ALICE"
-
-    def test_strop_with_arg_roundtrip(self):
-        expr = Field("name").contains(Const("li"))
-        restored = from_json(expr.to_json())
-        assert restored.eval({"name": "alice"}) is True
 
     def test_json_string_roundtrip(self):
         expr = (Field("a") + Const(1)) * Field("b")

@@ -145,68 +145,26 @@ def test_factory_default():
 # ── Model Tests ───────────────────────────────────────────────────────────────
 
 
-def test_bar_model():
-    """Bar model validates correctly."""
-    bar = Bar(
-        symbol="AAPL",
-        interval="1m",
-        open=150.0,
-        high=151.0,
-        low=149.5,
-        close=150.5,
-        volume=10000,
-        trade_count=42,
-        timestamp=datetime.now(timezone.utc),
-    )
-    assert bar.symbol == "AAPL"
-    assert bar.interval == "1m"
-    assert bar.volume == 10000
-
-
-def test_bar_model_no_volume():
-    """Bar model accepts None volume (for FX/curve bars)."""
-    bar = Bar(
-        symbol="EUR/USD",
-        interval="5m",
-        open=1.085,
-        high=1.086,
-        low=1.084,
-        close=1.0855,
-        volume=None,
-        trade_count=100,
-        timestamp=datetime.now(timezone.utc),
-    )
-    assert bar.volume is None
-
-
-def test_history_query_defaults():
-    """HistoryQuery has sensible defaults."""
-    q = HistoryQuery(type="equity", symbol="AAPL")
-    assert q.limit == 1000
-    assert q.start is None
-    assert q.end is None
-
-
-def test_bar_query_defaults():
-    """BarQuery has sensible defaults."""
-    q = BarQuery(type="fx", symbol="EUR/USD")
-    assert q.interval == "1m"
-    assert q.start is None
-    assert q.end is None
-
-
-def test_bar_model_dump():
-    """Bar.model_dump() returns a serializable dict."""
+def test_bar_model_and_queries():
+    """Bar model validates, accepts None volume, and serializes correctly."""
+    bar = Bar(symbol="AAPL", interval="1m", open=150.0, high=151.0, low=149.5,
+             close=150.5, volume=10000, trade_count=42, timestamp=datetime.now(timezone.utc))
+    assert bar.symbol == "AAPL" and bar.volume == 10000
+    fx_bar = Bar(symbol="EUR/USD", interval="5m", open=1.085, high=1.086, low=1.084,
+                close=1.0855, volume=None, trade_count=100, timestamp=datetime.now(timezone.utc))
+    assert fx_bar.volume is None
     ts = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
-    bar = Bar(
-        symbol="MSFT", interval="1h",
-        open=400.0, high=405.0, low=399.0, close=403.0,
-        volume=50000, trade_count=200, timestamp=ts,
-    )
-    d = bar.model_dump()
-    assert d["symbol"] == "MSFT"
-    assert d["high"] == 405.0
-    assert d["timestamp"] == ts
+    d = Bar(symbol="MSFT", interval="1h", open=400.0, high=405.0, low=399.0,
+           close=403.0, volume=50000, trade_count=200, timestamp=ts).model_dump()
+    assert d["symbol"] == "MSFT" and d["high"] == 405.0
+
+
+def test_query_defaults():
+    """HistoryQuery and BarQuery have sensible defaults."""
+    q = HistoryQuery(type="equity", symbol="AAPL")
+    assert q.limit == 1000 and q.start is None
+    bq = BarQuery(type="fx", symbol="EUR/USD")
+    assert bq.interval == "1m" and bq.start is None
 
 
 # ── Consumer Tests ────────────────────────────────────────────────────────────
@@ -271,40 +229,18 @@ async def test_consumer_stop_flushes():
 # ── QuestDB Writer Table Mapping Tests ────────────────────────────────────────
 
 
-def test_writer_table_map():
-    """Writer maps message types to correct table names."""
-    from timeseries.backends.questdb.writer import _TABLE_MAP
+def test_questdb_table_and_column_maps():
+    """Writer/Reader map message types to correct tables and columns."""
+    from timeseries.backends.questdb.writer import _TABLE_MAP as W_TABLE
+    from timeseries.backends.questdb.reader import _TABLE_MAP as R_TABLE
+    from timeseries.backends.questdb.reader import _SYMBOL_COL, _PRICE_COL
 
-    assert _TABLE_MAP["equity"] == "equity_ticks"
-    assert _TABLE_MAP["fx"] == "fx_ticks"
-    assert _TABLE_MAP["curve"] == "curve_ticks"
-
-
-def test_reader_table_map():
-    """Reader maps message types to correct table names."""
-    from timeseries.backends.questdb.reader import _TABLE_MAP
-
-    assert _TABLE_MAP["equity"] == "equity_ticks"
-    assert _TABLE_MAP["fx"] == "fx_ticks"
-    assert _TABLE_MAP["curve"] == "curve_ticks"
-
-
-def test_reader_symbol_col_map():
-    """Reader maps message types to correct symbol column names."""
-    from timeseries.backends.questdb.reader import _SYMBOL_COL
-
-    assert _SYMBOL_COL["equity"] == "symbol"
-    assert _SYMBOL_COL["fx"] == "pair"
-    assert _SYMBOL_COL["curve"] == "label"
-
-
-def test_reader_price_col_map():
-    """Reader maps message types to correct price column names."""
-    from timeseries.backends.questdb.reader import _PRICE_COL
-
-    assert _PRICE_COL["equity"] == "price"
-    assert _PRICE_COL["fx"] == "mid"
-    assert _PRICE_COL["curve"] == "rate"
+    for tmap in (W_TABLE, R_TABLE):
+        assert tmap["equity"] == "equity_ticks"
+        assert tmap["fx"] == "fx_ticks"
+        assert tmap["curve"] == "curve_ticks"
+    assert _SYMBOL_COL == {"equity": "symbol", "fx": "pair", "curve": "label"}
+    assert _PRICE_COL == {"equity": "price", "fx": "mid", "curve": "rate"}
 
 
 def test_reader_valid_intervals():

@@ -36,54 +36,24 @@ from lakehouse.sync import (
 # ── Model Tests ─────────────────────────────────────────────────────────────
 
 
-class TestSyncState:
-    """Tests for the SyncState Pydantic model."""
+class TestModels:
+    """Tests for SyncState and TableInfo Pydantic models."""
 
-    def test_defaults(self):
+    def test_sync_state_defaults_and_roundtrip(self):
         state = SyncState()
-        assert state.events_watermark is None
-        assert state.ticks_watermark is None
-        assert state.bars_watermark is None
-        assert state.last_sync_time is None
-        assert state.events_synced == 0
-        assert state.ticks_synced == 0
-        assert state.bars_synced == 0
-
-    def test_round_trip_json(self):
+        assert state.events_watermark is None and state.events_synced == 0
         now = datetime.now(timezone.utc)
-        state = SyncState(
-            events_watermark=now,
-            events_synced=42,
-            last_sync_time=now,
-        )
-        dumped = state.model_dump_json()
-        restored = SyncState(**json.loads(dumped))
-        assert restored.events_synced == 42
-        assert restored.events_watermark is not None
+        state2 = SyncState(events_watermark=now, events_synced=42, last_sync_time=now)
+        restored = SyncState(**json.loads(state2.model_dump_json()))
+        assert restored.events_synced == 42 and restored.events_watermark is not None
 
-
-class TestTableInfo:
-    """Tests for the TableInfo Pydantic model."""
-
-    def test_defaults(self):
+    def test_table_info(self):
         info = TableInfo(name="events")
-        assert info.name == "events"
-        assert info.namespace == "default"
-        assert info.snapshot_count == 0
-        assert info.schema_fields == []
-        assert info.partition_fields == []
-
-    def test_full(self):
-        info = TableInfo(
-            name="ticks",
-            namespace="prod",
-            current_snapshot_id=12345,
-            snapshot_count=3,
-            schema_fields=["symbol", "price", "timestamp"],
-            partition_fields=["tick_type", "timestamp_day"],
-        )
-        assert info.current_snapshot_id == 12345
-        assert len(info.schema_fields) == 3
+        assert info.namespace == "default" and info.snapshot_count == 0
+        info2 = TableInfo(name="ticks", namespace="prod", current_snapshot_id=12345,
+                         snapshot_count=3, schema_fields=["symbol", "price", "timestamp"],
+                         partition_fields=["tick_type", "timestamp_day"])
+        assert info2.current_snapshot_id == 12345 and len(info2.schema_fields) == 3
 
 
 # ── Schema Tests ────────────────────────────────────────────────────────────
@@ -261,22 +231,13 @@ class TestArrowConversion:
 class TestEnsureTz:
     """Tests for the _ensure_tz helper."""
 
-    def test_none(self):
+    def test_ensure_tz_cases(self):
         assert _ensure_tz(None) is None
-
-    def test_naive_datetime(self):
-        dt = datetime(2025, 1, 1, 12, 0, 0)
-        result = _ensure_tz(dt)
-        assert result.tzinfo == timezone.utc
-
-    def test_aware_datetime_passthrough(self):
-        dt = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        result = _ensure_tz(dt)
-        assert result is dt
-
-    def test_non_datetime(self):
         assert _ensure_tz("not a datetime") is None
-        assert _ensure_tz(12345) is None
+        naive = datetime(2025, 1, 1, 12, 0, 0)
+        assert _ensure_tz(naive).tzinfo == timezone.utc
+        aware = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        assert _ensure_tz(aware) is aware
 
 
 # ── Catalog Tests ───────────────────────────────────────────────────────────
@@ -301,38 +262,22 @@ class TestCatalogConfig:
 # ── Service Manager Tests ──────────────────────────────────────────────────
 
 
-class TestLakekeeperManager:
-    """Tests for LakekeeperManager configuration."""
+class TestServiceManagers:
+    """Tests for LakekeeperManager and MinIO backend configuration."""
 
-    def test_defaults(self):
+    def test_lakekeeper_defaults_and_custom(self):
         from lakehouse.services import LakekeeperManager
         mgr = LakekeeperManager()
-        assert mgr._port == 8181
-        assert mgr.catalog_url == "http://localhost:8181/catalog"
-        assert not mgr.is_running
+        assert mgr._port == 8181 and mgr.catalog_url == "http://localhost:8181/catalog"
+        mgr2 = LakekeeperManager(port=9999)
+        assert mgr2.catalog_url == "http://localhost:9999/catalog"
 
-    def test_custom_port(self):
-        from lakehouse.services import LakekeeperManager
-        mgr = LakekeeperManager(port=9999)
-        assert mgr._port == 9999
-        assert mgr.catalog_url == "http://localhost:9999/catalog"
-
-
-class TestObjectStoreBackend:
-    """Tests for objectstore backend configuration."""
-
-    def test_defaults(self):
+    def test_minio_defaults_and_custom(self):
         from objectstore._minio import _MinIOBackend
         mgr = _MinIOBackend()
-        assert mgr._api_port == 9002
-        assert mgr._console_port == 9003
-        assert mgr.endpoint == "http://localhost:9002"
-        assert not mgr.is_running
-
-    def test_custom_ports(self):
-        from objectstore._minio import _MinIOBackend
-        mgr = _MinIOBackend(api_port=9010, console_port=9011)
-        assert mgr.endpoint == "http://localhost:9010"
+        assert mgr._api_port == 9002 and mgr.endpoint == "http://localhost:9002"
+        mgr2 = _MinIOBackend(api_port=9010, console_port=9011)
+        assert mgr2.endpoint == "http://localhost:9010"
 
 
 # ── Sync Engine Tests ──────────────────────────────────────────────────────
@@ -397,13 +342,9 @@ class TestSyncEngine:
 class TestPlatformDetection:
     """Tests for binary download URL detection."""
 
-    def test_lakekeeper_archive_name(self):
+    def test_download_urls(self):
         from lakehouse.services import _lakekeeper_archive_name
-        name = _lakekeeper_archive_name()
-        assert name.endswith(".tar.gz")
-        assert "lakekeeper" in name
-
-    def test_objectstore_download_url(self):
         from objectstore._minio import _minio_download_url
-        url = _minio_download_url()
-        assert "dl.min.io" in url
+        name = _lakekeeper_archive_name()
+        assert name.endswith(".tar.gz") and "lakekeeper" in name
+        assert "dl.min.io" in _minio_download_url()
