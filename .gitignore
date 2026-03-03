@@ -11,3 +11,7 @@ build/
 data/
 hs_err_pid*.log
 .test_runs/
+_reference/
+models/agent_generated/
+store/columns/agent_generated/
+datacube/static/perspective-viewer-datagrid.js
