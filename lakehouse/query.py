@@ -55,6 +55,13 @@ class Lakehouse:
         lh.ingest("my_signals", df, mode="append")
         lh.transform("daily_pnl", "SELECT ... GROUP BY ...", mode="snapshot")
         lh.close()
+
+    Row-Level Security (optional)::
+
+        # When token is set, protected-table queries route through Flight SQL;
+        # open tables still go direct to DuckDB (zero overhead).
+        lh = Lakehouse("demo", token="alice-token")
+        lh.query("SELECT * FROM lakehouse.default.sales_data")  # → RLS-filtered
     """
 
     def __init__(
@@ -67,6 +74,7 @@ class Lakehouse:
         s3_secret_key: str | None = None,
         s3_region: str | None = None,
         namespace: str = "default",
+        token: str | None = None,
         # Legacy positional compat
         catalog_uri: str | None = None,
     ) -> None:
@@ -82,6 +90,16 @@ class Lakehouse:
         self._namespace = namespace or resolved.get("namespace", "default")
         self._conn: duckdb.DuckDBPyConnection | None = None
 
+        # ── RLS / Flight SQL (optional) ───────────────────────────────────
+        self._token = token
+        self._flight_host = resolved.get("flight_host")
+        self._flight_port = resolved.get("flight_port")
+        self._flight_client: Any = None  # pyarrow.flight.FlightClient (lazy)
+        self._protected_tables: set[str] = set()
+
+        if self._token and self._flight_host and self._flight_port:
+            self._init_rls()
+
     @staticmethod
     def _resolve(alias_or_catalog: str | None, catalog_uri: str | None) -> dict:
         """Resolve alias or explicit params."""
@@ -95,6 +113,64 @@ class Lakehouse:
         if catalog_uri is not None:
             return {"catalog_url": catalog_uri}
         return {}
+
+    # ── RLS / Flight SQL helpers ──────────────────────────────────────────
+
+    def _init_rls(self) -> None:
+        """Initialize RLS: connect to Flight server and fetch protected table set."""
+        try:
+            import pyarrow.flight as flight
+            location = flight.Location.for_grpc_tcp(self._flight_host, self._flight_port)
+            self._flight_client = flight.FlightClient(location)
+
+            # Authenticate with the bearer token
+            self._flight_client.authenticate(
+                _TokenClientAuthHandler(self._token)
+            )
+
+            # Fetch the set of protected tables from the server
+            action = flight.Action("get_protected_tables", b"")
+            results = list(self._flight_client.do_action(action))
+            if results:
+                import json
+                self._protected_tables = set(json.loads(results[0].body.to_pybytes()))
+
+            logger.info(
+                "RLS initialized: %d protected tables via %s:%s",
+                len(self._protected_tables), self._flight_host, self._flight_port,
+            )
+        except Exception as e:
+            logger.error("Failed to initialize RLS Flight client: %s", e)
+            self._flight_client = None
+            self._protected_tables = set()
+
+    def _ensure_flight(self) -> Any:
+        """Return the authenticated Flight client."""
+        if self._flight_client is None:
+            raise RuntimeError(
+                "Flight SQL client not initialized. "
+                "Provide token= and ensure alias has flight_host/flight_port."
+            )
+        return self._flight_client
+
+    def _is_flight_query(self, sql: str) -> bool:
+        """Check if the SQL references any RLS-protected table."""
+        if not self._token or not self._protected_tables:
+            return False
+        try:
+            from lakehouse.rls_server import RLSRewriter
+            tables = RLSRewriter.extract_tables(sql)
+            return bool(tables & self._protected_tables)
+        except Exception:
+            return False
+
+    def _flight_query_arrow(self, sql: str) -> pa.Table:
+        """Execute a query via Flight SQL and return an Arrow Table."""
+        import pyarrow.flight as flight
+        client = self._ensure_flight()
+        ticket = flight.Ticket(sql.encode("utf-8"))
+        reader = client.do_get(ticket)
+        return reader.read_all()
 
     # ── DuckDB connection (reads + writes) ────────────────────────────────
 
@@ -156,7 +232,21 @@ class Lakehouse:
 
         Tables are accessible as lakehouse.default.<table_name>, e.g.:
             lh.query("SELECT * FROM lakehouse.default.events LIMIT 10")
+
+        When ``token`` is set and the query references a protected table,
+        it is automatically routed through the Flight SQL server for RLS.
         """
+        # RLS routing: protected tables → Flight SQL
+        if self._is_flight_query(sql):
+            table = self._flight_query_arrow(sql)
+            columns = table.column_names
+            rows = table.to_pydict()
+            return [
+                {col: rows[col][i] for col in columns}
+                for i in range(table.num_rows)
+            ]
+
+        # Direct DuckDB path (open tables)
         conn = self._ensure_conn()
         try:
             if params:
@@ -172,6 +262,11 @@ class Lakehouse:
 
     def query_arrow(self, sql: str, params: list | None = None) -> pa.Table:
         """Execute a SQL query and return results as a PyArrow Table."""
+        # RLS routing: protected tables → Flight SQL
+        if self._is_flight_query(sql):
+            return self._flight_query_arrow(sql)
+
+        # Direct DuckDB path
         conn = self._ensure_conn()
         if params:
             return conn.execute(sql, params).fetch_arrow_table()
@@ -179,6 +274,11 @@ class Lakehouse:
 
     def query_df(self, sql: str, params: list | None = None) -> pd.DataFrame:
         """Execute a SQL query and return results as a Pandas DataFrame."""
+        # RLS routing: protected tables → Flight SQL
+        if self._is_flight_query(sql):
+            return self._flight_query_arrow(sql).to_pandas()
+
+        # Direct DuckDB path
         conn = self._ensure_conn()
         if params:
             return conn.execute(sql, params).fetchdf()
@@ -559,7 +659,10 @@ class Lakehouse:
         return Datacube(self, source_name=table_name, **kwargs)
 
     def close(self) -> None:
-        """Close the DuckDB connection."""
+        """Close the DuckDB and Flight SQL connections."""
+        if self._flight_client:
+            self._flight_client.close()
+            self._flight_client = None
         if self._conn:
             self._conn.close()
             self._conn = None
@@ -579,6 +682,45 @@ class Lakehouse:
     def sql_df(self, query_str: str, params: list | None = None) -> object:
         """Alias for query_df() — backward compatibility with LakehouseQuery."""
         return self.query_df(query_str, params)
+
+
+# ── Flight SQL auth helper ────────────────────────────────────────────────
+
+
+class _TokenClientAuthHandler:
+    """Client-side auth handler for Flight SQL bearer-token authentication.
+
+    Wraps a token string and implements the authenticate/get_token protocol.
+    Extends flight.ClientAuthHandler when pyarrow.flight is available.
+    """
+
+    def __new__(cls, token: str) -> _TokenClientAuthHandler:
+        try:
+            import pyarrow.flight as _flight
+            # Dynamically create a subclass that extends ClientAuthHandler
+            if not issubclass(cls, _flight.ClientAuthHandler):
+                bases = (_flight.ClientAuthHandler,)
+                ns = {k: v for k, v in cls.__dict__.items() if k != "__dict__"}
+                new_cls = type(cls.__name__, bases, ns)
+                instance = _flight.ClientAuthHandler.__new__(new_cls)
+                instance._token = token.encode("utf-8")
+                instance._session_token = b""
+                return instance
+        except ImportError:
+            pass
+        instance = object.__new__(cls)
+        instance._token = token.encode("utf-8")
+        instance._session_token = b""
+        return instance
+
+    def authenticate(self, outgoing: Any, incoming: Any) -> None:
+        """Send token, receive session token."""
+        outgoing.write(self._token)
+        self._session_token = incoming.read()
+
+    def get_token(self) -> bytes:
+        """Return the session token for subsequent requests."""
+        return self._session_token
 
 
 # ── Deprecated alias ──────────────────────────────────────────────────────

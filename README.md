@@ -747,11 +747,12 @@ pip install -e ".[timeseries]"
 
 ## Lakehouse
 
-Iceberg analytical store — all reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeeper + S3-compatible storage. See [LAKEHOUSE.md](LAKEHOUSE.md) for full docs.
+Iceberg analytical store — all reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeeper + S3-compatible storage. **Row-Level Security** via Arrow Flight SQL gateway. See [LAKEHOUSE.md](LAKEHOUSE.md) for full docs.
 
 ```bash
 pip install -e ".[lakehouse]"
 python3 demo_lakehouse.py   # auto-starts object store + Lakekeeper
+python3 demo_lakehouse_rls.py   # RLS demo: two users, row-level isolation
 ```
 
 ```python
@@ -773,6 +774,27 @@ lh.transform("daily_pnl", "SELECT ... GROUP BY ...", mode="snapshot")
 ```
 
 All write modes include `_batch_id` and `_batch_ts` for audit. Modes with versioning add `_is_current` for querying latest state.
+
+### Row-Level Security
+
+Protected tables are automatically routed through an Arrow Flight SQL gateway that rewrites SQL to inject ACL joins. Open tables bypass Flight entirely — zero overhead.
+
+```python
+# Platform: configure RLS on the server
+from lakehouse.admin import LakehouseServer, RLSPolicy
+
+server = LakehouseServer(
+    rls_policies=[RLSPolicy("sales_data", "sales_acl", "row_id", "user_token")],
+    rls_users={"alice-token": "alice", "bob-token": "bob"},
+)
+await server.start()
+server.register_alias("demo")
+
+# User: just add token=
+lh = Lakehouse("demo", token="alice-token")
+lh.query("SELECT * FROM lakehouse.default.trades")       # open → direct DuckDB
+lh.query("SELECT * FROM lakehouse.default.sales_data")   # protected → Flight SQL + RLS
+```
 
 ---
 

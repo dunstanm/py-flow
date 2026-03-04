@@ -1,6 +1,6 @@
 # Lakehouse — Iceberg Analytical Store
 
-All reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeeper REST catalog + S3-compatible storage. Syncs platform data from PG and QuestDB, plus user-facing ingest/transform API.
+All reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeeper REST catalog + S3-compatible storage. Syncs platform data from PG and QuestDB, plus user-facing ingest/transform API. Optional **Row-Level Security** via Arrow Flight SQL gateway.
 
 ---
 
@@ -18,6 +18,11 @@ All reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeep
 │  Lakehouse.query()   ──→ DuckDB SQL ──→ reads Parquet           │
 │                                                                 │
 │  Lakekeeper REST Catalog ──→ PG (catalog metadata)              │
+│                                                                 │
+│  ┌─ Lakehouse("demo", token="alice") ─────────────────────┐    │
+│  │  Open tables    → direct DuckDB (zero overhead)         │    │
+│  │  Protected tables → Flight SQL → RLS rewrite → DuckDB  │    │
+│  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -27,6 +32,7 @@ All reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeep
 | **Storage** | S3-compatible (via objectstore) | 9002 (API), 9003 (Console) |
 | **Read/Write** | DuckDB 1.4 + Iceberg extension | In-process |
 | **Platform Sync** | PyIceberg + PyArrow | In-process |
+| **RLS Gateway** | Arrow Flight SQL (gRPC) | Auto-assigned |
 
 ---
 
@@ -35,6 +41,7 @@ All reads and writes via DuckDB SQL (Iceberg extension + REST catalog). Lakekeep
 ```bash
 pip install -e ".[lakehouse]"
 python3 demo_lakehouse.py   # auto-starts object store + Lakekeeper
+python3 demo_lakehouse_rls.py   # RLS demo: two users, row-level isolation
 ```
 
 ```python
@@ -60,12 +67,15 @@ lh.close()
 
 ```
 lakehouse/
-├── __init__.py      # Public API: Lakehouse, SyncEngine, create_catalog, ensure_tables
-├── query.py         # Lakehouse class: query, ingest, transform (DuckDB SQL)
+├── __init__.py      # Public API: Lakehouse
+├── query.py         # Lakehouse class: query, ingest, transform, hybrid RLS routing
+├── rls_server.py    # RLSFlightServer, RLSPolicy, RLSRewriter, TokenServerAuthHandler
+├── admin.py         # LakehouseServer (manages stack + RLS lifecycle), RLSPolicy export
 ├── catalog.py       # PyIceberg REST catalog setup via Lakekeeper
 ├── tables.py        # Iceberg table definitions (events, ticks, bars_daily, positions)
 ├── sync.py          # Incremental ETL: PG + QuestDB → Iceberg (watermark-based)
 ├── services.py      # Lakekeeper binary lifecycle + objectstore integration
+├── _registry.py     # Internal alias registry (flight_host/flight_port)
 └── models.py        # Pydantic: SyncState, TableInfo
 ```
 
@@ -221,6 +231,79 @@ lh.transform("latest_prices",
 
 ---
 
+## Row-Level Security (RLS)
+
+Enforces row-level access control by routing protected-table queries through an Arrow Flight SQL gateway. The server rewrites SQL using `sqlglot` to inject ACL table joins. Open tables bypass Flight entirely — zero overhead.
+
+### How it works
+
+1. `LakehouseServer` starts an `RLSFlightServer` alongside PG/Lakekeeper/MinIO
+2. The server publishes which tables are protected via a `get_protected_tables` action
+3. `Lakehouse(token=)` fetches this set on init and caches it
+4. For each query, `sqlglot` extracts table names → checks membership → routes accordingly
+5. Protected queries go through Flight: server rewrites SQL with `INNER JOIN` to ACL table
+
+### Platform setup
+
+```python
+from lakehouse.admin import LakehouseServer, RLSPolicy
+
+server = LakehouseServer(
+    rls_policies=[
+        RLSPolicy(
+            table_name="sales_data",     # the protected table
+            acl_table="sales_acl",       # ACL mapping table
+            join_column="row_id",        # shared key
+            user_column="user_token",    # column with user identity
+        ),
+    ],
+    rls_users={"alice-token": "alice", "bob-token": "bob"},
+)
+await server.start()            # starts PG + Lakekeeper + MinIO + Flight SQL
+server.register_alias("demo")   # alias includes Flight endpoint automatically
+```
+
+### User code
+
+```python
+from lakehouse import Lakehouse
+
+# Open tables → direct DuckDB (zero overhead)
+# Protected tables → Flight SQL (RLS-filtered)
+lh = Lakehouse("demo", token="alice-token")
+
+lh.query("SELECT * FROM lakehouse.default.trades")       # open → all rows
+lh.query("SELECT * FROM lakehouse.default.sales_data")   # protected → alice's rows only
+```
+
+### SQL Rewriting
+
+The `RLSRewriter` transforms:
+
+```sql
+SELECT * FROM sales_data WHERE region = 'US'
+```
+
+Into:
+
+```sql
+SELECT sales_data.* FROM sales_data AS sales_data
+INNER JOIN sales_acl AS _acl
+  ON sales_data.row_id = _acl.row_id AND _acl.user_token = 'alice-token'
+WHERE region = 'US'
+```
+
+### RLSPolicy fields
+
+| Field | Description |
+|-------|-------------|
+| `table_name` | The protected table name |
+| `acl_table` | ACL table with row-level grants |
+| `join_column` | Column shared between data and ACL tables |
+| `user_column` | Column in ACL table holding the user token |
+
+---
+
 ## Platform Tables (SyncEngine)
 
 | Table | Source | Partition | Description |
@@ -296,8 +379,9 @@ lakehouse = [
     "pyiceberg[pyarrow]>=0.8.0",
     "duckdb>=1.4.0",
     "pyarrow>=14.0",
-    # minio SDK used internally via objectstore package
     "httpx>=0.27.0",
+    "sqlglot>=26.0",
+    "adbc-driver-flightsql>=1.0.0",
 ]
 ```
 
@@ -317,4 +401,5 @@ lakehouse = [
 | PostgreSQL (embedded) | 5488 | C | Object store + Lakekeeper catalog metadata |
 | Lakekeeper | 8181 | Rust | Iceberg REST catalog API |
 | Object store | 9002/9003 | Go | S3 storage for Parquet data files |
+| RLS Flight SQL | Auto | Python | Arrow Flight gateway for row-level security |
 | QuestDB | 8812/9000/9009 | Java | Time-series DB (optional, for tick sync) |

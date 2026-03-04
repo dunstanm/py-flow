@@ -13,6 +13,11 @@ User API::
     lh.transform("daily_pnl", "SELECT ... GROUP BY ...", mode="incremental", primary_key="id")
     lh.close()
 
+Row-Level Security (just add ``token=``)::
+
+    lh = Lakehouse("demo", token="alice-token")
+    lh.query("SELECT * FROM lakehouse.default.sales_data")  # → RLS-filtered
+
 Platform/admin APIs live in ``lakehouse.admin``.
 """
 
