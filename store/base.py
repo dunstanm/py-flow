@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 if TYPE_CHECKING:
-    from store.client import QueryResult, StoreClient
+    from store._client import QueryResult, StoreClient
 
 from workflow.engine import WorkflowEngine
 

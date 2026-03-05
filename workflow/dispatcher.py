@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from store.client import StoreClient
+    from store.connection import UserConnection
 
     from workflow.engine import WorkflowEngine
 
@@ -30,7 +30,7 @@ class WorkflowDispatcher:
     rather than re-executing the transition.
     """
 
-    def __init__(self, engine: WorkflowEngine, client: StoreClient) -> None:
+    def __init__(self, engine: WorkflowEngine, client: UserConnection) -> None:
         self._engine = engine
         self._client = client
 

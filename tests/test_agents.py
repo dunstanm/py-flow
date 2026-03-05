@@ -269,24 +269,19 @@ class TestAgentMemory:
 
     @pytest.fixture
     def pg_and_memory(self):
-        from ai.memory import AgentMemory, bootstrap_conversations_table
+        from ai.memory import AgentMemory
         from store.server import StoreServer
 
         server = StoreServer(data_dir=tempfile.mkdtemp(prefix="test_agent_mem_"))
         server.start()
         server.provision_user("agent_user", "agent_pw")
 
-        # Bootstrap table with admin privileges
-        admin = server.admin_conn()
-        bootstrap_conversations_table(admin, grant_to="agent_user")
-        admin.close()
-
         from store.connection import connect
         info = server.conn_info()
         conn = connect(user="agent_user", host=info["host"], port=info["port"],
                        dbname=info["dbname"], password="agent_pw")
 
-        memory = AgentMemory(store_conn=conn)  # type: ignore[arg-type]
+        memory = AgentMemory(store_conn=conn)
         yield memory, conn
         conn.close()
         server.stop()

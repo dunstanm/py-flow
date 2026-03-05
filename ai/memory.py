@@ -21,64 +21,49 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from ai._types import Message
+from store.base import Storable
 
 if TYPE_CHECKING:
-    from store._types import Connection
-    from store.client import StoreClient
+    from store.connection import UserConnection
 
     from ai.client import AI
 
 logger = logging.getLogger(__name__)
 
-_TABLE = "agent_conversations"
-
-
-def bootstrap_conversations_table(admin_conn: Connection, grant_to: str = "") -> None:
-    """Create the agent_conversations table using an admin connection.
-
-    Args:
-        admin_conn: A database admin connection (e.g. from StoreServer).
-        grant_to: Optional role to GRANT ALL to.
-    """
-    cursor = admin_conn.cursor()
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {_TABLE} (
-            id TEXT PRIMARY KEY,
-            agent_name TEXT DEFAULT '',
-            messages JSONB DEFAULT '[]'::jsonb,
-            summary TEXT DEFAULT '',
-            message_count INTEGER DEFAULT 0,
-            metadata JSONB DEFAULT '{{}}'::jsonb,
-            owner TEXT DEFAULT current_user,
-            created_at TIMESTAMPTZ DEFAULT now(),
-            updated_at TIMESTAMPTZ DEFAULT now()
-        )
-    """)
-    if grant_to:
-        cursor.execute(f"GRANT ALL ON {_TABLE} TO {grant_to}")
-    admin_conn.commit()
-    logger.info("Bootstrapped %s table", _TABLE)
-
 
 @dataclass
-class Conversation:
-    """A persisted agent conversation."""
-    id: str = ""
+class Conversation(Storable):
+    """A persisted agent conversation.
+
+    Stored in the object store as a Storable — inherits bi-temporal audit,
+    RLS, event sourcing, and Iceberg sync for free.
+    """
     agent_name: str = ""
-    messages: list[dict] = field(default_factory=list)
+    messages: list = field(default_factory=list)
     summary: str = ""
     message_count: int = 0
-    created_at: str = ""
-    updated_at: str = ""
     metadata: dict = field(default_factory=dict)
+
+    @property
+    def id(self) -> str:
+        """Conversation ID (alias for entity_id)."""
+        return self._store_entity_id or ""
+
+    @property
+    def created_at(self) -> str:
+        """Creation timestamp as ISO string."""
+        return str(self._store_tx_time or "")
+
+    @property
+    def updated_at(self) -> str:
+        """Last update timestamp as ISO string."""
+        return str(self._store_tx_time or "")
 
     def to_messages(self) -> list[Message]:
         """Convert stored message dicts back to Message objects."""
@@ -97,19 +82,19 @@ class AgentMemory:
     """
     Persistent conversation memory backed by the object store.
 
-    Stores conversations as JSON in the object_events table.
-    Supports save, load, list, and auto-summarization.
+    Stores conversations as Storable objects in object_events —
+    no separate table or raw SQL needed.
 
     Args:
-        store_conn: A store connection (from ``connect()``).
+        store_conn: A UserConnection (from ``connect()``).
         auto_summarize: Summarize conversations longer than this many messages (0 = disabled).
     """
 
-    def __init__(self, store_conn: StoreClient | None = None, auto_summarize: int = 20) -> None:
+    def __init__(self, store_conn: UserConnection | None = None, auto_summarize: int = 20) -> None:
         self._conn = store_conn
         self._auto_summarize = auto_summarize
 
-    def _require_conn(self) -> StoreClient:
+    def _require_conn(self) -> UserConnection:
         assert self._conn is not None, "AgentMemory requires a store connection"
         return self._conn
 
@@ -144,48 +129,48 @@ class AgentMemory:
         if self._auto_summarize > 0 and len(msg_dicts) > self._auto_summarize and ai is not None:
             summary = self._summarize(messages, ai)
 
-        now = datetime.now(timezone.utc).isoformat()
-        convo = Conversation(
-            id=conversation_id,
-            agent_name=agent_name,
-            messages=msg_dicts,
-            summary=summary,
-            message_count=len(msg_dicts),
-            created_at=now,
-            updated_at=now,
-            metadata=metadata or {},
-        )
-
         if self._conn is not None:
-            self._write_to_db(convo)
-
-        return convo
+            # Check if conversation already exists
+            existing = self._conn.read(Conversation, conversation_id)
+            if existing is not None:
+                # Update existing conversation
+                existing.messages = msg_dicts
+                existing.summary = summary or existing.summary
+                existing.message_count = len(msg_dicts)
+                existing.metadata = metadata or existing.metadata
+                existing.agent_name = agent_name or existing.agent_name
+                self._conn.update(existing)
+                return existing
+            else:
+                # Create new conversation with the provided ID
+                convo = Conversation(
+                    agent_name=agent_name,
+                    messages=msg_dicts,
+                    summary=summary,
+                    message_count=len(msg_dicts),
+                    metadata=metadata or {},
+                )
+                convo._store_entity_id = conversation_id
+                self._conn.write(convo)
+                return convo
+        else:
+            # No connection — return an in-memory conversation
+            convo = Conversation(
+                agent_name=agent_name,
+                messages=msg_dicts,
+                summary=summary,
+                message_count=len(msg_dicts),
+                metadata=metadata or {},
+            )
+            convo._store_entity_id = conversation_id
+            return convo
 
     def load(self, conversation_id: str) -> Conversation | None:
         """Load a conversation by ID. Returns None if not found."""
         if self._conn is None:
             return None
-
         try:
-            cursor = self._conn.conn.cursor()
-            cursor.execute(
-                f"SELECT id, agent_name, messages, summary, message_count, metadata, "
-                f"created_at, updated_at FROM {_TABLE} WHERE id = %s",
-                (conversation_id,),
-            )
-            row = cursor.fetchone()
-            if row is None:
-                return None
-            return Conversation(
-                id=row[0],
-                agent_name=row[1],
-                messages=row[2] if isinstance(row[2], list) else json.loads(row[2]),
-                summary=row[3] or "",
-                message_count=row[4],
-                metadata=row[5] if isinstance(row[5], dict) else json.loads(row[5] or "{}"),
-                created_at=str(row[6]),
-                updated_at=str(row[7]),
-            )
+            return self._conn.read(Conversation, conversation_id)
         except Exception as e:
             logger.warning("Failed to load conversation %s: %s", conversation_id, e)
             return None
@@ -198,34 +183,12 @@ class AgentMemory:
         """List conversations, optionally filtered by agent name."""
         if self._conn is None:
             return []
-
         try:
-            cursor = self._conn.conn.cursor()
-            sql = (
-                f"SELECT id, agent_name, '[]'::jsonb, summary, message_count, metadata, "
-                f"created_at, updated_at FROM {_TABLE}"
-            )
-            params: list = []
+            filters = {}
             if agent_name:
-                sql += " WHERE agent_name = %s"
-                params.append(agent_name)
-            sql += " ORDER BY updated_at DESC LIMIT %s"
-            params.append(limit)
-            cursor.execute(sql, params)
-
-            return [
-                Conversation(
-                    id=row[0],
-                    agent_name=row[1],
-                    messages=[],  # Don't load messages for listing
-                    summary=row[3] or "",
-                    message_count=row[4],
-                    metadata=row[5] if isinstance(row[5], dict) else json.loads(row[5] or "{}"),
-                    created_at=str(row[6]),
-                    updated_at=str(row[7]),
-                )
-                for row in cursor.fetchall()
-            ]
+                filters["agent_name"] = agent_name
+            result = self._conn.query(Conversation, filters=filters or None, limit=limit)
+            return list(result.items)
         except Exception as e:
             logger.warning("Failed to list conversations: %s", e)
             return []
@@ -235,10 +198,11 @@ class AgentMemory:
         if self._conn is None:
             return False
         try:
-            cursor = self._conn.conn.cursor()
-            cursor.execute(f"DELETE FROM {_TABLE} WHERE id = %s", (conversation_id,))
-            self._conn.conn.commit()
-            return bool(cursor.rowcount > 0)
+            convo = self._conn.read(Conversation, conversation_id)
+            if convo is None:
+                return False
+            self._conn.delete(convo)
+            return True
         except Exception as e:
             logger.warning("Failed to delete conversation %s: %s", conversation_id, e)
             return False
@@ -246,38 +210,6 @@ class AgentMemory:
     def new_id(self) -> str:
         """Generate a new conversation ID."""
         return str(uuid.uuid4())
-
-    def _write_to_db(self, convo: Conversation) -> None:
-        """Upsert a conversation to the database."""
-        try:
-            cursor = self._require_conn().conn.cursor()
-            cursor.execute(
-                f"""
-                INSERT INTO {_TABLE} (id, agent_name, messages, summary, message_count, metadata, updated_at)
-                VALUES (%s, %s, %s::jsonb, %s, %s, %s::jsonb, now())
-                ON CONFLICT (id) DO UPDATE SET
-                    messages = EXCLUDED.messages,
-                    summary = EXCLUDED.summary,
-                    message_count = EXCLUDED.message_count,
-                    metadata = EXCLUDED.metadata,
-                    updated_at = now()
-                """,
-                (
-                    convo.id,
-                    convo.agent_name,
-                    json.dumps(convo.messages),
-                    convo.summary,
-                    convo.message_count,
-                    json.dumps(convo.metadata),
-                ),
-            )
-            self._require_conn().conn.commit()
-        except Exception as e:
-            logger.warning("Failed to save conversation %s: %s", convo.id, e)
-            try:
-                self._require_conn().conn.rollback()
-            except Exception:
-                pass
 
     def _summarize(self, messages: list[Message], ai: AI) -> str:
         """Summarize a conversation using the LLM."""

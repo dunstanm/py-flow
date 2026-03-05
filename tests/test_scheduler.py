@@ -466,7 +466,7 @@ class TestSchedulerIntegration:
 
     @pytest.fixture
     def client(self, store_server):
-        from store.client import StoreClient
+        from store._client import StoreClient
         info = store_server.conn_info()
         return StoreClient(
             host=info["host"],
@@ -562,7 +562,7 @@ class TestSchedulerIntegration:
 
         # Lightweight: inject client directly (no full start())
         server = SchedulerServer.__new__(SchedulerServer)
-        server._client = client
+        server._conn = client
         server._engine = None
         server._dag_runner = DAGRunner(None, client)  # type: ignore[arg-type]
         server._last_fire = {}
@@ -587,7 +587,7 @@ class TestSchedulerIntegration:
         from scheduler.server import SchedulerServer
 
         server = SchedulerServer.__new__(SchedulerServer)
-        server._client = client
+        server._conn = client
         server._engine = None
         server._dag_runner = DAGRunner(None, client)  # type: ignore[arg-type]
         server._last_fire = {}
@@ -613,7 +613,7 @@ class TestSchedulerIntegration:
         from scheduler.server import SchedulerServer
 
         server = SchedulerServer.__new__(SchedulerServer)
-        server._client = client
+        server._conn = client
         server._engine = None
         server._dag_runner = DAGRunner(None, client)  # type: ignore[arg-type]
         server._last_fire = {}

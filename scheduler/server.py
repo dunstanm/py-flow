@@ -23,14 +23,14 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from scheduler.cron import is_due
 from scheduler.dag_runner import DAGRunner
 from scheduler.models import Run, Schedule
 
-if False:  # TYPE_CHECKING
-    from store.client import StoreClient  # type: ignore[unreachable]
+if TYPE_CHECKING:
+    from store.connection import UserConnection
     from store.server import StoreServer
     from workflow.dbos_engine import WorkflowEngine
 
@@ -63,7 +63,7 @@ class SchedulerServer:
         """
         self._data_dir = os.path.abspath(data_dir)
         self._store: StoreServer | None = None
-        self._client: StoreClient | None = None
+        self._conn: UserConnection | None = None
         self._engine: WorkflowEngine | None = None
         self._dag_runner: DAGRunner | None = None
         self._last_fire: dict[str, datetime] = {}
@@ -71,11 +71,11 @@ class SchedulerServer:
         self._running = False
         self._thread: threading.Thread | None = None
 
-    # ── Require helpers (narrow Optional → concrete type) ────────────
+    # ── Require helpers ──────────────────────────────────────────────
 
-    def _require_client(self) -> StoreClient:
-        assert self._client is not None, "SchedulerServer not started"
-        return self._client
+    def _require_client(self) -> UserConnection:
+        assert self._conn is not None, "SchedulerServer not started"
+        return self._conn
 
     def _require_dag_runner(self) -> DAGRunner:
         assert self._dag_runner is not None, "SchedulerServer not started"
@@ -93,7 +93,7 @@ class SchedulerServer:
         Returns:
             self (for chaining).
         """
-        from store.client import StoreClient
+        from store.connection import connect
         from store.server import StoreServer
         from workflow.factory import create_engine
 
@@ -102,9 +102,9 @@ class SchedulerServer:
         self._store.start()
         self._store.provision_user(_SVC_USER, _SVC_PASSWORD)
 
-        # 2. Internal StoreClient
+        # 2. UserConnection
         info = self._store.conn_info()
-        self._client = StoreClient(
+        self._conn = connect(
             host=info["host"], port=info["port"],
             dbname=info["dbname"],
             user=_SVC_USER, password=_SVC_PASSWORD,
@@ -115,7 +115,7 @@ class SchedulerServer:
         self._engine.launch()
 
         # 4. DAGRunner
-        self._dag_runner = DAGRunner(self._engine, self._client)
+        self._dag_runner = DAGRunner(self._engine, self._conn)
 
         # 5. Background tick loop (optional)
         self._poll_interval = poll_interval
@@ -141,9 +141,9 @@ class SchedulerServer:
                 logger.debug("Engine destroy error (ignored)", exc_info=True)
             self._engine = None
 
-        if self._client is not None:
-            self._client.close()
-            self._client = None
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
 
         if self._store is not None:
             self._store.stop()

@@ -22,7 +22,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from store.base import Storable
-from store.client import StoreClient
+from store.connection import UserConnection
 from store.subscriptions import ChangeEvent, EventBus, SubscriptionListener
 from streaming import TickingTable
 
@@ -102,12 +102,12 @@ class StoreBridge:
         self._registrations: dict[str, _Registration] = {}  # type_name → reg
         self._bus = EventBus()
         self._listener: SubscriptionListener | None = None
-        self._client: StoreClient | None = None
+        self._conn: UserConnection | None = None
         self._started = False
 
-    def _require_client(self) -> StoreClient:
-        assert self._client is not None, "StoreBridge not started"
-        return self._client
+    def _require_client(self) -> UserConnection:
+        assert self._conn is not None, "StoreBridge not started"
+        return self._conn
 
     # ── Registration ─────────────────────────────────────────────────
 
@@ -158,8 +158,15 @@ class StoreBridge:
         if self._started:
             return
 
-        # StoreClient for read-back (uses same PG connection params)
-        self._client = StoreClient(**self._conn_params)
+        # UserConnection for read-back (uses same PG connection params)
+        from store.connection import connect
+        self._conn = connect(
+            host=self._conn_params["host"],
+            port=self._conn_params["port"],
+            dbname=self._conn_params.get("dbname", "postgres"),
+            user=self._conn_params["user"],
+            password=self._conn_params["password"],
+        )
 
         # Wire EventBus → _dispatch
         self._bus.on_all(self._dispatch)
@@ -178,9 +185,9 @@ class StoreBridge:
         if self._listener:
             self._listener.stop()
             self._listener = None
-        if self._client:
-            self._client.close()
-            self._client = None
+        if self._conn:
+            self._conn.close()
+            self._conn = None
         self._started = False
 
     # ── Internal dispatch ────────────────────────────────────────────

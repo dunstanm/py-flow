@@ -767,11 +767,8 @@ def main():
     admin = store.admin_conn()
     bootstrap_chunks_schema(admin, embedding_dim=768)
     admin.close()
-    from ai.memory import bootstrap_conversations_table
-    admin = store.admin_conn()
-    bootstrap_conversations_table(admin, grant_to="agent_user")
-    admin.close()
-    print("  ✓ Schemas bootstrapped (media search, chunks, conversations)")
+    # Conversations are now Storable — stored in object_events, no separate table needed
+    print("  ✓ Schemas bootstrapped (media search, chunks)")
 
     # 2. ObjectStore (S3/MinIO)
     from media.admin import MediaServer

@@ -16,27 +16,27 @@ from reaktiv import Effect
 from reaktiv.signal import ComputeSignal as _ComputeSignal
 
 if TYPE_CHECKING:
-    from store.client import StoreClient
+    from store.connection import UserConnection
 
 logger = logging.getLogger(__name__)
 
 
-def auto_persist_effect(obj: Any, store_client: StoreClient | None = None) -> list:
+def auto_persist_effect(obj: Any, store_conn: UserConnection | None = None) -> list:
     """
     Create effects that write `obj` back to the store whenever
     any @computed value changes.
 
     Args:
         obj: A Storable instance with @computed properties
-        store_client: Optional StoreClient instance. If None, uses the
+        store_conn: Optional UserConnection instance. If None, uses the
                       active UserConnection from ``store.connect()``.
 
     Returns:
         List of Effect instances created (one per @computed on this object).
     """
-    if store_client is None:
+    if store_conn is None:
         from store.connection import get_connection
-        store_client = get_connection()._client
+        store_conn = get_connection()
 
     reactive = object.__getattribute__(obj, '_reactive')
     effects = []
@@ -49,7 +49,7 @@ def auto_persist_effect(obj: Any, store_client: StoreClient | None = None) -> li
             def effect_fn() -> None:
                 _value = comp()
                 try:
-                    store_client.update(obj)
+                    store_conn.update(obj)
                 except Exception:
                     logger.exception(
                         f"auto_persist for {computed_name} failed"

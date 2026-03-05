@@ -92,7 +92,7 @@ class StoreClient:
             raise TypeError(
                 f"{type(obj).__name__} is Embedded — write the parent Storable instead"
             )
-        entity_id = str(uuid.uuid4())
+        entity_id = obj._store_entity_id or str(uuid.uuid4())
         json_data = obj.to_json()
         type_name = obj.type_name()
         state = None

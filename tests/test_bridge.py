@@ -26,7 +26,7 @@ from bridge.store_bridge import StoreBridge
 from bridge.type_mapping import extract_row, infer_schema
 from reactive.expr import Const, Field
 from store.base import Storable
-from store.client import StoreClient
+from store._client import StoreClient
 from store.server import StoreServer
 from store.subscriptions import ChangeEvent
 from streaming import flush as streaming_flush

@@ -15,14 +15,18 @@ connection used by ``Storable.save()``, ``Position.find()``, etc.
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from store.client import StoreClient
+from store._client import QueryResult, StoreClient
+from store.base import Storable
 
 if TYPE_CHECKING:
     import psycopg2.extensions
 
     from store.subscriptions import EventBus
+
+_S = TypeVar("_S", bound=Storable)
 
 # ── Alias registry ────────────────────────────────────────────────────
 
@@ -104,8 +108,58 @@ class UserConnection:
         if _active.connection is self:
             _set_active(None)
 
+    # ── Store operations (typed proxies to internal StoreClient) ─────
+
+    def write(self, obj: Storable, valid_from: datetime | None = None) -> str:
+        """Create a new entity. Returns entity_id."""
+        return self._client.write(obj, valid_from=valid_from)
+
+    def update(self, obj: Storable, valid_from: datetime | None = None) -> None:
+        """Update an existing entity (new version)."""
+        self._client.update(obj, valid_from=valid_from)
+
+    def delete(self, obj: Storable) -> bool:
+        """Soft-delete an entity."""
+        return self._client.delete(obj)
+
+    def read(self, cls: type[_S], entity_id: str) -> _S | None:
+        """Read the latest version of an entity by ID."""
+        return self._client.read(cls, entity_id)
+
+    def query(self, cls: type[_S], filters: dict | None = None,
+              limit: int = 100, cursor: Any = None) -> QueryResult[_S]:
+        """Query entities of a type with optional filters."""
+        return self._client.query(cls, filters=filters, limit=limit, cursor=cursor)
+
+    def history(self, cls: type[_S], entity_id: str) -> list[_S]:
+        """Return all versions of an entity."""
+        return self._client.history(cls, entity_id)
+
+    def as_of(self, cls: type[_S], entity_id: str,
+              tx_time: datetime | None = None,
+              valid_time: datetime | None = None) -> _S | None:
+        """Bi-temporal point-in-time query."""
+        return self._client.as_of(cls, entity_id, tx_time=tx_time, valid_time=valid_time)
+
+    def transition(self, obj: Storable, new_state: str,
+                   valid_from: datetime | None = None) -> None:
+        """Transition an entity to a new lifecycle state."""
+        self._client.transition(obj, new_state, valid_from=valid_from)
+
+    def write_many(self, objects: list[Storable],
+                   valid_from: datetime | None = None) -> list[str]:
+        """Write multiple entities in a single transaction."""
+        return self._client.write_many(objects, valid_from=valid_from)
+
+    def update_many(self, objects: list[Storable],
+                    valid_from: datetime | None = None) -> None:
+        """Update multiple entities in a single transaction."""
+        self._client.update_many(objects, valid_from=valid_from)
+
+    # ── Lifecycle ──────────────────────────────────────────────────
+
     def close(self) -> None:
-        """Close the underlying StoreClient and deactivate."""
+        """Close the underlying connection and deactivate."""
         self.deactivate()
         self._client.close()
 
