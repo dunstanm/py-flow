@@ -276,7 +276,7 @@ class TestStoreIntegration:
         def create_counter(name, initial):
             c = Counter(name=name, value=initial)
             _client.write(c)  # type: ignore[union-attr]
-            return c._store_entity_id
+            return c.entity_id
 
         def increment_counter(entity_id, amount):
             c = _client.read(Counter, entity_id)  # type: ignore[union-attr]
@@ -302,7 +302,7 @@ class TestStoreIntegration:
         def create_ticket():
             t = Ticket(title="Bug report")
             _client.write(t)  # type: ignore[union-attr]
-            return t._store_entity_id
+            return t.entity_id
 
         def failing_step():
             raise ValueError("intentional failure")

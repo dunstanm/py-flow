@@ -227,8 +227,8 @@ class TestEventSourcing:
         entity_id = alice.write(w)
         assert entity_id is not None
         uuid.UUID(entity_id)
-        assert w._store_version == 1
-        assert w._store_event_type == "CREATED"
+        assert w.version == 1
+        assert w.event_type == "CREATED"
 
     def test_read_back(self, alice):
         w = Widget(name="spring", color="silver", weight=0.1)
@@ -242,32 +242,32 @@ class TestEventSourcing:
     def test_store_metadata_set(self, alice):
         w = Widget(name="pin", color="black", weight=0.01)
         alice.write(w)
-        assert w._store_entity_id is not None
-        assert w._store_version == 1
-        assert w._store_owner == "alice"
-        assert w._store_tx_time is not None
-        assert w._store_valid_from is not None
-        assert w._store_event_type == "CREATED"
+        assert w.entity_id is not None
+        assert w.version == 1
+        assert w.owner == "alice"
+        assert w.tx_time is not None
+        assert w.valid_from is not None
+        assert w.event_type == "CREATED"
 
     def test_update_creates_new_version(self, alice):
         w = Widget(name="updatable", color="white", weight=1.0)
         alice.write(w)
-        assert w._store_version == 1
+        assert w.version == 1
 
         w.color = "black"
         alice.update(w)
-        assert w._store_version == 2
-        assert w._store_event_type == "UPDATED"
+        assert w.version == 2
+        assert w.event_type == "UPDATED"
 
-        loaded = alice.read(Widget, w._store_entity_id)
+        loaded = alice.read(Widget, w.entity_id)
         assert loaded.color == "black"
-        assert loaded._store_version == 2
+        assert loaded.version == 2
 
     def test_update_never_overwrites(self, alice):
         """After update, both versions exist in history."""
         w = Widget(name="immutable_test", color="red", weight=1.0)
         alice.write(w)
-        entity_id = w._store_entity_id
+        entity_id = w.entity_id
 
         w.color = "blue"
         alice.update(w)
@@ -275,16 +275,16 @@ class TestEventSourcing:
         history = alice.history(Widget, entity_id)
         assert len(history) == 2
         assert history[0].color == "red"
-        assert history[0]._store_version == 1
+        assert history[0].version == 1
         assert history[1].color == "blue"
-        assert history[1]._store_version == 2
+        assert history[1].version == 2
 
     def test_delete_creates_tombstone(self, alice):
         w = Widget(name="deletable", color="grey", weight=0.5)
         entity_id = alice.write(w)
 
         alice.delete(w)
-        assert w._store_event_type == "DELETED"
+        assert w.event_type == "DELETED"
 
         # Gone from read/query
         assert alice.read(Widget, entity_id) is None
@@ -292,7 +292,7 @@ class TestEventSourcing:
         # But present in history
         history = alice.history(Widget, entity_id)
         assert len(history) == 2
-        assert history[-1]._store_event_type == "DELETED"
+        assert history[-1].event_type == "DELETED"
 
     def test_version_numbers_monotonic(self, alice):
         w = Widget(name="mono_test", color="a", weight=1.0)
@@ -300,10 +300,10 @@ class TestEventSourcing:
         for i in range(5):
             w.color = f"color_{i}"
             alice.update(w)
-        assert w._store_version == 6
+        assert w.version == 6
 
-        history = alice.history(Widget, w._store_entity_id)
-        versions = [h._store_version for h in history]
+        history = alice.history(Widget, w.entity_id)
+        versions = [h.version for h in history]
         assert versions == [1, 2, 3, 4, 5, 6]
 
     def test_independent_entity_versions(self, alice):
@@ -315,8 +315,8 @@ class TestEventSourcing:
         w1.color = "updated"
         alice.update(w1)
 
-        assert w1._store_version == 2
-        assert w2._store_version == 1
+        assert w1.version == 2
+        assert w2.version == 1
 
     def test_history_returns_all_versions(self, alice):
         w = Widget(name="history_test", color="v1", weight=1.0)
@@ -326,7 +326,7 @@ class TestEventSourcing:
         w.color = "v3"
         alice.update(w)
 
-        history = alice.history(Widget, w._store_entity_id)
+        history = alice.history(Widget, w.entity_id)
         assert len(history) == 3
         colors = [h.color for h in history]
         assert colors == ["v1", "v2", "v3"]
@@ -339,7 +339,7 @@ class TestBiTemporal:
         """What did we know at time T?"""
         w = Widget(name="bitemporal", color="original", weight=1.0)
         alice.write(w)
-        entity_id = w._store_entity_id
+        entity_id = w.entity_id
         after_write = datetime.now(timezone.utc)
 
         time.sleep(0.05)
@@ -365,8 +365,8 @@ class TestBiTemporal:
         w.color = "corrected"
         alice.update(w, valid_from=past)
 
-        assert w._store_event_type == "CORRECTED"
-        assert w._store_valid_from <= datetime.now(timezone.utc)  # type: ignore[operator]
+        assert w.event_type == "CORRECTED"
+        assert w.valid_from <= datetime.now(timezone.utc)  # type: ignore[operator]
 
     def test_valid_from_defaults_to_now(self, alice):
         """When valid_from is not specified, it defaults to now()."""
@@ -375,7 +375,7 @@ class TestBiTemporal:
         alice.write(w)
         _after = datetime.now(timezone.utc)
 
-        assert w._store_valid_from is not None
+        assert w.valid_from is not None
         # valid_from should be roughly between before and after
         # (PG now() might differ slightly from Python now())
 
@@ -384,7 +384,7 @@ class TestBiTemporal:
         w = Widget(name="valid_time_test", color="original", weight=1.0)
         past_time = datetime.now(timezone.utc) - timedelta(hours=2)
         alice.write(w, valid_from=past_time)
-        entity_id = w._store_entity_id
+        entity_id = w.entity_id
 
         # Update effective from 1 hour ago
         later_time = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -406,18 +406,18 @@ class TestBiTemporal:
         past = datetime.now(timezone.utc) - timedelta(days=1)
         w = Widget(name="custom_vf", color="yesterday", weight=1.0)
         alice.write(w, valid_from=past)
-        assert w._store_valid_from is not None
+        assert w.valid_from is not None
 
     def test_tx_time_is_immutable(self, alice):
         """tx_time is set by the system and never changes."""
         w = Widget(name="tx_immutable", color="a", weight=1.0)
         alice.write(w)
-        tx1 = w._store_tx_time
+        tx1 = w.tx_time
 
         time.sleep(0.05)
         w.color = "b"
         alice.update(w)
-        tx2 = w._store_tx_time
+        tx2 = w.tx_time
 
         # Different versions have different tx_times
         assert tx2 > tx1  # type: ignore[operator]
@@ -429,14 +429,14 @@ class TestStateMachine:
     def test_write_sets_initial_state(self, alice):
         o = Order(symbol="AAPL", quantity=100, price=228.0, side="BUY")
         alice.write(o)
-        assert o._store_state == "PENDING"
+        assert o.state == "PENDING"
 
     def test_valid_transition(self, alice):
         o = Order(symbol="AAPL", quantity=100, price=228.0, side="BUY")
         alice.write(o)
         alice.transition(o, "FILLED")
-        assert o._store_state == "FILLED"
-        assert o._store_event_type == "STATE_CHANGE"
+        assert o.state == "FILLED"
+        assert o.event_type == "STATE_CHANGE"
 
     def test_invalid_transition_raises(self, alice):
         o = Order(symbol="TSLA", quantity=50, price=355.0, side="SELL")
@@ -447,16 +447,16 @@ class TestStateMachine:
     def test_state_tracked_across_versions(self, alice):
         o = Order(symbol="GOOG", quantity=200, price=192.0, side="BUY")
         alice.write(o)
-        assert o._store_state == "PENDING"
+        assert o.state == "PENDING"
 
         alice.transition(o, "PARTIAL")
-        assert o._store_state == "PARTIAL"
+        assert o.state == "PARTIAL"
 
         alice.transition(o, "FILLED")
-        assert o._store_state == "FILLED"
+        assert o.state == "FILLED"
 
         alice.transition(o, "SETTLED")
-        assert o._store_state == "SETTLED"
+        assert o.state == "SETTLED"
 
     def test_state_history(self, alice):
         o = Order(symbol="MSFT", quantity=100, price=415.0, side="BUY")
@@ -464,10 +464,10 @@ class TestStateMachine:
         alice.transition(o, "FILLED")
         alice.transition(o, "SETTLED")
 
-        history = alice.history(Order, o._store_entity_id)
-        states = [h._store_state for h in history]
+        history = alice.history(Order, o.entity_id)
+        states = [h.state for h in history]
         assert states == ["PENDING", "FILLED", "SETTLED"]
-        event_types = [h._store_event_type for h in history]
+        event_types = [h.event_type for h in history]
         assert event_types == ["CREATED", "STATE_CHANGE", "STATE_CHANGE"]
 
     def test_cancel_from_partial(self, alice):
@@ -475,7 +475,7 @@ class TestStateMachine:
         alice.write(o)
         alice.transition(o, "PARTIAL")
         alice.transition(o, "CANCELLED")
-        assert o._store_state == "CANCELLED"
+        assert o.state == "CANCELLED"
 
     def test_cannot_transition_from_terminal_state(self, alice):
         o = Order(symbol="META", quantity=10, price=700.0, side="SELL")
@@ -489,7 +489,7 @@ class TestStateMachine:
         """Widget has no state machine — state should be NULL."""
         w = Widget(name="no_sm", color="x", weight=1.0)
         alice.write(w)
-        assert w._store_state is None
+        assert w.state is None
 
     def test_transition_without_state_machine_raises(self, alice):
         w = Widget(name="no_sm_transition", color="x", weight=1.0)
@@ -508,8 +508,8 @@ class TestStateMachine:
         alice.write(o)
         alice.transition(o, "FILLED")
 
-        loaded = alice.read(Order, o._store_entity_id)
-        assert loaded._store_state == "FILLED"
+        loaded = alice.read(Order, o.entity_id)
+        assert loaded.state == "FILLED"
 
     # ── Guard tests ────────────────────────────────────────────────
 
@@ -518,7 +518,7 @@ class TestStateMachine:
         o = Order(symbol="AAPL", quantity=100, price=228.0, side="BUY")
         alice.write(o)
         alice.transition(o, "FILLED")
-        assert o._store_state == "FILLED"
+        assert o.state == "FILLED"
 
     def test_guard_blocks_transition(self, alice):
         """PENDING → FILLED has guard: quantity > 0. Fails with quantity=0."""
@@ -526,7 +526,7 @@ class TestStateMachine:
         alice.write(o)
         with pytest.raises(GuardFailure):
             alice.transition(o, "FILLED")
-        assert o._store_state == "PENDING"  # unchanged
+        assert o.state == "PENDING"  # unchanged
 
     def test_guard_on_settled_allows(self, alice):
         """FILLED → SETTLED has guard: price > 0. Passes with price=228."""
@@ -534,7 +534,7 @@ class TestStateMachine:
         alice.write(o)
         alice.transition(o, "FILLED")
         alice.transition(o, "SETTLED")
-        assert o._store_state == "SETTLED"
+        assert o.state == "SETTLED"
 
     def test_guard_on_settled_blocks(self, alice):
         """FILLED → SETTLED has guard: price > 0. Fails with price=0."""
@@ -543,7 +543,7 @@ class TestStateMachine:
         alice.transition(o, "FILLED")
         with pytest.raises(GuardFailure):
             alice.transition(o, "SETTLED")
-        assert o._store_state == "FILLED"  # unchanged
+        assert o.state == "FILLED"  # unchanged
 
     def test_guard_failure_is_distinct_from_invalid(self, alice):
         """GuardFailure and InvalidTransition are different exceptions."""
@@ -564,7 +564,7 @@ class TestStateMachine:
         alice.write(o)
         with pytest.raises(TransitionNotPermitted):
             alice.transition(o, "CANCELLED")
-        assert o._store_state == "PENDING"
+        assert o.state == "PENDING"
 
     def test_allowed_by_permits_authorized_user(self, conn_info, _provision_users, server):
         """User 'risk_manager' can cancel."""
@@ -577,7 +577,7 @@ class TestStateMachine:
         o = Order(symbol="TSLA", quantity=50, price=355.0, side="SELL")
         rm.write(o)
         rm.transition(o, "CANCELLED")
-        assert o._store_state == "CANCELLED"
+        assert o.state == "CANCELLED"
         rm.close()
 
     def test_transition_without_allowed_by_open_to_all(self, alice):
@@ -585,7 +585,7 @@ class TestStateMachine:
         o = Order(symbol="GOOG", quantity=200, price=192.0, side="BUY")
         alice.write(o)
         alice.transition(o, "PARTIAL")
-        assert o._store_state == "PARTIAL"
+        assert o.state == "PARTIAL"
 
     # ── Action tests ───────────────────────────────────────────────
 
@@ -735,10 +735,10 @@ class TestOptimisticConcurrency:
         """Normal update works — version is tracked automatically."""
         w = Widget(name="occ_ok", color="v1", weight=1.0)
         alice.write(w)
-        assert w._store_version == 1
+        assert w.version == 1
         w.color = "v2"
         alice.update(w)  # auto-checks version 1 matches
-        assert w._store_version == 2
+        assert w.version == 2
 
     def test_stale_object_raises_version_conflict(self, alice):
         """Two readers of the same version — second writer loses."""
@@ -761,7 +761,7 @@ class TestOptimisticConcurrency:
         w = Widget(name="occ_del_ok", color="v1", weight=1.0)
         alice.write(w)
         alice.delete(w)  # auto-checks version 1
-        assert alice.read(Widget, w._store_entity_id) is None
+        assert alice.read(Widget, w.entity_id) is None
 
     def test_delete_stale_object_raises(self, alice):
         w = Widget(name="occ_del_stale", color="v1", weight=1.0)
@@ -782,7 +782,7 @@ class TestOptimisticConcurrency:
         alice.update(w)
         w.color = "v3"
         alice.update(w)
-        assert w._store_version == 3
+        assert w.version == 3
 
     def test_version_conflict_preserves_db_state(self, alice):
         """Conflicted update does not change the stored data."""
@@ -806,8 +806,8 @@ class TestBulkOperations:
         ids = alice.write_many(widgets)
         assert len(ids) == 5
         for i, w in enumerate(widgets):
-            assert w._store_entity_id == ids[i]
-            assert w._store_version == 1
+            assert w.entity_id == ids[i]
+            assert w.version == 1
 
     def test_write_many_atomic_on_failure(self, alice):
         """If one write fails, none should persist."""
@@ -829,10 +829,10 @@ class TestBulkOperations:
         w1.color = "updated_a"
         w2.color = "updated_b"
         alice.update_many([w1, w2])
-        assert w1._store_version == 2
-        assert w2._store_version == 2
-        loaded1 = alice.read(Widget, w1._store_entity_id)
-        loaded2 = alice.read(Widget, w2._store_entity_id)
+        assert w1.version == 2
+        assert w2.version == 2
+        loaded1 = alice.read(Widget, w1.entity_id)
+        loaded2 = alice.read(Widget, w2.entity_id)
         assert loaded1.color == "updated_a"
         assert loaded2.color == "updated_b"
 
@@ -844,8 +844,8 @@ class TestBulkOperations:
         w1.color = "c"
         w2.color = "d"
         alice.update_many([w1, w2])
-        assert w1._store_version == 2
-        assert w2._store_version == 2
+        assert w1.version == 2
+        assert w2.version == 2
 
     def test_update_many_rolls_back_on_conflict(self, alice):
         w1 = Widget(name="ubulk_rb1", color="a", weight=1.0)
@@ -853,7 +853,7 @@ class TestBulkOperations:
         alice.write(w1)
         alice.write(w2)
         # Read stale copy of w2
-        stale_w2 = alice.read(Widget, w2._store_entity_id)
+        stale_w2 = alice.read(Widget, w2.entity_id)
         # Update w2 so its version is now 2
         w2.color = "sneaky"
         alice.update(w2)
@@ -863,7 +863,7 @@ class TestBulkOperations:
         with pytest.raises(VersionConflict):
             alice.update_many([w1, stale_w2])
         # w1 should NOT have been updated (atomic rollback)
-        loaded1 = alice.read(Widget, w1._store_entity_id)
+        loaded1 = alice.read(Widget, w1.entity_id)
         assert loaded1.color == "a"
 
 
@@ -893,8 +893,8 @@ class TestPagination:
         assert len(page2) >= 1
 
         # No overlap
-        ids1 = {w._store_entity_id for w in page1}
-        ids2 = {w._store_entity_id for w in page2}
+        ids1 = {w.entity_id for w in page1}
+        ids2 = {w.entity_id for w in page2}
         assert ids1.isdisjoint(ids2)
 
     def test_last_page_has_no_cursor(self, alice):
@@ -926,7 +926,7 @@ class TestAuditLog:
         w.color = "v3"
         alice.update(w)
 
-        trail = alice.audit(w._store_entity_id)
+        trail = alice.audit(w.entity_id)
         assert len(trail) == 3
         assert trail[0]["version"] == 1
         assert trail[0]["event_type"] == "CREATED"
@@ -937,7 +937,7 @@ class TestAuditLog:
     def test_audit_includes_updated_by(self, alice):
         w = Widget(name="audit_by", color="v1", weight=1.0)
         alice.write(w)
-        trail = alice.audit(w._store_entity_id)
+        trail = alice.audit(w.entity_id)
         assert trail[0]["updated_by"] == "alice"
 
     def test_audit_includes_state_changes(self, alice):
@@ -946,7 +946,7 @@ class TestAuditLog:
         alice.transition(o, "FILLED")
         alice.transition(o, "SETTLED")
 
-        trail = alice.audit(o._store_entity_id)
+        trail = alice.audit(o.entity_id)
         assert len(trail) == 3
         states = [e["state"] for e in trail]
         assert states == ["PENDING", "FILLED", "SETTLED"]
@@ -957,7 +957,7 @@ class TestAuditLog:
         w = Widget(name="audit_del", color="v1", weight=1.0)
         alice.write(w)
         alice.delete(w)
-        trail = alice.audit(w._store_entity_id)
+        trail = alice.audit(w.entity_id)
         assert len(trail) == 2
         assert trail[-1]["event_type"] == "DELETED"
 
@@ -966,7 +966,7 @@ class TestAuditLog:
         alice.write(w)
         w.color = "v2"
         alice.update(w)
-        trail = alice.audit(w._store_entity_id)
+        trail = alice.audit(w.entity_id)
         assert trail[0]["tx_time"] <= trail[1]["tx_time"]
 
     def test_audit_empty_for_nonexistent(self, alice):
@@ -1005,7 +1005,7 @@ class TestRLSIsolation:
         w.color = "b"
         bob.update(w)
         # Alice gets empty history
-        assert alice.history(Widget, w._store_entity_id) == []
+        assert alice.history(Widget, w.entity_id) == []
 
     def test_count_respects_rls(self, alice, bob):
         alice.write(Widget(name="ac_rls", color="x", weight=0.0))
@@ -1096,7 +1096,7 @@ class TestTrustBoundary:
             with alice.conn.cursor() as cur:
                 cur.execute(
                     "DELETE FROM object_events WHERE entity_id = %s",
-                    (w._store_entity_id,),
+                    (w.entity_id,),
                 )
         alice.conn.rollback()
 
@@ -1137,8 +1137,8 @@ class TestSharing:
         refreshed = alice.read(Widget, entity_id)
         assert refreshed.color == "updated_by_bob"
         # owner stays as alice, updated_by records bob
-        assert refreshed._store_owner == "alice"
-        assert refreshed._store_updated_by == "bob"
+        assert refreshed.owner == "alice"
+        assert refreshed.updated_by == "bob"
 
     def test_shared_history_visible(self, alice, bob):
         """Shared entity's full history is visible to the reader."""
@@ -1215,7 +1215,7 @@ class TestAdminAccess:
         alice.write(w)
         w.color = "v2"
         alice.update(w)
-        history = admin_client.history(Widget, w._store_entity_id)
+        history = admin_client.history(Widget, w.entity_id)
         assert len(history) == 2
 
 
@@ -1230,7 +1230,7 @@ class TestContextManager:
         ) as c:
             w = Widget(name="ctx_test", color="x", weight=1.0)
             c.write(w)
-            assert w._store_entity_id is not None
+            assert w.entity_id is not None
 
 
 # ── EventBus (Tier 1: in-process) ──────────────────────────────────────────
@@ -1329,7 +1329,7 @@ class TestClientEventBus:
         c.write(w)
         assert len(events) == 1
         assert events[0].event_type == "CREATED"
-        assert events[0].entity_id == w._store_entity_id
+        assert events[0].entity_id == w.entity_id
         c.close()
 
     def test_update_emits_event(self, conn_info, _provision_users):
@@ -1386,7 +1386,7 @@ class TestClientEventBus:
         """StoreClient without event_bus still works."""
         w = Widget(name="no_bus", color="x", weight=1.0)
         alice.write(w)
-        assert w._store_entity_id is not None
+        assert w.entity_id is not None
 
     def test_on_entity_filters_correctly(self, conn_info, _provision_users):
         bus = EventBus()
@@ -1398,13 +1398,13 @@ class TestClientEventBus:
         )
         w1 = Widget(name="bus_e1", color="x", weight=1.0)
         c.write(w1)
-        bus.on_entity(w1._store_entity_id, lambda e: events.append(e))  # type: ignore[arg-type]
+        bus.on_entity(w1.entity_id, lambda e: events.append(e))  # type: ignore[arg-type]
         w2 = Widget(name="bus_e2", color="x", weight=1.0)
         c.write(w2)  # should NOT trigger
         w1.color = "updated"
         c.update(w1)  # should trigger
         assert len(events) == 1
-        assert events[0].entity_id == w1._store_entity_id
+        assert events[0].entity_id == w1.entity_id
         c.close()
 
 
@@ -1439,7 +1439,7 @@ class TestSubscriptionListener:
         time.sleep(0.5)  # Give listener time to receive
         listener.stop()
 
-        assert any(e.entity_id == w._store_entity_id for e in events)
+        assert any(e.entity_id == w.entity_id for e in events)
 
     def test_listener_catches_up_on_start(self, conn_info, _provision_users):
         """Listener catches up on events that happened before it started."""
@@ -1451,7 +1451,7 @@ class TestSubscriptionListener:
         )
         w = Widget(name="catchup_test", color="x", weight=1.0)
         writer.write(w)
-        before_time = w._store_tx_time
+        before_time = w.tx_time
         writer.close()
 
         # Now start a listener with a checkpoint BEFORE that event
@@ -1476,7 +1476,7 @@ class TestSubscriptionListener:
         listener._catch_up()
         listener._conn.close()
 
-        assert any(e.entity_id == w._store_entity_id for e in events)
+        assert any(e.entity_id == w.entity_id for e in events)
 
     def test_durable_checkpoint_persists(self, conn_info, _provision_users):
         """Subscriber with subscriber_id persists checkpoint to DB."""
@@ -1567,7 +1567,7 @@ class TestSubscriptionListener:
         listener2.stop()
 
         # Should have caught up on w2
-        assert any(e.entity_id == w2._store_entity_id for e in events2)
+        assert any(e.entity_id == w2.entity_id for e in events2)
 
 
 # ===========================================================================
@@ -1595,7 +1595,7 @@ class TestThreeTierTransition:
         alice.write(order)
         alice.transition(order, "DONE")
 
-        assert order._store_state == "DONE"
+        assert order.state == "DONE"
         assert "action_ran" in tier1_log
 
     def test_action_failure_rolls_back_state_change(self, alice):
@@ -1616,8 +1616,8 @@ class TestThreeTierTransition:
             alice.transition(order, "DONE")
 
         # State should NOT have changed — rolled back
-        fresh = alice.read(Order, order._store_entity_id)
-        assert fresh._store_state == "NEW"
+        fresh = alice.read(Order, order.entity_id)
+        assert fresh.state == "NEW"
 
     # ── Tier 2: Fire-and-forget hooks ────────────────────────────────
 
@@ -1638,7 +1638,7 @@ class TestThreeTierTransition:
         alice.write(order)
         alice.transition(order, "B")
 
-        assert order._store_state == "B"
+        assert order.state == "B"
         assert ("exit", "A") in hook_log
         assert ("enter", "B") in hook_log
 
@@ -1658,7 +1658,7 @@ class TestThreeTierTransition:
 
         # Should NOT raise — on_enter failures are swallowed
         alice.transition(order, "Y")
-        assert order._store_state == "Y"
+        assert order.state == "Y"
 
     # ── Tier 3: Workflow dispatch ────────────────────────────────────
 
@@ -1706,7 +1706,7 @@ class TestThreeTierTransition:
 
         assert len(dispatched) == 1
         assert dispatched[0][0] is my_workflow
-        assert dispatched[0][1] == order._store_entity_id
+        assert dispatched[0][1] == order.entity_id
 
         # Clean up
         type(order)._workflow_engine = None

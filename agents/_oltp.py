@@ -125,9 +125,9 @@ def _serialize_storable(obj: Any) -> dict:
         val = getattr(obj, f.name)
         result[f.name] = val
     # Include store metadata
-    if obj._store_entity_id:
-        result["_entity_id"] = obj._store_entity_id
-        result["_version"] = obj._store_version
+    if obj.entity_id:
+        result["_entity_id"] = obj.entity_id
+        result["_version"] = obj.version
     return result
 
 

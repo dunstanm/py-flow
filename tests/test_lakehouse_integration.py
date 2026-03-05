@@ -247,11 +247,11 @@ class TestLakehouseRoundTrip:
     def test_storable_objects_created(self, seeded):
         """Storable objects have entity_ids after .save()."""
         for t in seeded["trades"]:
-            assert t._store_entity_id is not None
-            assert t._store_version == 1
-            assert t._store_event_type == "CREATED"
+            assert t.entity_id is not None
+            assert t.version == 1
+            assert t.event_type == "CREATED"
         for o in seeded["orders"]:
-            assert o._store_entity_id is not None
+            assert o.entity_id is not None
 
     def test_tables_created(self, iceberg_tables):
         """All 4 Iceberg tables should exist."""

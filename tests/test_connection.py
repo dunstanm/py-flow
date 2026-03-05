@@ -131,18 +131,18 @@ class TestSaveAndFind:
         item = Item(name="widget", value=42.0)
         entity_id = item.save()
         assert entity_id is not None
-        assert item._store_entity_id == entity_id
-        assert item._store_version == 1
+        assert item.entity_id == entity_id
+        assert item.version == 1
 
     def test_save_updates_existing(self, alice_db):
         item = Item(name="gadget", value=10.0)
         item.save()
-        assert item._store_version == 1
+        assert item.version == 1
 
         item.value = 20.0
         entity_id = item.save()
-        assert item._store_version == 2
-        assert entity_id == item._store_entity_id
+        assert item.version == 2
+        assert entity_id == item.entity_id
 
     def test_find_by_id(self, alice_db):
         item = Item(name="findme", value=99.0)
@@ -196,17 +196,17 @@ class TestTransition:
     def test_transition(self, alice_db):
         item = Item(name="stateful", value=5.0)
         item.save()
-        assert item._store_state == "ACTIVE"
+        assert item.state == "ACTIVE"
 
         item.transition("ARCHIVED")
-        assert item._store_state == "ARCHIVED"
+        assert item.state == "ARCHIVED"
 
     def test_transition_round_trip(self, alice_db):
         item = Item(name="roundtrip", value=5.0)
         item.save()
         item.transition("ARCHIVED")
         item.transition("ACTIVE")
-        assert item._store_state == "ACTIVE"
+        assert item.state == "ACTIVE"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -244,7 +244,7 @@ class TestHistoryAuditRefresh:
         item.save()
 
         # Simulate external change via internal client
-        item2 = Item.find(item._store_entity_id)  # type: ignore[arg-type]
+        item2 = Item.find(item.entity_id)  # type: ignore[arg-type]
         item2.value = 99.0  # type: ignore[union-attr]
         item2.save()  # type: ignore[union-attr]
 
@@ -343,7 +343,7 @@ class TestShareUnshare:
         assert found is not None
         found.value = 999.0
         found.save()
-        assert found._store_version == 2
+        assert found.version == 2
 
         bob.close()
         alice.activate()

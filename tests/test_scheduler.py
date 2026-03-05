@@ -493,20 +493,20 @@ class TestSchedulerIntegration:
         assert entity_id is not None
         s2 = client.read(Schedule, entity_id)
         assert s2.name == "test_sched"
-        assert s2._store_state == "ACTIVE"
+        assert s2.state == "ACTIVE"
 
     def test_schedule_pause_resume(self, client):
         """Test Schedule state machine transitions."""
         from scheduler.models import Schedule
         s = Schedule(name="pausable", cron_expr="0 * * * *")
         client.write(s)
-        assert s._store_state == "ACTIVE"
+        assert s.state == "ACTIVE"
 
         client.transition(s, "PAUSED")
-        assert s._store_state == "PAUSED"
+        assert s.state == "PAUSED"
 
         client.transition(s, "ACTIVE")
-        assert s._store_state == "ACTIVE"
+        assert s.state == "ACTIVE"
 
     def test_schedule_write_read_with_tasks(self, client):
         """Write a Schedule with Tasks and read back."""
@@ -533,13 +533,13 @@ class TestSchedulerIntegration:
         from scheduler.models import Run
         r = Run(schedule_name="test")
         client.write(r)
-        assert r._store_state == "PENDING"
+        assert r.state == "PENDING"
 
         client.transition(r, "RUNNING")
-        assert r._store_state == "RUNNING"
+        assert r.state == "RUNNING"
 
         client.transition(r, "SUCCESS")
-        assert r._store_state == "SUCCESS"
+        assert r.state == "SUCCESS"
 
     def test_run_write_with_task_results(self, client):
         """Write a Run with TaskResults and read back."""
@@ -578,7 +578,7 @@ class TestSchedulerIntegration:
         server.register(s)
 
         run = server.fire("fire_test")
-        assert run._store_state in ("SUCCESS", "ERROR")
+        assert run.state in ("SUCCESS", "ERROR")
 
     def test_scheduler_tick_fires_due(self, client):
         """Tick should fire schedules that are due."""
@@ -632,7 +632,7 @@ class TestSchedulerIntegration:
         server.register(s)
 
         run = server.fire("pipeline_fire_test")
-        assert run._store_state in ("SUCCESS", "ERROR")
+        assert run.state in ("SUCCESS", "ERROR")
 
 
 # ── resolve_fn tests ─────────────────────────────────────────────────────
@@ -714,7 +714,7 @@ class TestSchedulerFullStack:
         run = scheduler.fire("fs_fn_test")
 
         assert run.schedule_name == "fs_fn_test"
-        assert run._store_state == "SUCCESS"
+        assert run.state == "SUCCESS"
         assert "executed" in call_log
 
     def test_pipeline_fire_linear(self, scheduler):
@@ -735,7 +735,7 @@ class TestSchedulerFullStack:
 
         run = scheduler.fire("fs_linear")
 
-        assert run._store_state == "SUCCESS"
+        assert run.state == "SUCCESS"
         assert call_log == ["a", "b", "c"]
         assert run.task_results["step1"].status == "SUCCESS"
         assert run.task_results["step2"].status == "SUCCESS"
@@ -758,7 +758,7 @@ class TestSchedulerFullStack:
 
         run = scheduler.fire("fs_diamond")
 
-        assert run._store_state == "SUCCESS"
+        assert run.state == "SUCCESS"
         assert len(run.task_results) == 4
         for name in ["a", "b", "c", "d"]:
             assert run.task_results[name].status == "SUCCESS"
@@ -779,7 +779,7 @@ class TestSchedulerFullStack:
 
         run = scheduler.fire("fs_fail")
 
-        assert run._store_state in ("PARTIAL", "ERROR")
+        assert run.state in ("PARTIAL", "ERROR")
         assert run.task_results["ok_task"].status == "SUCCESS"
         assert run.task_results["bad_task"].status == "ERROR"
         assert "boom" in run.task_results["bad_task"].error

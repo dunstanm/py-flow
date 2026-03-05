@@ -53,17 +53,17 @@ class Conversation(Storable):
     @property
     def id(self) -> str:
         """Conversation ID (alias for entity_id)."""
-        return self._store_entity_id or ""
+        return self.entity_id or ""
 
     @property
     def created_at(self) -> str:
         """Creation timestamp as ISO string."""
-        return str(self._store_tx_time or "")
+        return str(self.tx_time or "")
 
     @property
     def updated_at(self) -> str:
         """Last update timestamp as ISO string."""
-        return str(self._store_tx_time or "")
+        return str(self.tx_time or "")
 
     def to_messages(self) -> list[Message]:
         """Convert stored message dicts back to Message objects."""

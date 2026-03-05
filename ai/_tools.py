@@ -345,7 +345,7 @@ def create_search_tools(media_store: MediaStore) -> list[Tool]:
         )
         return json.dumps([
             {
-                "entity_id": str(d._store_entity_id),
+                "entity_id": str(d.entity_id),
                 "title": d.title,
                 "filename": d.filename,
                 "content_type": d.content_type,

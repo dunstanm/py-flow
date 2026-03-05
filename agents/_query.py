@@ -100,8 +100,8 @@ def create_query_tools(ctx: _PlatformContext) -> list:
                     for f in dataclasses.fields(obj):  # type: ignore[unreachable]
                         if not f.name.startswith("_"):
                             row[f.name] = getattr(obj, f.name)
-                if obj._store_entity_id:
-                    row["_entity_id"] = obj._store_entity_id
+                if obj.entity_id:
+                    row["_entity_id"] = obj.entity_id
                 rows.append(row)
             return json.dumps({
                 "source": "oltp",

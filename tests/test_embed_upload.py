@@ -124,14 +124,14 @@ class TestUploadWithoutEmbedder:
             filename="no_embed.txt",
             title="No Embed Doc",
         )
-        assert doc._store_entity_id is not None
+        assert doc.entity_id is not None
         assert doc.has_text
 
         # No chunks should exist
         with admin_db.cursor() as cur:
             cur.execute(
                 "SELECT count(*) FROM document_chunks WHERE entity_id = %s",
-                (str(doc._store_entity_id),),
+                (str(doc.entity_id),),
             )
             assert cur.fetchone()[0] == 0
 
@@ -164,7 +164,7 @@ class TestUploadWithEmbedder:
             cur.execute(
                 "SELECT chunk_index, token_count, embedding IS NOT NULL as has_emb "
                 "FROM document_chunks WHERE entity_id = %s ORDER BY chunk_index",
-                (str(doc._store_entity_id),),
+                (str(doc.entity_id),),
             )
             rows = cur.fetchall()
 
@@ -183,7 +183,7 @@ class TestUploadWithEmbedder:
         with admin_db.cursor() as cur:
             cur.execute(
                 "SELECT embedding IS NOT NULL FROM document_search WHERE entity_id = %s",
-                (str(doc._store_entity_id),),
+                (str(doc.entity_id),),
             )
             row = cur.fetchone()
 
@@ -204,7 +204,7 @@ class TestUploadWithEmbedder:
                 FROM document_chunks
                 WHERE entity_id = %s AND embedding IS NOT NULL
                 LIMIT 1
-            """, (str(doc._store_entity_id),))
+            """, (str(doc.entity_id),))
             row = cur.fetchone()
 
         assert row is not None
@@ -240,8 +240,8 @@ class TestUploadWithEmbedder:
         assert len(rows) > 0
         # The options pricing doc should be in the top results
         found_ids = [row[0] for row in rows]
-        assert str(doc._store_entity_id) in found_ids, (
-            f"Expected {doc._store_entity_id} in results, got {found_ids}"
+        assert str(doc.entity_id) in found_ids, (
+            f"Expected {doc.entity_id} in results, got {found_ids}"
         )
 
     def test_binary_file_no_chunks(self, media_store_with_embed, admin_db):
@@ -256,7 +256,7 @@ class TestUploadWithEmbedder:
         with admin_db.cursor() as cur:
             cur.execute(
                 "SELECT count(*) FROM document_chunks WHERE entity_id = %s",
-                (str(doc._store_entity_id),),
+                (str(doc.entity_id),),
             )
             assert cur.fetchone()[0] == 0
 

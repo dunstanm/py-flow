@@ -256,7 +256,7 @@ class SchedulerServer:
     def list_schedules(self) -> list[Schedule]:
         """Return all non-deleted schedules."""
         all_schedules = self._require_client().query(Schedule)
-        return [s for s in all_schedules if s._store_state != "DELETED"]
+        return [s for s in all_schedules if s.state != "DELETED"]
 
     def history(self, name: str, limit: int = 20) -> list[Run]:
         """Return past runs for a schedule, most recent first."""
@@ -347,7 +347,7 @@ class SchedulerServer:
     def _load_active_schedules(self) -> list[Schedule]:
         """Load all schedules in ACTIVE state."""
         all_schedules = self._require_client().query(Schedule)
-        return [s for s in all_schedules if s._store_state == "ACTIVE"]
+        return [s for s in all_schedules if s.state == "ACTIVE"]
 
     def _run_loop(self) -> None:
         """Internal blocking loop — runs in background thread."""

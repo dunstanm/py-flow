@@ -105,6 +105,52 @@ class Storable:
     _store_state: str | None = None
     _store_event_type: str | None = None
 
+    # ── Public read-only accessors for store metadata ──────────────────
+    @property
+    def entity_id(self) -> str | None:
+        """Stable identity across versions."""
+        return self._store_entity_id
+
+    @property
+    def version(self) -> int | None:
+        """Monotonic version number per entity."""
+        return self._store_version
+
+    @property
+    def owner(self) -> str | None:
+        """User who created this entity."""
+        return self._store_owner
+
+    @property
+    def updated_by(self) -> str | None:
+        """User who last updated this entity."""
+        return self._store_updated_by
+
+    @property
+    def tx_time(self) -> datetime | None:
+        """Transaction timestamp — when the write was committed."""
+        return self._store_tx_time
+
+    @property
+    def valid_from(self) -> datetime | None:
+        """Business-time start of this version's validity."""
+        return self._store_valid_from
+
+    @property
+    def valid_to(self) -> datetime | None:
+        """Business-time end of this version's validity."""
+        return self._store_valid_to
+
+    @property
+    def state(self) -> str | None:
+        """Lifecycle state (if a state machine is registered)."""
+        return self._store_state
+
+    @property
+    def event_type(self) -> str | None:
+        """Event type of the last write (INSERT, UPDATE, DELETE, etc.)."""
+        return self._store_event_type
+
     # Optional state machine — set on the class by the user
     _state_machine: ClassVar[type[StateMachine] | None] = None
 

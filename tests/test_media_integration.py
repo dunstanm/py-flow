@@ -94,7 +94,7 @@ class TestMediaIntegration:
             tags=["test", "finance"],
         )
 
-        assert doc._store_entity_id is not None
+        assert doc.entity_id is not None
         assert doc.title == "Test Document"
         assert doc.filename == "test_doc.txt"
         assert doc.content_type == "text/plain"
@@ -217,7 +217,7 @@ and *volatility surface* construction.
         content = b"Test download by ID"
         doc = media_store.upload(content, filename="by_id.txt")
 
-        downloaded = media_store.download(str(doc._store_entity_id))
+        downloaded = media_store.download(str(doc.entity_id))
         assert downloaded == content
 
     def test_search_full_text(self, media_store):
@@ -280,7 +280,7 @@ and *volatility surface* construction.
 
         # find
         from media.models import Document
-        found = Document.find(doc._store_entity_id)
+        found = Document.find(doc.entity_id)
         assert found is not None
         assert found.title == "Storable Test"
 
@@ -292,7 +292,7 @@ and *volatility surface* construction.
         """Delete a document — soft delete, S3 object retained."""
         content = b"To be deleted"
         doc = media_store.upload(content, filename="delete_me.txt", title="Delete Me")
-        entity_id = doc._store_entity_id
+        entity_id = doc.entity_id
 
         media_store.delete(doc)
 

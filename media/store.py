@@ -212,7 +212,7 @@ class MediaStore:
         doc.save()
 
         # Build S3 key and upload
-        s3_key = f"media/{doc._store_entity_id}/{filename}"
+        s3_key = f"media/{doc.entity_id}/{filename}"
         self._s3.upload(s3_key, data, content_type)
         doc.s3_key = s3_key
         doc.save()  # update with S3 key
@@ -247,7 +247,7 @@ class MediaStore:
         assert isinstance(doc, Document)
 
         if not doc.s3_key:
-            raise ValueError(f"Document {doc._store_entity_id} has no S3 key")
+            raise ValueError(f"Document {doc.entity_id} has no S3 key")
 
         return self._s3.download(doc.s3_key)
 
@@ -423,13 +423,13 @@ class MediaStore:
         try:
             from store.connection import get_connection
             conn = get_connection()
-            delete_search_index(conn.conn, str(doc._store_entity_id))
+            delete_search_index(conn.conn, str(doc.entity_id))
         except Exception as e:
             logger.warning("Failed to remove search index: %s", e)
 
         # Soft-delete the Storable
         doc.delete()
-        logger.info("Deleted document %s (%s)", doc._store_entity_id, doc.filename)
+        logger.info("Deleted document %s (%s)", doc.entity_id, doc.filename)
 
     # ── Internal ──────────────────────────────────────────────────────────
 
@@ -440,8 +440,8 @@ class MediaStore:
             conn = get_connection()
             upsert_search_index(
                 conn.conn,
-                entity_id=str(doc._store_entity_id),
-                owner=doc._store_owner or conn.user,
+                entity_id=str(doc.entity_id),
+                owner=doc.owner or conn.user,
                 readers=getattr(doc, '_store_readers', []) or [],
                 writers=getattr(doc, '_store_writers', []) or [],
                 title=doc.title,
@@ -452,7 +452,7 @@ class MediaStore:
             )
         except Exception as e:
             logger.warning("Failed to update search index for %s: %s",
-                           doc._store_entity_id, e)
+                           doc.entity_id, e)
 
     def _embed_document(self, doc: Document) -> None:
         """Chunk text and generate embeddings for a document."""
@@ -474,7 +474,7 @@ class MediaStore:
             # Store chunks + embeddings in document_chunks table
             from store.connection import get_connection
             conn = get_connection()
-            entity_id = str(doc._store_entity_id)
+            entity_id = str(doc.entity_id)
             upsert_document_chunks(conn.conn, entity_id, chunks, embeddings)
 
             # Store whole-document embedding (title + first chunk)
@@ -486,7 +486,7 @@ class MediaStore:
                          doc.filename, len(chunks), self._embedder.dimension)
         except Exception as e:
             logger.warning("Failed to embed document %s: %s",
-                           doc._store_entity_id, e)
+                           doc.entity_id, e)
 
     def close(self) -> None:
         """Clean up resources. Stops auto-started MediaServer if any."""
