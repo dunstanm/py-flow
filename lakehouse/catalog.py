@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from pyiceberg.catalog import load_catalog
+
+if TYPE_CHECKING:
+    from pyiceberg.catalog import Catalog
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +35,7 @@ def create_catalog(
     s3_access_key: str | None = None,
     s3_secret_key: str | None = None,
     s3_region: str | None = None,
-) -> object:
+) -> Catalog:
     """
     Create a PyIceberg REST catalog connected to Lakekeeper + S3-compatible storage.
 

@@ -25,6 +25,8 @@ import pyarrow as pa
 if TYPE_CHECKING:
     import pandas as pd
 
+    from datacube.engine import Datacube as _Datacube
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_S3_ENDPOINT = "http://localhost:9002"
@@ -144,7 +146,7 @@ class Lakehouse:
             self._flight_client = None
             self._protected_tables = set()
 
-    def _ensure_flight(self) -> Any:
+    def _ensure_flight(self) -> pa.flight.FlightClient:
         """Return the authenticated Flight client."""
         if self._flight_client is None:
             raise RuntimeError(
@@ -643,7 +645,7 @@ class Lakehouse:
 
     # ── Datacube ────────────────────────────────────────────────────────
 
-    def datacube(self, table_name: str, **kwargs: Any) -> Any:
+    def datacube(self, table_name: str, **kwargs: Any) -> _Datacube:
         """Create a Datacube over a Lakehouse Iceberg table.
 
         Queries go directly from S3 → DuckDB → result (no Python).
@@ -679,7 +681,7 @@ class Lakehouse:
         """Alias for query_arrow() — backward compatibility with LakehouseQuery."""
         return self.query_arrow(query_str, params)
 
-    def sql_df(self, query_str: str, params: list | None = None) -> object:
+    def sql_df(self, query_str: str, params: list | None = None) -> pd.DataFrame:
         """Alias for query_df() — backward compatibility with LakehouseQuery."""
         return self.query_df(query_str, params)
 

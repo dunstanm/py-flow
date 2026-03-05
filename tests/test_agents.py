@@ -503,6 +503,7 @@ class TestImportHygiene:
             "RAGResult", "ExtractionResult", "Tool",
             "Agent", "AgentResult", "AgentStep",
             "AgentTeam",
+            "TeamResult",
             "EvalRunner", "EvalCase", "EvalResult",
             "tool",
         }

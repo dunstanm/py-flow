@@ -30,9 +30,15 @@ import os
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from ai._types import LLMResponse, Message, ToolCall
+
+if TYPE_CHECKING:
+    from google import genai
+    from google.genai import types
+
+_T = TypeVar("_T")
 
 logger = logging.getLogger(__name__)
 
@@ -175,9 +181,9 @@ class GeminiLLM(LLMClient):
             )
         self._model = model
         self._max_retries = max_retries
-        self._client: Any = None
+        self._client: genai.Client | None = None
 
-    def _get_client(self) -> Any:
+    def _get_client(self) -> genai.Client:
         """Lazy-init the genai client."""
         if self._client is None:
             from google import genai
@@ -294,7 +300,7 @@ class GeminiLLM(LLMClient):
         self._last_system_instruction = system_instruction
         return contents
 
-    def _build_config(self, tools: list[dict] | None, temperature: float, max_tokens: int) -> Any:
+    def _build_config(self, tools: list[dict] | None, temperature: float, max_tokens: int) -> types.GenerateContentConfig:
         """Build Gemini generation config."""
         from google.genai import types
 
@@ -370,7 +376,7 @@ class GeminiLLM(LLMClient):
             _raw_content=raw_content,
         )
 
-    def _call_with_retry(self, fn: Callable[..., Any], retries: int | None = None) -> Any:
+    def _call_with_retry(self, fn: Callable[..., _T], retries: int | None = None) -> _T:
         """Call fn with exponential backoff on transient errors."""
         max_retries = retries if retries is not None else self._max_retries
         last_error = None

@@ -20,7 +20,12 @@ import os
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from google import genai
+
+_T = TypeVar("_T")
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +100,9 @@ class GeminiEmbeddings(EmbeddingProvider):
         self._model = model
         self._dimension = dimension
         self._max_retries = max_retries
-        self._client: Any = None
+        self._client: genai.Client | None = None
 
-    def _get_client(self) -> Any:
+    def _get_client(self) -> genai.Client:
         """Lazy-init the genai client."""
         if self._client is None:
             from google import genai
@@ -131,7 +136,9 @@ class GeminiEmbeddings(EmbeddingProvider):
             )
         )
 
-        vectors = [list(e.values) for e in result.embeddings]
+        if result.embeddings is None:
+            return []
+        vectors = [list(e.values or []) for e in result.embeddings]
         logger.debug("Embedded %d texts → %d-dim vectors", len(texts), self._dimension)
         return vectors
 
@@ -155,11 +162,13 @@ class GeminiEmbeddings(EmbeddingProvider):
             )
         )
 
-        vector = list(result.embeddings[0].values)
+        if result.embeddings is None:
+            return []
+        vector = list(result.embeddings[0].values or [])
         logger.debug("Embedded query → %d-dim vector", self._dimension)
         return vector
 
-    def _call_with_retry(self, fn: Callable[..., Any], retries: int | None = None) -> Any:
+    def _call_with_retry(self, fn: Callable[..., _T], retries: int | None = None) -> _T:
         """Call fn with exponential backoff retry on transient errors."""
         max_retries = retries if retries is not None else self._max_retries
         last_error = None
