@@ -62,22 +62,20 @@ class TestAutoPersistEffect:
         """auto_persist_effect returns one Effect per @computed."""
         s = Sensor(name="temp", value=50.0, threshold=100.0)
         s.save()
-        effects = auto_persist_effect(s, store_conn=conn)
+        effects = auto_persist_effect(s)
         assert len(effects) >= 1
 
     def test_auto_persist_persists_value(self, conn):
-        """The effect's update path must use save(), not conn.update().
+        """The effect's update path must use save().
 
         We call the effect's internal function and verify the value
-        was actually persisted to the database. If auto_persist_effect
-        still calls conn.update(), the except block swallows the
-        AttributeError and the value won't be persisted.
+        was actually persisted to the database.
         """
         s = Sensor(name="persist_test", value=50.0, threshold=100.0)
         s.save()
         eid = s.entity_id
 
-        effects = auto_persist_effect(s, store_conn=conn)
+        effects = auto_persist_effect(s)
         assert len(effects) >= 1
 
         # Mutate the signal so @computed changes
@@ -88,7 +86,7 @@ class TestAutoPersistEffect:
             eff._fn()
 
         # Verify the change was actually persisted to the database
-        refreshed = Sensor.get(eid)  # type: ignore[arg-type]
+        refreshed = Sensor.get(eid)
         assert refreshed.value == 200.0, (
             "auto_persist_effect failed to persist — "
             "likely still calling conn.update() instead of obj.save()"

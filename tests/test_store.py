@@ -21,7 +21,6 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from store._active_record import VersionConflict
 from store.admin import StoreServer
 from store.base import Storable, _json_decoder_hook, _JSONEncoder
 from store.connection import UserConnection
@@ -29,6 +28,8 @@ from store.permissions import list_shared_with, share_read, share_write, unshare
 from store.query_result import QueryResult
 from store.state_machine import GuardFailure, InvalidTransition, StateMachine, Transition, TransitionNotPermitted
 from store.subscriptions import ChangeEvent, EventBus, SubscriptionListener
+
+from store import VersionConflict
 
 # ── Test models ──────────────────────────────────────────────────────────────
 

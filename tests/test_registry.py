@@ -463,12 +463,35 @@ class TestGlobalRegistry:
     def test_global_registry_loaded_and_wired(self):
         from store.base import Storable
         from store.columns import REGISTRY
-        from store.models import Order, Signal, Trade
+
+        # Define example models inline — these auto-register via Storable.__init_subclass__
+        @dataclass
+        class _AuditTrade(Storable):
+            symbol: str = ""
+            quantity: int = 0
+            price: float = 0.0
+            side: str = ""
+
+        @dataclass
+        class _AuditOrder(Storable):
+            symbol: str = ""
+            quantity: int = 0
+            price: float = 0.0
+            side: str = ""
+            order_type: str = "LIMIT"
+            status: str = "PENDING"
+
+        @dataclass
+        class _AuditSignal(Storable):
+            symbol: str = ""
+            direction: str = ""
+            strength: float = 0.0
+
         cols = REGISTRY.all_columns()
         assert len(cols) >= 40
         assert Storable._registry is not None
         entities = Storable._registry.entities()
-        assert Trade in entities and Order in entities and Signal in entities
+        assert _AuditTrade in entities and _AuditOrder in entities and _AuditSignal in entities
 
     def test_registry_has_expected_columns(self):
         from store.columns import REGISTRY

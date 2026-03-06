@@ -15,28 +15,23 @@ from typing import Any
 from reaktiv import Effect
 from reaktiv.signal import ComputeSignal as _ComputeSignal
 
-from store import UserConnection
-
 logger = logging.getLogger(__name__)
 
 
-def auto_persist_effect(obj: Any, store_conn: UserConnection | None = None) -> list:
+def auto_persist_effect(obj: Any) -> list:
     """
     Create effects that write `obj` back to the store whenever
     any @computed value changes.
 
+    Uses the active UserConnection (thread-local) for persistence
+    via obj.save().
+
     Args:
         obj: A Storable instance with @computed properties
-        store_conn: Optional UserConnection instance. If None, uses the
-                      active UserConnection from ``store.connect()``.
 
     Returns:
         List of Effect instances created (one per @computed on this object).
     """
-    if store_conn is None:
-        from store import active_connection
-        store_conn = active_connection()
-
     reactive = object.__getattribute__(obj, '_reactive')
     effects = []
 
