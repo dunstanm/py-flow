@@ -189,6 +189,15 @@ class EmbeddedPGManager:
         )
         if result.returncode != 0:
             raise RuntimeError(f"initdb failed: {result.stderr.decode()[:500]}")
+
+        # Minimize shared memory usage so many concurrent PG instances
+        # don't exhaust macOS kern.sysv.shm* limits during parallel tests.
+        conf = self._pgdata / "postgresql.conf"
+        with open(conf, "a") as f:
+            f.write("\n# Added by py-flow: minimize SysV IPC for parallel test suites\n")
+            f.write("shared_buffers = 8MB\n")
+            f.write("dynamic_shared_memory_type = posix\n")
+
         logger.info("Initialized pgdata at %s", self._pgdata)
 
     def _ensure_binaries(self) -> None:
@@ -422,7 +431,7 @@ class LakekeeperManager:
         env["LAKEKEEPER__PG_ENCRYPTION_KEY"] = self._encryption_key
         env["LAKEKEEPER__LISTEN_PORT"] = str(self._port)
         env["LAKEKEEPER__PG_SSL_MODE"] = "disable"
-        env["LAKEKEEPER__METRICS_PORT"] = "9100"
+        env["LAKEKEEPER__METRICS_PORT"] = str(self._port + 1000)
 
         # Run migrate first
         logger.info("Running Lakekeeper migrate...")

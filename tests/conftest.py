@@ -25,6 +25,11 @@ from pathlib import Path
 
 import pytest
 
+# ── Port isolation ───────────────────────────────────────────────────────────
+# Set PORT_OFFSET env var to run multiple test suites in parallel.
+# run_demo_tests.sh sets PORT_OFFSET=100 so demo tests don't collide with main.
+_PORT_OFFSET = int(os.environ.get("PORT_OFFSET", "0"))
+
 # ── Load .env ────────────────────────────────────────────────────────────────
 _env_file = Path(__file__).resolve().parent.parent / ".env"
 if _env_file.exists():
@@ -76,7 +81,7 @@ def _any_test_needs_streaming() -> bool:
 _streaming = None
 if _any_test_needs_streaming():
     from streaming.admin import StreamingServer
-    _streaming = StreamingServer(port=10000, max_heap="512m")
+    _streaming = StreamingServer(port=10000 + _PORT_OFFSET, max_heap="512m")
     _streaming.start()
 
 
@@ -121,8 +126,8 @@ def media_server():
 
     srv = MediaServer(
         data_dir=tempfile.mkdtemp(prefix="test_media_"),
-        api_port=9102,
-        console_port=9103,
+        api_port=9102 + _PORT_OFFSET,
+        console_port=9103 + _PORT_OFFSET,
         bucket="test-media",
     )
     asyncio.run(srv.start())
@@ -142,9 +147,9 @@ def tsdb_server():
 
     srv = TsdbServer(
         data_dir=tempfile.mkdtemp(prefix="test_tsdb_"),
-        http_port=9200,
-        ilp_port=9209,
-        pg_port=8922,
+        http_port=9200 + _PORT_OFFSET,
+        ilp_port=9209 + _PORT_OFFSET,
+        pg_port=8922 + _PORT_OFFSET,
     )
     asyncio.run(srv.start())
     srv.register_alias("test")
@@ -163,7 +168,7 @@ def market_data_server(tsdb_server):
     import httpx
     from marketdata.admin import MarketDataServer
 
-    srv = MarketDataServer(port=8765, host="127.0.0.1")
+    srv = MarketDataServer(port=8765 + _PORT_OFFSET, host="127.0.0.1")
     asyncio.run(srv.start())
     srv.register_alias("test")
 
@@ -207,10 +212,10 @@ def lakehouse_server():
     tmp_dir = tempfile.mkdtemp(prefix="tst_lh_", dir="/tmp")
     srv = LakehouseServer(
         data_dir=tmp_dir,
-        pg_port=5490,
-        lakekeeper_port=8183,
-        s3_api_port=9004,
-        s3_console_port=9005,
+        pg_port=5490 + _PORT_OFFSET,
+        lakekeeper_port=8183 + _PORT_OFFSET,
+        s3_api_port=9004 + _PORT_OFFSET,
+        s3_console_port=9005 + _PORT_OFFSET,
         rls_policies=[
             RLSPolicy(
                 table_name="sales_data",
