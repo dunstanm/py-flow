@@ -231,9 +231,9 @@ class LakehouseServer:
 
 __all__ = [
     "LakehouseServer",
+    "RLSFlightServer",
+    "RLSPolicy",
     "SyncEngine",
     "SyncState",
     "create_catalog",
-    "RLSFlightServer",
-    "RLSPolicy",
 ]

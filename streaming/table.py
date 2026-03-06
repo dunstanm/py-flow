@@ -15,10 +15,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    import pandas as pd
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Python type → Deephaven type mapping (lazy, avoids import at module level)

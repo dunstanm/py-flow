@@ -203,7 +203,7 @@ async def run_demo(args):
     sync = SyncEngine(lakehouse=lh, state_path="data/demo_lakehouse_sync.json")
     ticks_synced = sync.sync_ticks(backend)
     print(f"  {ticks_synced} ticks synced")
-    print(f"  (Store events sync via EventBridge + LakehouseSink)")
+    print("  (Store events sync via EventBridge + LakehouseSink)")
     print()
 
     # ── Step 4: Query via DuckDB ───────────────────────────────────────

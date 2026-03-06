@@ -33,7 +33,6 @@ import sys
 import threading
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -62,8 +61,9 @@ print(f"  Market data server started on port {_md_server.port}")
 from dataclasses import dataclass, field
 
 from reactive.computed import computed, effect
-from store import Storable
 from streaming import agg, flush, get_tables, ticking
+
+from store import Storable
 
 # Publish queue: @effect on YieldCurvePoint.rate enqueues CurveTicks here;
 # the WS consumer drains them and sends back to the market data hub.

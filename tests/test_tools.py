@@ -177,7 +177,7 @@ class TestLLMToolIntegration:
 
     def test_llm_uses_tool(self, registry):
         """LLM generates a tool call, registry executes, LLM responds."""
-        from ai._llm import GeminiLLM
+        from ai._gemini import GeminiLLM
         from ai._types import Message
 
         llm = GeminiLLM(api_key=GEMINI_API_KEY)

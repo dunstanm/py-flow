@@ -26,13 +26,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 if TYPE_CHECKING:
     from store._client import QueryResult, StoreClient
 
+from reaktiv import Computed, Effect, Signal, batch
+from reaktiv.signal import ComputeSignal as _ComputeSignal
 from workflow.engine import WorkflowEngine
 
 from store.registry import ColumnRegistry
 from store.state_machine import StateMachine
-
-from reaktiv import Computed, Effect, Signal, batch
-from reaktiv.signal import ComputeSignal as _ComputeSignal
 
 logger = logging.getLogger(__name__)
 

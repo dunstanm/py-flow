@@ -16,15 +16,13 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, TypeVar
-
-from store._client import QueryResult, StoreClient
-from store.base import Storable
+from typing import Any, TypeVar
 
 import psycopg2.extensions
 
-if TYPE_CHECKING:
-    from store.subscriptions import EventBus
+from store._client import QueryResult, StoreClient
+from store.base import Storable
+from store.subscriptions import EventBus
 
 _S = TypeVar("_S", bound=Storable)
 

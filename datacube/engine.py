@@ -18,21 +18,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any, Protocol, runtime_checkable
+
 import duckdb
 import pandas as pd
 import pyarrow as pa
-from typing import Any, Protocol, runtime_checkable
-
-from store import Storable
-
-
-@runtime_checkable
-class LakehouseProtocol(Protocol):
-    """Structural type for the Lakehouse duck-typed interface."""
-
-    def _ensure_conn(self) -> duckdb.DuckDBPyConnection: ...
-    def _fqn(self, table_name: str) -> str: ...
-    def table_info(self, table_name: str) -> list[dict]: ...
 
 from datacube import compiler as _compiler
 from datacube.config import (
@@ -44,6 +34,16 @@ from datacube.config import (
     JoinSpec,
     Sort,
 )
+from store import Storable
+
+
+@runtime_checkable
+class LakehouseProtocol(Protocol):
+    """Structural type for the Lakehouse duck-typed interface."""
+
+    def _ensure_conn(self) -> duckdb.DuckDBPyConnection: ...
+    def _fqn(self, table_name: str) -> str: ...
+    def table_info(self, table_name: str) -> list[dict]: ...
 
 logger = logging.getLogger(__name__)
 

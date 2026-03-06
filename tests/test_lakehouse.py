@@ -9,7 +9,6 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-import pyarrow as pa
 from lakehouse.models import SyncState, TableInfo
 from lakehouse.sync import (
     _bars_to_arrow,

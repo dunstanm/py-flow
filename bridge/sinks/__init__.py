@@ -35,7 +35,7 @@ class EventSink(ABC):
         """Flush buffered events, return count written. Default: no-op."""
         return 0
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027
         """Release resources."""
 
 

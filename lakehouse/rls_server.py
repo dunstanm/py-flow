@@ -26,10 +26,9 @@ Usage::
 from __future__ import annotations
 
 import logging
-import struct
 import threading
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import duckdb
 import pyarrow as pa
@@ -389,7 +388,7 @@ class RLSFlightServer(flight.FlightServerBase):
         for catalog, schema, table_name in rows:
             fqn = f"{catalog}.{schema}.{table_name}" if catalog else f"{schema}.{table_name}"
             descriptor = flight.FlightDescriptor.for_command(
-                f"SELECT * FROM {fqn}".encode("utf-8")
+                f"SELECT * FROM {fqn}".encode()
             )
             # Minimal FlightInfo — schema discovery on demand
             info = flight.FlightInfo(

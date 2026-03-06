@@ -14,7 +14,7 @@ on crash recovery):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from store import UserConnection
 from workflow.engine import WorkflowEngine

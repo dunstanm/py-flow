@@ -20,11 +20,9 @@ import logging
 from typing import Any
 
 from timeseries._registry import register_alias as _register_alias
+from timeseries.backends.questdb.manager import QuestDBManager
 from timeseries.consumer import TSDBConsumer
 from timeseries.factory import create_backend
-
-if False:  # TYPE_CHECKING
-    from timeseries.backends.questdb.manager import QuestDBManager  # type: ignore[unreachable]
 
 logger = logging.getLogger(__name__)
 

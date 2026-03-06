@@ -9,7 +9,6 @@ from __future__ import annotations
 import psycopg2.extensions
 
 
-
 def share_read(conn: psycopg2.extensions.connection, entity_id: str, to_user: str) -> bool:
     """Grant read access on all versions of an entity to another user.
     Only the owner (or a writer) can do this — RLS enforces."""

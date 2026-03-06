@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import psycopg2.extensions
 
-
 GROUP_ROLE = "app_user"
 ADMIN_ROLE = "app_admin"
 

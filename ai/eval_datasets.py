@@ -17,7 +17,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from lakehouse import Lakehouse
 from media.store import MediaStore

@@ -6,7 +6,7 @@ No mocks.
 
 Covers:
 - Type mapping: infer_schema, extract_row
-- StoreBridge: register, table, event dispatch, Expr filters
+- StoreBridge: register, table, event dispatch, predicate filters
 - Full round-trip: StoreClient.write() → PG NOTIFY → bridge → DH table
 """
 
@@ -24,10 +24,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # DH JVM is started by conftest.py before test collection — safe to import.
 from bridge.store_bridge import StoreBridge
 from bridge.type_mapping import extract_row, infer_schema
-from reactive.expr import Const, Field
-from store.base import Storable
 from store._client import StoreClient
 from store.admin import StoreServer
+from store.base import Storable
 from store.subscriptions import ChangeEvent
 from streaming import flush as streaming_flush
 
@@ -269,7 +268,7 @@ class TestBridgeDH:
             user="bridge_user", password="bridge_pw",
             subscriber_id=None,
         )
-        bridge.register(Widget, filter=Field("color") == Const("red"))
+        bridge.register(Widget, filter=lambda d: d.get("color") == "red")
         tbl = bridge.table(Widget)
 
         client = StoreClient(
@@ -303,7 +302,7 @@ class TestBridgeDH:
             user="bridge_user", password="bridge_pw",
             subscriber_id=None,
         )
-        bridge.register(Widget, filter=Field("color") == Const("red"))
+        bridge.register(Widget, filter=lambda d: d.get("color") == "red")
         tbl = bridge.table(Widget)
 
         client = StoreClient(

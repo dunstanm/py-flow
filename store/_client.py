@@ -8,14 +8,14 @@ RLS enforces zero-trust access control automatically.
 
 import json
 import uuid
-from collections.abc import Iterator
 from datetime import datetime, timezone
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 import psycopg2
 import psycopg2.extras
 
 from store.base import Embedded, Storable, _json_decoder_hook, _JSONEncoder
+from store.query_result import QueryResult
 from store.subscriptions import ChangeEvent
 
 
@@ -33,23 +33,6 @@ class VersionConflict(Exception):
 
 
 _S = TypeVar("_S", bound=Storable)
-
-
-class QueryResult(Generic[_S]):
-    """Result of a paginated query. Contains items and an optional next_cursor."""
-
-    def __init__(self, items: list[_S], next_cursor: Any = None) -> None:
-        self.items = items
-        self.next_cursor = next_cursor
-
-    def __iter__(self) -> Iterator[_S]:
-        return iter(self.items)
-
-    def __len__(self) -> int:
-        return len(self.items)
-
-    def __getitem__(self, index: int) -> _S:
-        return self.items[index]
 
 
 class StoreClient:

@@ -54,6 +54,7 @@ def lakehouse_stack():
     """Start the full lakehouse stack with RLS configured."""
     import shutil
     import tempfile
+
     from lakehouse.admin import LakehouseServer, RLSPolicy
 
     data_dir = tempfile.mkdtemp(prefix="lh_rls_", dir="/tmp")

@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-from objectstore import S3Client
+from typing import Any
 
 from ai.client import AI
+from objectstore import S3Client
 
 from media.chunking import chunk_text
 from media.extraction import detect_content_type, extract_text

@@ -298,6 +298,7 @@ class TestDAGRunner:
     def test_run_linear(self):
         from scheduler.dag_runner import DAGRunner
         from scheduler.models import Schedule, Task
+
         from tests._sched_fixtures import call_log, reset_log
 
         reset_log()
@@ -702,6 +703,7 @@ class TestSchedulerFullStack:
     def test_single_task_schedule_fire(self, scheduler):
         """Register a single-task schedule, fire it, verify Run is SUCCESS."""
         from scheduler.models import Schedule, Task
+
         from tests._sched_fixtures import call_log, reset_log
 
         reset_log()
@@ -720,6 +722,7 @@ class TestSchedulerFullStack:
     def test_pipeline_fire_linear(self, scheduler):
         """Register a 3-task linear pipeline, fire, verify all SUCCESS."""
         from scheduler.models import Schedule, Task
+
         from tests._sched_fixtures import call_log, reset_log
 
         reset_log()

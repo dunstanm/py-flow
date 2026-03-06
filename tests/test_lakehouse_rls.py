@@ -15,12 +15,9 @@ import threading
 import time
 
 import duckdb
-import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
-
 from lakehouse.rls_server import RLSFlightServer, RLSPolicy, RLSRewriter
-
 
 # ── Test Data ────────────────────────────────────────────────────────────────
 
@@ -281,7 +278,7 @@ class TestRLSFlightRoundTrip:
 
     def test_alice_sees_own_rows(self, flight_server) -> None:
         """Alice should only see rows 1, 2 (her ACL entries)."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("alice-token"))
 
@@ -296,7 +293,7 @@ class TestRLSFlightRoundTrip:
 
     def test_bob_sees_own_rows(self, flight_server) -> None:
         """Bob should only see rows 3, 4, 5 (his ACL entries)."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("bob-token"))
 
@@ -311,7 +308,7 @@ class TestRLSFlightRoundTrip:
 
     def test_alice_with_where_clause(self, flight_server) -> None:
         """Alice's WHERE clause should be preserved alongside RLS filter."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("alice-token"))
 
@@ -327,7 +324,7 @@ class TestRLSFlightRoundTrip:
 
     def test_open_table_no_rls(self, flight_server) -> None:
         """Queries to unprotected tables should return all rows."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("alice-token"))
 
@@ -340,7 +337,7 @@ class TestRLSFlightRoundTrip:
 
     def test_unauthenticated_rejected(self, flight_server) -> None:
         """Requests with invalid tokens should be rejected."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
 
         with pytest.raises(flight.FlightUnauthenticatedError):
@@ -350,7 +347,7 @@ class TestRLSFlightRoundTrip:
 
     def test_get_protected_tables_action(self, flight_server) -> None:
         """get_protected_tables action should return the policy table set."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("alice-token"))
 
@@ -364,7 +361,7 @@ class TestRLSFlightRoundTrip:
 
     def test_list_flights_returns_tables(self, flight_server) -> None:
         """list_flights should return available tables."""
-        server, port = flight_server
+        _server, port = flight_server
         client = flight.FlightClient(f"grpc://localhost:{port}")
         client.authenticate(_TestAuthHandler("alice-token"))
 

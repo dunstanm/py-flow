@@ -17,14 +17,12 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import duckdb
 import pandas as pd
 import pyarrow as pa
-
-if TYPE_CHECKING:
-    from datacube.engine import Datacube as _Datacube
+from datacube.engine import Datacube as _Datacube
 
 logger = logging.getLogger(__name__)
 

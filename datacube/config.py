@@ -22,7 +22,7 @@ import builtins
 import dataclasses
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from store import ColumnDef
 

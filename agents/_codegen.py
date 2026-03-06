@@ -116,9 +116,7 @@ def _build_sandbox_namespace(ctx: _PlatformContext | None = None) -> dict:
     import json as json_mod
     import math
 
-    from store import Storable
-    from store import REGISTRY
-    from store import ColumnDef
+    from store import REGISTRY, ColumnDef, Storable
 
     ns = {
         # Column registry

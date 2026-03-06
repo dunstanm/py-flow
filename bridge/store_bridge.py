@@ -10,7 +10,7 @@ Usage:
     bridge = StoreBridge(host=host, port=port, dbname=dbname,
                          user="bridge_user", password="bridge_pw")
     bridge.register(Order)
-    bridge.register(Trade, filter=Field("symbol") == Const("AAPL"))
+    bridge.register(Trade, filter=lambda d: d.get("symbol") == "AAPL")
 
     # Optional: add extra sinks
     bridge.add_sink(LakehouseSink(catalog))
@@ -24,17 +24,15 @@ Usage:
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
-from store import ChangeEvent, Storable, connect
 from store.admin import EventBus, SubscriptionListener
 from streaming import TickingTable
 
 from bridge.sinks import EventSink
 from bridge.type_mapping import extract_row, infer_schema
-
-if TYPE_CHECKING:
-    from reactive.expr import Expr
+from store import ChangeEvent, Storable, connect
 
 
 class _Registration:
@@ -49,7 +47,7 @@ class _Registration:
         "type_name",
     )
 
-    def __init__(self, storable_cls: type[Storable], ticking: TickingTable, column_names: list[str], filter_expr: Expr | None) -> None:
+    def __init__(self, storable_cls: type[Storable], ticking: TickingTable, column_names: list[str], filter_expr: Callable[[dict], bool] | None) -> None:
         self.storable_cls = storable_cls
         self.type_name = storable_cls.type_name()
         self.ticking = ticking
@@ -115,13 +113,13 @@ class StoreBridge:
 
     # ── Registration ─────────────────────────────────────────────────
 
-    def register(self, storable_cls: type[Storable], *, filter: Expr | None = None, columns: dict | None = None) -> None:
+    def register(self, storable_cls: type[Storable], *, filter: Callable[[dict], bool] | None = None, columns: dict | None = None) -> None:
         """Register a Storable type to be bridged to a ticking table.
 
         Args:
             storable_cls: @dataclass Storable subclass (e.g. Order, Trade).
-            filter: Optional Expr predicate. Only events where
-                    filter.eval(obj_data_dict) is truthy are shipped.
+            filter: Optional predicate ``(dict) -> bool``. Only events where
+                    ``filter(obj_data_dict)`` is truthy are shipped.
             columns: Optional dict override for column schema
                      (Python types). If None, auto-generated from
                      dataclass fields.
@@ -226,11 +224,11 @@ class StoreBridge:
         except Exception:
             return  # Object not readable (deleted, permission, etc.)
 
-        # Apply Expr filter if configured
+        # Apply filter predicate if configured
         if reg.filter_expr is not None:
             try:
                 obj_data: dict[str, Any] = dataclasses.asdict(obj) if dataclasses.is_dataclass(obj) else {}  # type: ignore[arg-type]
-                if not reg.filter_expr.eval(obj_data):
+                if not reg.filter_expr(obj_data):
                     return
             except Exception:
                 return  # Filter evaluation error — skip

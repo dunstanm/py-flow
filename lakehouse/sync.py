@@ -13,13 +13,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pyarrow as pa
+from timeseries import TSDBBackend
 
 from lakehouse.models import SyncState
 from lakehouse.query import Lakehouse
-from timeseries import TSDBBackend
 
 logger = logging.getLogger(__name__)
 

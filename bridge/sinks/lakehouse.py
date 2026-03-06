@@ -24,8 +24,9 @@ from __future__ import annotations
 
 import logging
 
-from bridge.sinks import EventSink
 from lakehouse import Lakehouse
+
+from bridge.sinks import EventSink
 from store import ChangeEvent
 
 logger = logging.getLogger(__name__)

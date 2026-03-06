@@ -14,16 +14,17 @@ This keeps driver-specific imports (psycopg2) in one place.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, Sequence
+from collections.abc import Sequence
+from typing import Any, Protocol
 
 
 class Cursor(Protocol):
     """PEP 249 DB-API 2.0 cursor interface."""
 
     @property
-    def rowcount(self) -> int: ...                                      # noqa: E704
+    def rowcount(self) -> int: ...
     @property
-    def description(self) -> Any: ...                                    # noqa: E704
+    def description(self) -> Any: ...
 
     def execute(self, sql: str, params: Sequence[Any] | dict[str, Any] | None = None) -> Any: ...
     def fetchone(self) -> tuple[Any, ...] | None: ...

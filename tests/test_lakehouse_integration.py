@@ -28,9 +28,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from marketdata.models import CurveTick, FXTick, Tick
-from store import Storable
-from store import connect
 from store.admin import StoreServer
+
+from store import Storable, connect
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -579,8 +579,9 @@ class TestEventBridgeLakehouseSink:
         """
         import time
 
-        from bridge import LakehouseSink, StoreBridge
         from lakehouse import Lakehouse
+
+        from bridge import LakehouseSink, StoreBridge
         from store import connect
 
         info = server.conn_info()
@@ -645,8 +646,9 @@ class TestEventBridgeLakehouseSink:
         """Multiple flush() calls are incremental — only new events are written."""
         import time
 
-        from bridge import LakehouseSink, StoreBridge
         from lakehouse import Lakehouse
+
+        from bridge import LakehouseSink, StoreBridge
         from store import connect
 
         info = server.conn_info()

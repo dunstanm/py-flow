@@ -17,9 +17,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from store.base import Storable
-from store.connection import _set_active, connect, active_connection
 from store.admin import StoreServer
+from store.base import Storable
+from store.connection import _set_active, active_connection, connect
 from store.state_machine import StateMachine, Transition
 
 # ── Test models ──────────────────────────────────────────────────────────────

@@ -7,13 +7,12 @@ builds a prompt with context, and generates an LLM answer with citations.
 Usage::
 
     from ai import GeminiLLM, GeminiEmbeddings, RAGPipeline
-    from media import MediaStore
+    from ai._types import DocumentStore
 
     llm = GeminiLLM(api_key="...")
-    embedder = GeminiEmbeddings(api_key="...")
-    ms = MediaStore(..., ai=ai_instance)
+    doc_store: DocumentStore = ...  # e.g. MediaStore
 
-    rag = RAGPipeline(llm=llm, media_store=ms)
+    rag = RAGPipeline(llm=llm, media_store=doc_store)
     result = rag.ask("What are credit default swaps?")
     print(result.answer)
     print(result.sources)
@@ -24,8 +23,7 @@ from __future__ import annotations
 import logging
 
 from ai._llm import LLMClient
-from ai._types import Message, RAGResult
-from media.store import MediaStore
+from ai._types import DocumentStore, Message, RAGResult
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +51,14 @@ class RAGPipeline:
 
     Args:
         llm: An LLMClient instance for generation.
-        media_store: A MediaStore instance with ai= for retrieval.
+        media_store: A DocumentStore (e.g. MediaStore) for retrieval.
         search_mode: Search strategy — "hybrid", "semantic", or "text" (default: "hybrid").
     """
 
     def __init__(
         self,
         llm: LLMClient,
-        media_store: MediaStore,
+        media_store: DocumentStore,
         search_mode: str = "hybrid",
     ) -> None:
         self._llm = llm

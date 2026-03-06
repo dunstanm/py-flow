@@ -4,13 +4,13 @@ AI — Single entry point for all AI capabilities.
 Usage::
 
     from ai import AI, Message
-    from media import MediaStore
+    from ai._types import DocumentStore
 
     ai = AI(api_key="...")
-    ms = MediaStore(s3_endpoint="...", ai=ai)
+    doc_store = DocumentStore(s3_endpoint="...", ai=ai) # Example: replace with your actual DocumentStore implementation
 
     # RAG
-    result = ai.ask("What are credit default swaps?", documents=ms)
+    result = ai.ask("What are credit default swaps?", documents=doc_store)
 
     # Direct generation
     response = ai.generate("Explain quantum computing")
@@ -38,19 +38,15 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable, Generator
-from typing import TYPE_CHECKING
 
+from ai._embeddings import EmbeddingProvider
 from ai._types import (
+    DocumentStore,
     ExtractionResult,
     LLMResponse,
     Message,
     RAGResult,
 )
-
-if TYPE_CHECKING:
-    from media.store import MediaStore
-
-    from ai._embeddings import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +81,7 @@ class AI:
         self._embedding_dim = embedding_dim
 
         if provider == "gemini":
-            from ai._embeddings import GeminiEmbeddings
-            from ai._llm import GeminiLLM
+            from ai._gemini import GeminiEmbeddings, GeminiLLM
 
             self._embedder = GeminiEmbeddings(
                 api_key=self._api_key,
@@ -147,7 +142,7 @@ class AI:
     def ask(
         self,
         question: str,
-        documents: MediaStore | None = None,
+        documents: DocumentStore | None = None,
         system_prompt: str | None = None,
         search_mode: str = "hybrid",
         limit: int = 5,
@@ -158,7 +153,7 @@ class AI:
 
         Args:
             question: The question to answer.
-            documents: A MediaStore instance to retrieve context from.
+            documents: A DocumentStore (e.g. MediaStore) to retrieve context from.
             system_prompt: Optional custom system prompt.
             search_mode: "hybrid", "semantic", or "text" (default: "hybrid").
             limit: Number of chunks to retrieve.
@@ -168,7 +163,7 @@ class AI:
             RAGResult with answer, sources, and usage stats.
         """
         if documents is None:
-            raise ValueError("documents= is required. Pass a MediaStore instance.")
+            raise ValueError("documents= is required. Pass a DocumentStore (e.g. MediaStore).")
 
         from ai._rag import RAGPipeline
         pipeline = RAGPipeline(
@@ -251,14 +246,14 @@ class AI:
             max_iterations=max_iterations,
         )
 
-    def search_tools(self, media_store: MediaStore) -> list[dict]:
+    def search_tools(self, media_store: DocumentStore) -> list[dict]:
         """
-        Get tool declarations for document search on a MediaStore.
+        Get tool declarations for document search on a DocumentStore.
 
         Pass the result to generate(tools=...) or run_tool_loop(tools=...).
 
         Args:
-            media_store: A MediaStore instance.
+            media_store: A DocumentStore (e.g. MediaStore) instance.
 
         Returns:
             List of tool declaration dicts.

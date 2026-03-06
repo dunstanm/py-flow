@@ -212,7 +212,7 @@ class TestUploadWithEmbedder:
 
     def test_cosine_search_finds_document(self, media_store_with_embed, admin_db):
         """Cosine similarity query on chunks finds the uploaded document."""
-        from ai._embeddings import GeminiEmbeddings
+        from ai._gemini import GeminiEmbeddings
 
         doc = media_store_with_embed.upload(
             b"Black-Scholes option pricing model for European call and put options.",

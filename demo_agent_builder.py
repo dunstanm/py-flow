@@ -37,16 +37,13 @@ import logging
 import math
 import os
 import tempfile
-from typing import TYPE_CHECKING
-
-from media import MediaStore as _MediaStoreType
-
 import textwrap
 import threading
 import time as _time
 from datetime import datetime, timezone
 
 import httpx
+from media import MediaStore as _MediaStoreType
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -61,6 +58,7 @@ from ai.eval import EvalCase, EvalRunner
 from ai.team import AgentTeam
 from reactive.agg import group_by, rank_by
 from reactive.computed import computed, effect
+
 from store import Storable
 
 

@@ -117,7 +117,7 @@ def media_store(s3_server, store_conn):
 
 @pytest.fixture(scope="module")
 def rag(media_store):
-    from ai._llm import GeminiLLM
+    from ai._gemini import GeminiLLM
     llm = GeminiLLM(api_key=GEMINI_API_KEY)
     return RAGPipeline(llm=llm, media_store=media_store, search_mode="hybrid")
 
@@ -173,7 +173,7 @@ class TestRAGPipeline:
 
     def test_rag_semantic_mode(self, media_store):
         """RAG with semantic-only search mode."""
-        from ai._llm import GeminiLLM
+        from ai._gemini import GeminiLLM
         llm = GeminiLLM(api_key=GEMINI_API_KEY)
         rag = RAGPipeline(llm=llm, media_store=media_store, search_mode="semantic")
         result = rag.ask("How do derivatives transfer risk?")

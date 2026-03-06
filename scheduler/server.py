@@ -23,15 +23,15 @@ import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from store.admin import StoreServer
+from workflow.dbos_engine import WorkflowEngine
 
 from scheduler.cron import is_due
 from scheduler.dag_runner import DAGRunner
 from scheduler.models import Run, Schedule
-
 from store import UserConnection
-from store.admin import StoreServer
-from workflow.dbos_engine import WorkflowEngine
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +92,10 @@ class SchedulerServer:
         Returns:
             self (for chaining).
         """
-        from store import connect
         from store.admin import StoreServer
         from workflow.factory import create_engine
+
+        from store import connect
 
         # 1. Embedded PG
         self._store = StoreServer(data_dir=self._data_dir)

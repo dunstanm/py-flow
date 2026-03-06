@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from ai._types import Message
 from ai.client import AI

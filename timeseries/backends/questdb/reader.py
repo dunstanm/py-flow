@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 import psycopg2.extras
+from db import Connection
+from db import connect as _db_connect
 
-from db import Connection, connect as _db_connect
 from timeseries.models import Bar
 
 logger = logging.getLogger(__name__)

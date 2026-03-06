@@ -29,9 +29,9 @@ import logging
 from collections.abc import Callable
 from typing import Any, get_type_hints
 
-from ai._types import Tool
 from lakehouse import Lakehouse
-from media.store import MediaStore
+
+from ai._types import DocumentStore, Tool
 
 logger = logging.getLogger(__name__)
 
@@ -215,13 +215,13 @@ class ToolRegistry:
     @classmethod
     def from_platform(
         cls,
-        media_store: MediaStore | None = None,
+        media_store: DocumentStore | None = None,
         lakehouse: Lakehouse | None = None,
     ) -> ToolRegistry:
         """Create a ToolRegistry with built-in platform tools.
 
         Args:
-            media_store: A MediaStore instance — registers search/list tools.
+            media_store: A DocumentStore (e.g. MediaStore) — registers search/list tools.
             lakehouse: A Lakehouse instance — registers query/list_tables tools.
 
         Returns:
@@ -240,12 +240,12 @@ class ToolRegistry:
 # ── Built-in platform tools ──────────────────────────────────────────────
 
 
-def create_search_tools(media_store: MediaStore) -> list[Tool]:
+def create_search_tools(media_store: DocumentStore) -> list[Tool]:
     """
-    Create search tools that operate on a MediaStore.
+    Create search tools that operate on a DocumentStore.
 
     Args:
-        media_store: A MediaStore instance (with or without ai=).
+        media_store: A DocumentStore (e.g. MediaStore).
 
     Returns:
         List of Tool instances for document search.

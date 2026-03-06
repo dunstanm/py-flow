@@ -19,8 +19,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from timeseries import TSDBBackend
-from timeseries.admin import TSDBConsumer
-from timeseries.admin import create_backend
+from timeseries.admin import TSDBConsumer, create_backend
 
 from marketdata.bus import TickBus
 from marketdata.consumers.ws_publisher import WebSocketPublisher

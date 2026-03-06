@@ -12,9 +12,9 @@ import time
 from dataclasses import dataclass
 
 import pytest
-from store.base import Storable
 from store._client import StoreClient
 from store.admin import StoreServer
+from store.base import Storable
 from workflow.engine import WorkflowEngine, WorkflowHandle, WorkflowStatus
 from workflow.factory import create_engine
 

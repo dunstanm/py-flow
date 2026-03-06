@@ -25,7 +25,6 @@ import json
 import logging
 import webbrowser
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import perspective
 import perspective.handlers.tornado

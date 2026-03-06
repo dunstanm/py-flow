@@ -45,8 +45,9 @@ def run_demo():
 
     from media.admin import MediaServer
     from media.models import bootstrap_search_schema
-    from store import connect
     from store.admin import StoreServer
+
+    from store import connect
 
     # PG for Storable metadata
     server = StoreServer(data_dir=tempfile.mkdtemp(prefix="demo_media_store_"))
