@@ -24,9 +24,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ai._types import Message
-
-if TYPE_CHECKING:
-    from ai.client import AI
+from ai.client import AI
 
 logger = logging.getLogger(__name__)
 

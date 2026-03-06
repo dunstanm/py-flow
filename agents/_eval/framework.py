@@ -35,11 +35,10 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ai.agent import AgentResult
-    from ai.client import AI
+from ai.agent import AgentResult
+from ai.client import AI
 
 logger = logging.getLogger(__name__)
 

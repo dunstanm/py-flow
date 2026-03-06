@@ -34,8 +34,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 
-if TYPE_CHECKING:
-    from datacube.engine import Datacube
+from datacube.engine import Datacube
 
 logger = logging.getLogger(__name__)
 

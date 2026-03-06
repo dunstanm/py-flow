@@ -24,12 +24,9 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ai.client import AI
 
 from ai._types import Message
+from ai.client import AI
 from store import Storable, UserConnection
 
 logger = logging.getLogger(__name__)

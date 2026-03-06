@@ -25,13 +25,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from ai._types import Message, Tool, ToolCall
+from ai.client import AI
 from ai.memory import AgentMemory
-
-if TYPE_CHECKING:
-    from ai.client import AI
 
 logger = logging.getLogger(__name__)
 

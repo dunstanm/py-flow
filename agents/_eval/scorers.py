@@ -10,10 +10,8 @@ These are used by EvalDimension objects in the framework.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from agents._eval.framework import AgentEvalCase
+from agents._eval.framework import AgentEvalCase
 
 
 def score_naming_conventions(case: AgentEvalCase, artifacts: dict) -> float:

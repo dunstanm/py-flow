@@ -18,10 +18,8 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 
 from lakehouse.models import SyncState
-
-if TYPE_CHECKING:
-    from lakehouse.query import Lakehouse
-    from timeseries import TSDBBackend
+from lakehouse.query import Lakehouse
+from timeseries import TSDBBackend
 
 logger = logging.getLogger(__name__)
 
