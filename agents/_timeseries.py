@@ -245,6 +245,9 @@ def create_timeseries_tools(ctx: _PlatformContext) -> list:
             if not log_returns:
                 return json.dumps({"error": "Could not compute returns"})
 
+            if len(log_returns) < 2:
+                return json.dumps({"error": "Not enough data points for vol computation (need >= 3 bars)"})
+
             mean_ret = sum(log_returns) / len(log_returns)
             variance = sum((r - mean_ret) ** 2 for r in log_returns) / (len(log_returns) - 1)
             daily_vol = math.sqrt(variance)

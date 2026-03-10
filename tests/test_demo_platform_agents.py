@@ -23,6 +23,9 @@ import pytest
 
 from agents import PlatformAgents
 
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
+
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -51,6 +54,8 @@ def infra(store_server, media_server, tsdb_server, market_data_server,
 @pytest.fixture(scope="module")
 def team(infra):
     """Build PlatformAgents team — same as demo."""
+    if not GEMINI_API_KEY:
+        pytest.skip("GEMINI_API_KEY not set")
     return PlatformAgents(
         alias="pa-demo",
         user="pa_user",

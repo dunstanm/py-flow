@@ -11,6 +11,7 @@ Verifies the full demo flow:
   6. Tool calling: LLM searches autonomously
 """
 
+import os
 import textwrap
 
 import pytest
@@ -19,6 +20,9 @@ from ai import AI
 from media import MediaStore
 from media.models import bootstrap_chunks_schema, bootstrap_search_schema
 from store import connect
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -47,6 +51,8 @@ def infra(store_server, media_server):
 @pytest.fixture(scope="module")
 def ai_client():
     """AI client — same as demo's AI()."""
+    if not GEMINI_API_KEY:
+        pytest.skip("GEMINI_API_KEY not set")
     return AI()
 
 

@@ -18,6 +18,7 @@ All services started via conftest — same as demo.
 
 import json
 import math
+import os
 import textwrap
 import time as _time
 from datetime import datetime, timezone
@@ -35,6 +36,9 @@ from reactive.computed import computed, effect
 from store import Storable, connect
 
 from dataclasses import dataclass, field
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+requires_gemini = pytest.mark.skipif(not GEMINI_API_KEY, reason="GEMINI_API_KEY not set")
 
 
 # ── Constants — same as demo ─────────────────────────────────────────────
@@ -246,6 +250,8 @@ def infra(store_server, media_server, tsdb_server, market_data_server,
 def lh(infra, lakehouse_server):
     """Lakehouse client — same as demo."""
     inst = Lakehouse("demo-ab")
+    # Ensure the default namespace exists in the Iceberg catalog
+    inst._ensure_namespace()
     # Seed initial snapshot — same as demo
     inst.ingest("ab_portfolio_snapshots", [{
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -289,6 +295,8 @@ def portfolio_risk(positions):
 @pytest.fixture(scope="module")
 def media_store(infra):
     """MediaStore with AI embeddings — same as demo."""
+    if not GEMINI_API_KEY:
+        pytest.skip("GEMINI_API_KEY not set")
     ai = AI()
     ms = MediaStore("demo-ab", ai=ai)
     yield ms
@@ -414,6 +422,8 @@ def agent_tools(positions, portfolio_risk, infra, media_store, lh):
 
 @pytest.fixture(scope="module")
 def team(agent_tools):
+    if not GEMINI_API_KEY:
+        pytest.skip("GEMINI_API_KEY not set")
     """Build 3-agent team — same as demo's build_team()."""
     market_agent = Agent(
         tools=[agent_tools["get_portfolio_positions"], agent_tools["get_live_quote"],
