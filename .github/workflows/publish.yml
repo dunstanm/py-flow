@@ -22,13 +22,13 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Install build tools
-        run: uv pip install --system build
+      - name: Install project and build tools
+        run: |
+          uv pip install --system build
+          uv pip install --system -e ".[streaming,marketdata,timeseries,lakehouse,media,ai,datacube,agents,dev]"
 
       - name: Packaging hygiene check
-        run: |
-          uv pip install --system pytest
-          python -m pytest tests/test_packaging.py -v
+        run: python -m pytest tests/test_packaging.py -v
 
       - name: Build sdist and wheel
         run: python -m build
