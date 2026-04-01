@@ -20,10 +20,14 @@ Requires a ``.env`` file at the project root with::
 """
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# Ensure local source takes precedence over installed packages
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # ── Port isolation ───────────────────────────────────────────────────────────
 # Set PORT_OFFSET env var to run multiple test suites in parallel.
@@ -58,28 +62,36 @@ if not os.environ.get("GEMINI_API_KEY"):
 # The JVM MUST start before any test file that imports deephaven is collected.
 # But we skip it entirely when running tests that don't need it (e.g. unit tests).
 
-import sys
-from pathlib import Path as _Path
-
 def _any_test_needs_streaming() -> bool:
-    """Check if any test file on the command line actually needs Deephaven."""
+    """Check if any test file on the command line actually needs Deephaven.
+
+    VSCode passes lists like ['-p', 'vscode_pytest', '--rootdir=...', 'tests/test_foo.py::test_bar']
+    so we parse cautiously.
+    """
     args = sys.argv[1:]
-    # No specific files → running full suite → need streaming
+    # No specific files or directory on command line → running full suite → need streaming
     if not args:
         return True
     for arg in args:
         if arg.startswith("-"):
             continue
-        # Strip pytest ::Class::method selectors to get the file path
-        file_part = arg.split("::")[0]
-        p = _Path(file_part)
-        # If pointing at the whole tests/ directory, assume full suite
+        # Strip pytest selectors ("::") to get the pure file/path
+        path_str = arg.split("::")[0]
+        p = Path(path_str)
+
+        # If any directory (e.g. 'tests/') is selected, start it.
         if p.is_dir():
             return True
+
+        # If any file is selected, check its contents for 'streaming' or 'deephaven'.
         if p.is_file() and p.suffix == ".py":
-            src = p.read_text()
-            if "deephaven" in src or "streaming" in src:
-                return True
+            try:
+                src = p.read_text()
+                if "deephaven" in src or "streaming" in src:
+                    return True
+            except Exception:
+                pass
+
     return False
 
 _streaming = None

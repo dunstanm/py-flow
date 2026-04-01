@@ -13,6 +13,7 @@ Internal:
 from __future__ import annotations
 
 import json
+import logging
 import select
 import threading
 from collections.abc import Callable
@@ -22,6 +23,8 @@ from typing import Any
 
 import psycopg2
 import psycopg2.extensions
+
+logger = logging.getLogger(__name__)
 
 NOTIFY_CHANNEL = "object_events"
 
@@ -128,15 +131,27 @@ class SubscriptionListener:
         self._stop_event = threading.Event()
         self._last_tx_time: datetime | None = None
 
-    def _require_conn(self) -> psycopg2.extensions.connection:
-        assert self._conn is not None, "SubscriptionListener not started"
-        return self._conn
-
     def start(self) -> None:
-        """Start the listener background thread."""
+        """Start the listener background thread.
+
+        Includes a 5-second retry loop to handle slow-starting ARM/WSL databases.
+        """
         self._stop_event.clear()
-        self._conn = psycopg2.connect(**self._conn_params)
-        self._conn.autocommit = True
+        
+        # Retry loop for connection (ARM/WSL startup resilience)
+        import time
+        last_error = None
+        for attempt in range(10):
+            try:
+                self._conn = psycopg2.connect(**self._conn_params)
+                self._conn.autocommit = True
+                break
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                last_error = e
+                time.sleep(0.5)
+        
+        if self._conn is None:
+            raise RuntimeError(f"SubscriptionListener failed to connect to PostgreSQL after 5s: {last_error}")
 
         # Load checkpoint
         self._last_tx_time = self._load_checkpoint()
@@ -166,12 +181,50 @@ class SubscriptionListener:
         while not self._stop_event.is_set():
             if self._conn is None or self._conn.closed:
                 break
-            # Use select to wait for notifications with timeout
-            if select.select([self._conn], [], [], 0.5) != ([], [], []):
-                self._conn.poll()
-                while self._conn.notifies:
-                    notify = self._conn.notifies.pop(0)
-                    self._handle_notify(notify)
+            try:
+                # Use select to wait for notifications with timeout
+                if select.select([self._conn], [], [], 0.5) != ([], [], []):
+                    self._conn.poll()
+                    while self._conn.notifies:
+                        notify = self._conn.notifies.pop(0)
+                        self._handle_notify(notify)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                # Server closed connection or connection is in bad state
+                if not self._stop_event.is_set():
+                    logger.warning("SubscriptionListener lost connection to PostgreSQL: %s", e)
+                break
+            except Exception as e:
+                logger.error("Unexpected error in SubscriptionListener loop: %s", e)
+                if self._stop_event.is_set():
+                    break
+
+    def _parse_iso(self, val: Any) -> datetime:
+        """Robustly parse ISO 8601 strings from PG NOTIFY payloads.
+        Handles variable fractional second precision (3.10 fromisoformat is strict)."""
+        if not isinstance(val, str):
+            return val
+        # Replace Z with UTC offset if present
+        s = val.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(s)
+        except ValueError:
+            # Fallback for non-standard fractional precision (e.g. 5 digits)
+            import re
+            # If there's a dot, normalize the fractional part to 6 digits
+            if "." in s:
+                # Split into (prefix, fractional+offset)
+                prefix, tail = s.split(".", 1)
+                # Split tail into (fraction, offset)
+                # Matches the start of + or - for the timezone
+                match = re.search(r"[+-]", tail)
+                if match:
+                    offset_idx = match.start()
+                    frac = tail[:offset_idx]
+                    offset = tail[offset_idx:]
+                    # Pad fraction to 6 digits
+                    frac = frac.ljust(6, "0")[:6]
+                    s = f"{prefix}.{frac}{offset}"
+            return datetime.fromisoformat(s)
 
     def _handle_notify(self, notify: psycopg2.extensions.Notify) -> None:
         """Parse a PG notification and emit to EventBus."""
@@ -184,7 +237,7 @@ class SubscriptionListener:
                 type_name=payload["type_name"],
                 updated_by=payload["updated_by"],
                 state=payload.get("state"),
-                tx_time=datetime.fromisoformat(payload["tx_time"]) if isinstance(payload["tx_time"], str) else payload["tx_time"],
+                tx_time=self._parse_iso(payload["tx_time"]),
             )
             self.event_bus.emit(event)
             self._last_tx_time = event.tx_time
@@ -199,7 +252,7 @@ class SubscriptionListener:
             self._save_checkpoint()
             return
 
-        with self._require_conn().cursor() as cur:
+        with self._conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT entity_id, version, event_type, type_name,
@@ -230,7 +283,7 @@ class SubscriptionListener:
         if not self.subscriber_id:
             return None
 
-        with self._require_conn().cursor() as cur:
+        with self._conn.cursor() as cur:
             cur.execute(
                 "SELECT last_tx_time FROM subscription_checkpoints WHERE subscriber_id = %s",
                 (self.subscriber_id,),
