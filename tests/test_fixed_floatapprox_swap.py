@@ -11,9 +11,9 @@ Proves that:
 """
 
 import pytest
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio, payment_dates, rack_dates
-from instruments.portfolio import Portfolio
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio, payment_dates, rack_dates
+from pricing.pricing.pricing.instruments.portfolio import Portfolio
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.expr import diff, Variable, Const
 
 
@@ -69,14 +69,14 @@ class TestDfExpr:
         """Expr tree df().eval() must produce the same value as df_at()."""
         for t in [0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0]:
             expected = curve.df_at(t)
-            expr = curve.df(t)
+            expr = curve._df_expr(t)
             actual = expr.eval(ctx)
             assert actual == pytest.approx(expected, rel=1e-12), \
                 f"df mismatch at t={t}: expr={actual}, df_at={expected}"
 
     def test_interp_matches_interp(self, curve, ctx):
         """interp should match the scalar _interp for all tenors."""
-        from marketmodel.yield_curve import _interp
+        from pricing.marketmodels.yield_curve import _interp
         tenors = curve.pillar_tenors
         rates = curve.pillar_rates
         for t in [0.0, 0.5, 1.0, 3.0, 5.0, 7.5, 10.0, 12.0]:
@@ -87,16 +87,16 @@ class TestDfExpr:
 
     def test_df_generates_sql(self, curve):
         """df should produce a SQL string (not crash)."""
-        sql = curve.df(3.0).to_sql()
+        sql = curve._df_expr(3.0).to_sql()
         assert isinstance(sql, str)
         assert len(sql) > 0
         assert "^" in sql or "**" in sql or "p.rate" in sql
 
     def test_df_caching(self, curve):
         """df(t) should return the SAME object for the same tenor."""
-        a = curve.df(5.0)
-        b = curve.df(5.0)
-        assert a is b, "df should cache and return the same object"
+        a = curve._df_expr(5.0)
+        b = curve._df_expr(5.0)
+        assert a is b, "_df_expr should cache and return the same object"
 
     def test_interp_caching(self, curve):
         """interp(t) should return the SAME object for the same tenor."""
@@ -275,9 +275,9 @@ class TestPortfolio:
         p.add_instrument("5Y", IRSwapFixedFloatApprox(symbol="PORT_5Y", notional=50_000_000, fixed_rate=0.05, tenor_years=5.0, curve=curve))
         p.add_instrument("10Y", IRSwapFixedFloatApprox(symbol="PORT_10Y", notional=80_000_000, fixed_rate=0.07, tenor_years=10.0, curve=curve))
 
-        df5_a = curve.df(5.0)
-        df5_b = curve.df(5.0)
-        assert df5_a is df5_b, "df(5.0) should return the same object (via cache)"
+        df5_a = curve._df_expr(5.0)
+        df5_b = curve._df_expr(5.0)
+        assert df5_a is df5_b, "_df_expr(5.0) should return the same object (via cache)"
 
     def test_shared_nodes_count(self, curve):
         """There should be shared Expr nodes between swaps on the same curve."""
@@ -310,9 +310,9 @@ class TestExprFitter:
 
     def test_solve_npv_near_zero(self):
         """After solve, all target swap NPVs should be near zero."""
-        from marketmodel.swap_curve import SwapQuote
-        from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-        from marketmodel.curve_fitter import CurveFitter
+        from pricing.marketmodels.swap_curve import SwapQuote
+        from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+        from pricing.marketmodels.curve_fitter import CurveFitter
 
         q1 = SwapQuote(symbol="Q1Y", rate=0.02)
         q5 = SwapQuote(symbol="Q5Y", rate=0.04)

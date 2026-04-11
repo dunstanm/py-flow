@@ -47,10 +47,17 @@ print("  Starting streaming server...")
 
 from streaming.admin import StreamingServer
 
-streaming = StreamingServer(port=10000)
-streaming.start()
-streaming.register_alias("demo")
-print(f"  Streaming server started on {streaming.url}")
+streaming_server = StreamingServer(port=10000)
+streaming_server.start()
+streaming_server.register_alias("demo")
+print(f"  Streaming server started on {streaming_server.url}")
+
+# Activate ticking tables — materialises TickingTable + LiveTable for all
+# @ticking-decorated classes. Until this call, @ticking is pure metadata
+# and .tick() is a no-op (compute-library mode).
+from streaming import activate
+activate()
+print("  Streaming tables activated.")
 
 print("  Starting market data server...")
 from marketdata.admin import MarketDataServer
@@ -62,21 +69,22 @@ print(f"  Market data server started on port {_md_server.port}")
 # ── 2. Import instrument models from instruments/ ─────────────────────────
 from streaming import agg, flush, get_active_tables, get_tables, clear_stale_tables
 
-from marketmodel.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
-from marketmodel.curve_fitter import CurveFitter
-from marketmodel.symbols import fit_symbol, tenor_name
-from marketmodel.swap_curve import SwapQuote, SwapQuoteRisk
-from instruments.ir_swap_fixed_float import IRSwapFixedFloat
+from pricing.marketmodels.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
+from pricing.marketmodels.curve_fitter import CurveFitter
+from pricing.marketmodels.symbols import fit_symbol, tenor_name
+from pricing.marketmodels.swap_curve import SwapQuote, SwapQuoteRisk
+from pricing.pricing.pricing.instruments.ir_swap_fixed_ois import IRSwapFixedOIS
 
 # ── 3. Build reactive objects — cross-entity refs wired at construction ───
 print("  Building reactive objects...")
 
 # 1. Market Quotes (Inputs)
 swap_quotes = {
-    "IR_USD_OIS_QUOTE.1Y":  SwapQuote(symbol="IR_USD_OIS_QUOTE.1Y",  tenor=1.0,  rate=0.01),
-    "IR_USD_OIS_QUOTE.5Y":  SwapQuote(symbol="IR_USD_OIS_QUOTE.5Y",  tenor=5.0,  rate=0.02),
-    "IR_USD_OIS_QUOTE.10Y": SwapQuote(symbol="IR_USD_OIS_QUOTE.10Y", tenor=10.0, rate=0.05),
-    "IR_USD_OIS_QUOTE.20Y": SwapQuote(symbol="IR_USD_OIS_QUOTE.20Y", tenor=20.0, rate=0.06),
+    "IR_USD_OIS_QUOTE.1Y":  SwapQuote(symbol="IR_USD_OIS_QUOTE.1Y",  tenor=1.0,  rate=0.011),
+    "IR_USD_OIS_QUOTE.2Y":  SwapQuote(symbol="IR_USD_OIS_QUOTE.2Y",  tenor=2.0,  rate=0.012),
+    "IR_USD_OIS_QUOTE.5Y":  SwapQuote(symbol="IR_USD_OIS_QUOTE.5Y",  tenor=5.0,  rate=0.015),
+    "IR_USD_OIS_QUOTE.10Y": SwapQuote(symbol="IR_USD_OIS_QUOTE.10Y", tenor=10.0, rate=0.020),
+    "IR_USD_OIS_QUOTE.20Y": SwapQuote(symbol="IR_USD_OIS_QUOTE.20Y", tenor=20.0, rate=0.030),
 }
 
 # 2. Integrated rate curve pillars (average short rate knots)
@@ -103,11 +111,12 @@ usd_curve = IntegratedShortRateCurve(
 # that the fitter solves is consistent with portfolio pricing.
 target_swaps = []
 for q in swap_quotes.values():
-    target_swaps.append(IRSwapFixedFloat(
-        symbol=q.symbol, notional=50_000_000,
+    target_swaps.append(IRSwapFixedOIS(
+        symbol=f"FIT.{q.symbol}", notional=50_000_000,
         fixed_rate=q.rate, tenor_years=q.tenor,
+        frequency_months=3, # Quarterly scheduling
         discount_curve=usd_curve, projection_curve=usd_curve,
-        is_target=True,  # suppresses @effect tick() during solve
+        is_target=True,
     ))
 
 # 5. Global Fitter — the writer that publishes fitted rates
@@ -126,11 +135,16 @@ print("  Curve solved.")
 
 # 6. Portfolio — one 7Y IRS to test interpolation risk split across 5Y/10Y pillars
 swaps = {
-    "USD-7Y": IRSwapFixedFloat(
-        symbol="USD-7Y", notional=100_000_000, fixed_rate=0.04,
-        tenor_years=7.0, discount_curve=usd_curve, projection_curve=usd_curve,
+    "USD-7Y": IRSwapFixedOIS(
+        symbol="USD-7Y", notional=100_000_000, fixed_rate=0.0175,
+        tenor_years=7.0, frequency_months=3,
+        discount_curve=usd_curve, projection_curve=usd_curve,
+        is_live=True,
     )
 }
+
+if hasattr(swaps["USD-7Y"], "tick"):
+    swaps["USD-7Y"].tick()
 
 
 # ── 4. Publish @ticking tables to DH global scope ────────────────────────
@@ -146,14 +160,14 @@ if cleared:
 tables = get_active_tables()
 
 # Aggregates and curated views
-swap_summary = IRSwapFixedFloat._ticking_live.agg_by([  # type: ignore[attr-defined]
+swap_summary = IRSwapFixedOIS._ticking_live.agg_by([  # type: ignore[attr-defined]
     agg.sum(["TotalNPV=npv", "TotalDV01=dv01"]),
     agg.count("NumSwaps"),
     agg.avg(["AvgNPV=npv"]),
 ], by=[])
 tables["swap_summary"]           = swap_summary
 tables["swap_risk_ladder"]       = SwapQuoteRisk._ticking_live       # type: ignore[attr-defined]
-tables["interest_rate_swap_live"] = IRSwapFixedFloat._ticking_live   # type: ignore[attr-defined]
+tables["interest_rate_swap_live"] = IRSwapFixedOIS._ticking_live   # type: ignore[attr-defined]
 tables["yield_curve_live"]       = usd_curve._ticking_live           # type: ignore[attr-defined]
 
 print(f"  Publishing {len(tables)} tables to Deephaven...")
@@ -228,17 +242,25 @@ async def _consume_and_publish():
 
                 async for msg_str in ws:
                     tick = json.loads(msg_str)
-                    if tick.get("type") != "swap":
-                        continue
+                    if tick.get("type") == "batch":
+                        for t in tick.get("ticks", []):
+                            if t.get("type") != "swap":
+                                continue
+                            sq = swap_quotes.get(t["symbol"])
+                            if sq:
+                                sq.batch_update(rate=t["rate"])
+                    else:
+                        if tick.get("type") != "swap":
+                            continue
 
-                    sq = swap_quotes.get(tick["symbol"])
-                    if sq is None:
-                        continue
+                        sq = swap_quotes.get(tick["symbol"])
+                        if sq is None:
+                            continue
 
-                    # ── THE ONLY IMPERATIVE CALL ──────────────────────
-                    # Everything else is reactive: @computed recalcs +
-                    # @effect DH pushes all fire inside batch_update().
-                    sq.batch_update(rate=tick["rate"])
+                        # ── THE ONLY IMPERATIVE CALL ──────────────────────
+                        # Everything else is reactive: @computed recalcs +
+                        # @effect DH pushes all fire inside batch_update().
+                        sq.batch_update(rate=tick["rate"])
                     
                     # Trigger the global fitting 
                     fitter.solve()
@@ -246,8 +268,10 @@ async def _consume_and_publish():
                     flush()
 
                     tick_count += 1
-                    print(f"  [Tick] Processed {tick['symbol']} #{tick_count}")
-
+                    if tick.get("type") == "batch":
+                        print(f"  [Tick] Processed batch of {len(tick.get('ticks', []))} ticks #{tick_count}")
+                    else:
+                        print(f"  [Tick] Processed {tick['symbol']} #{tick_count}")
                     # Publish derived CurveTicks back to the hub
                     for label, pt in curve_points.items():
                         ct = {
@@ -281,7 +305,10 @@ async def _consume_and_publish():
                         usd_10y = curve_points[lbl_10y].rate * 100
 
                         print("\n" + "-"*60)
-                        print(f"  SUMMARY TICK #{tick_count} | {tick['symbol']} {tick['rate']:.4%}")
+                        if tick.get("type") == "batch":
+                            print(f"  SUMMARY TICK #{tick_count} | Batch of {len(tick.get('ticks', []))} ticks")
+                        else:
+                            print(f"  SUMMARY TICK #{tick_count} | {tick['symbol']} {tick['rate']:.4%}")
                         print(f"  USD 5Y: {usd_5y:.4f}%  |  USD 10Y: {usd_10y:.4f}%")
                         print("-"*60)
                         

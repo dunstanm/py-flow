@@ -1,6 +1,6 @@
 import datetime
-from instruments.calendars import CalendarFactory
-from instruments.ir_scheduling import calendar_for, BDConvention
+from pricing.pricing.pricing.instruments.calendars import CalendarFactory
+from pricing.pricing.pricing.instruments.ir_scheduling import calendar_for, BDConvention
 
 def test_yaml_calendar_loading():
     """Verify that YAML-based calendars are loaded and correctly identify holidays."""

@@ -227,13 +227,17 @@ class ColumnRegistry:
             if field_name.startswith('_'):
                 continue
 
-            # Unwrap Optional[X] → X
+            # Unwrap Optional[X] → X (or Union[X, None])
+            import types, typing
             origin = get_origin(field_type)
-            if origin is not None:
+            if origin is getattr(types, 'UnionType', type(int | str)) or origin is typing.Union:
                 args = get_args(field_type)
                 non_none = [a for a in args if a is not type(None)]
                 if non_none:
                     field_type = non_none[0]
+            elif origin is not None:
+                # E.g. dict[str, str] -> validate against dict
+                field_type = origin
 
             # Resolve column
             try:

@@ -793,3 +793,79 @@ REGISTRY.define("equiv_notional", float,
     display_name="Equiv Notional",
     category="risk",
 )
+
+# ── New OIS Fields ───────────────────────────────────────────────
+
+import datetime
+
+REGISTRY.define("effective_date", datetime.date,
+    description="Start of the first accrual period",
+    role="dimension",
+    category="fixed_income",
+)
+
+REGISTRY.define("termination_date", datetime.date,
+    description="Maturity of the instrument",
+    role="dimension",
+    category="fixed_income",
+)
+
+REGISTRY.define("effective_date_override", datetime.date,
+    description="User-supplied override for effective date",
+    role="attribute",
+    category="fixed_income",
+    nullable=True,
+)
+
+REGISTRY.define("evaluation_date_override", datetime.date,
+    description="User-supplied override for evaluation/spot date",
+    role="attribute",
+    category="fixed_income",
+    nullable=True,
+)
+
+REGISTRY.define("frequency_months", int,
+    description="Payment frequency in months (e.g. 3, 6, 12)",
+    role="dimension",
+    category="fixed_income",
+)
+
+
+REGISTRY.define("index_name", str,
+    description="Name of the floating index",
+    role="dimension",
+    category="fixed_income",
+)
+
+REGISTRY.define("schedule", list,
+    description="List of payment/accrual dates",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("evaluation_date", datetime.date,
+    description="Date at which the instrument is being priced",
+    role="attribute",
+    category="risk",
+)
+
+REGISTRY.define("fixings", dict,
+    description="Historical daily fixing rates map",
+    role="attribute",
+    category="fixed_income",
+)
+REGISTRY.define("termination_date_override", datetime.date, description="optional override for end date", role="attribute", category="fixed_income")
+# ── Curve Parameters ──────────────────────────────────────────────
+
+REGISTRY.define("degree", int,
+    description="Polynomial degree of the integrated curve (2=Quadratic, 3=Cubic)",
+    role="attribute",
+    category="fixed_income",
+    enum=[2, 3],
+)
+
+REGISTRY.define("is_local", bool,
+    description="If True, use local slope matching (prev avg slope). If False, use actual slope matching (backward influence).",
+    role="attribute",
+    category="fixed_income",
+)

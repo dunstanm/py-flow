@@ -16,9 +16,9 @@ from store import Storable
 from reactive.computed import computed, effect
 from reactive.computed_expr import computed_expr
 from reactive.expr import diff, Expr
-import marketmodel.curve_fitter
+import pricing.marketmodels.curve_fitter
 from streaming import ticking
-from instruments.ir_scheduling import payment_dates, reset_dates
+from pricing.pricing.pricing.instruments.ir_scheduling import payment_dates, reset_dates
 
 
 @ticking(exclude={"discount_curve", "projection_curve", "risk"})
@@ -146,7 +146,7 @@ class IRSwapFixedFloat(Storable):
 
     @effect("npv")
     def on_npv(self, value):
-        if marketmodel.curve_fitter.IS_SOLVING or self.is_target:
+        if pricing.marketmodels.curve_fitter.IS_SOLVING or self.is_target:
             return
         self.tick()
 

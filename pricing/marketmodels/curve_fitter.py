@@ -25,9 +25,9 @@ from store import Storable
 
 from reaktiv import batch
 
-from marketmodel.curve_base import CurveBase
-from marketmodel.yield_curve import CurveJacobianEntry
-from marketmodel.symbols import fit_symbol, jacobian_symbol
+from pricing.marketmodels.curve_base import CurveBase
+from pricing.marketmodels.yield_curve import CurveJacobianEntry
+from pricing.marketmodels.symbols import fit_symbol, jacobian_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -82,22 +82,20 @@ class CurveFitter(Storable):
     # ══════════════════════════════════════════════════════════════════
 
     def solve(self):
-        """Solve using Portfolio — symbolic Jacobian from the same Expr tree.
-
-        The Jacobian is derived from the SAME Expr as the objective,
-        so it can't drift.  Each iteration evaluates the pre-built
-        derivative DAGs via eval_cached().
-        """
+        """Solve using Portfolio — symbolic Jacobian from the same Expr tree."""
         global IS_SOLVING
         if self._is_solving:
+            logger.debug("Solver already running, skipping re-entrant call.")
             return
+
         if not self.target_swaps or not self.points:
             return
 
-        import marketmodel.curve_fitter
-        marketmodel.curve_fitter.IS_SOLVING = True
+        self._is_solving = True
+        import pricing.marketmodels.curve_fitter
+        pricing.marketmodels.curve_fitter.IS_SOLVING = True
         try:
-            from instruments.portfolio import Portfolio
+            from pricing.pricing.pricing.instruments.portfolio import Portfolio
 
             # Build the Portfolio from the target swaps
             portfolio = Portfolio()
@@ -168,15 +166,18 @@ class CurveFitter(Storable):
                 return np.array(matrix)
 
             # Solve!
-            print(f"  [Fitter] Starting LM solve ({len(self.points)} pillars)...")
-            res = least_squares(objective, x0, jac=jacobian, method='lm')
+            # Use 'trf' (Trust Region Reflective) instead of 'lm' to support bounds.
+            # LM is slightly faster but 'trf' is more robust to bad market data.
+            bounds = (-0.1, 0.5) # Hard physiological bounds (-10% to +50%)
+            print(f"  [Fitter] Starting solve ({len(self.points)} pillars, method=trf)...")
+            res = least_squares(objective, x0, jac=jacobian, method='trf', bounds=bounds)
             print(f"  [Fitter] Solve complete. Status: {res.status}")
             sys.stdout.flush()
 
             if not res.success:
                 logger.warning(f"Fitter solver failed: {res.message}")
             # Reset IS_SOLVING BEFORE applying final rates so effects fire
-            marketmodel.curve_fitter.IS_SOLVING = False
+            pricing.marketmodels.curve_fitter.IS_SOLVING = False
 
             # Map results back to YieldCurvePoints with a batch update
             with batch():
@@ -191,7 +192,8 @@ class CurveFitter(Storable):
                 print(f"  [Fitter] Jacobian published.")
                 sys.stdout.flush()
         finally:
-            marketmodel.curve_fitter.IS_SOLVING = False
+            self._is_solving = False
+            pricing.marketmodels.curve_fitter.IS_SOLVING = False
 
     # ══════════════════════════════════════════════════════════════════
     # Bootstrap initial guess
@@ -223,6 +225,8 @@ class CurveFitter(Storable):
 
         # Bootstrap short → long
         order = sorted(range(n), key=lambda i: self.points[i].tenor_years)
+        print(f"    [Fitter] Bootstrapping {self.name} ({n} pillars)...")
+        sys.stdout.flush()
 
         for pi in order:
             pt = self.points[pi]
@@ -235,43 +239,61 @@ class CurveFitter(Storable):
             if npv_expr is None:
                 continue
 
-            def _make_eval(point_idx, expr):
-                """Factory to capture point_idx by value (avoids closure bug)."""
-                def _eval_npv(r_val):
-                    x0[point_idx] = r_val
-                    for i, p in enumerate(self.points):
-                        p.fitted_rate = float(x0[i])
-                    ctx = {p.name: float(x0[i]) for i, p in enumerate(self.points)}
-                    return eval_cached(expr, ctx)
-                return _eval_npv
+            # --- Ultra-Fast Path: Direct Numerical Solve ---
+            # Pre-calculate schedule and parameters once per pillar
+            notional = getattr(swap, 'notional', 10e6)
+            fixed_rate = getattr(swap, 'fixed_rate', 0.0)
+            target_tenor = float(pt.tenor_years)
+            
+            # Get payment schedule (tenors and year fractions)
+            # Both Approx and OIS swaps support these legacy helpers or properties
+            if hasattr(swap, 'target_dates'):
+                pay_tenors = [float(t) for t in swap.target_dates()]
+                resets = [0.0] + pay_tenors[:-1]
+                if hasattr(swap, 'reset_dates'):
+                    resets = [float(t) for t in swap.reset_dates()]
+                taus = [pay_tenors[i] - resets[i] for i in range(len(pay_tenors))]
+            else:
+                # Fallback for bullet instruments
+                pay_tenors = [target_tenor]
+                taus = [target_tenor]
 
-            eval_npv = _make_eval(pi, npv_expr)
+            def _eval_npv(r_val):
+                x0[pi] = r_val
+                # High-speed numerical update (bypasses reactive system completely)
+                if hasattr(self.curve, "set_rates_numerical"):
+                    self.curve.set_rates_numerical(x0)
+                
+                # Direct vectorized NPV calculation: payoff = float - fixed
+                # (Standard simplification for initial guess)
+                dfs = self.curve.df_array(pay_tenors)
+                annuity = sum(t * df for t, df in zip(taus, dfs))
+                # For shortcut float leg: PV = notional * (1 - DF_maturity)
+                float_leg_pv = notional * (1.0 - dfs[-1])
+                return (float_leg_pv - fixed_rate * notional * annuity)
 
-            # Secant method — try/except handles multi-curve swaps where
-            # the NPV expr references pillars from other curves.
+            # Secant method
             try:
                 r_a = x0[pi]
-                f_a = eval_npv(r_a)
+                f_a = _eval_npv(r_a)
                 bump = max(abs(r_a) * 0.01, 1e-6)
                 r_b = r_a + bump
-                f_b = eval_npv(r_b)
+                f_b = _eval_npv(r_b)
 
                 for _ in range(8):
-                    if abs(f_b) < 1e-14:
-                        break
+                    if abs(f_b) < 1e-12: break
                     denom = f_b - f_a
-                    if abs(denom) < 1e-30:
-                        break
+                    if abs(denom) < 1e-25: break
                     r_new = r_b - f_b * (r_b - r_a) / denom
+                    r_new = max(-0.1, min(0.5, r_new))
                     r_a, f_a = r_b, f_b
-                    r_b = r_new
-                    f_b = eval_npv(r_b)
+                    r_b, f_b = r_new, _eval_npv(r_new)
 
                 x0[pi] = r_b
-            except (KeyError, ZeroDivisionError, ValueError):
-                pass  # keep the simple initial_guess
+            except Exception:
+                pass  # keep initial_guess on failure
 
-        # Apply bootstrapped values and invalidate caches
+        # Final pass: Apply bootstrapped values to reactive points once
         for i, p in enumerate(self.points):
             p.fitted_rate = float(x0[i])
         if hasattr(self.curve, 'invalidate_caches'):

@@ -1,5 +1,5 @@
 """
-ir_swap — Interest Rate Swap instruments.
+ir_swap — Interest Rate Swap pricing.pricing.instruments.
 
 Two swap types with self-contained payoff logic:
 
@@ -38,14 +38,15 @@ from dataclasses import field
 from store import Storable
 from reactive.computed import computed, effect
 from reactive.expr import Const, diff, eval_cached, If, Expr
-import marketmodel.curve_fitter
+import pricing.marketmodels.curve_fitter
 from streaming import ticking
 
 
-from instruments.ir_scheduling import rack_dates, payment_dates, reset_dates, day_count_fraction
+from pricing.pricing.pricing.instruments.ir_scheduling import rack_dates, payment_dates, reset_dates, day_count_fraction
 
 from reactive.computed import computed, effect
 from reactive.computed_expr import computed_expr
+from reactive.traceable import traceable
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -94,26 +95,33 @@ class IRSwapFixedFloatApprox(Storable):
         """Payment dates for this swap (short front stub, no 0.0)."""
         return payment_dates(self.tenor_years)
 
-    # ── Symbolic + Reactive Properties ─────────────────────────────────
+    # ── Traceable Pricing Properties ──────────────────────────────────
+    #
+    # @traceable: same code runs on plain floats (debug) or TracedFloat
+    # (for symbolic Expr trees).  Default is float — zero overhead,
+    # transparent in debugger watch windows.
+    #
+    # swap.dv01   → 4523.17   (float, fast)
+    # swap.dv01() → Expr tree (lazy-traced, cached)
+    #
 
-    @computed_expr
-    def dv01(self) -> Expr:
+    @traceable
+    def dv01(self) -> float:
         """DV01 = Σ (notional × period_i × df_i × 0.0001)."""
         dates = self.coupon_payment_dates()
-        pv = Const(0.0)
+        pv = 0.0
         prev_t = 0.0
         for t in dates:
             df = self.curve.df(t)
-            # Optimized: Expr takes care of flattening and constant folding
             pv += df * day_count_fraction(prev_t, t) * self.notional * 0.0001
             prev_t = t
         return pv
 
-    @computed_expr
-    def fixed_leg_pv(self) -> Expr:
+    @traceable
+    def fixed_leg_pv(self) -> float:
         """PV of fixed leg = Σ df * dt * fixed_rate * notional"""
         dates = self.coupon_payment_dates()
-        pv = Const(0.0)
+        pv = 0.0
         prev_t = 0.0
         for t in dates:
             df = self.curve.df(t)
@@ -121,24 +129,23 @@ class IRSwapFixedFloatApprox(Storable):
             prev_t = t
         return pv
 
-
-    @computed_expr
-    def float_leg_pv(self) -> Expr:
+    @traceable
+    def float_leg_pv(self) -> float:
         """PV of floating leg = notional × (1 - DF_maturity)."""
         df_T = self.curve.df(float(self.tenor_years))
         return self.notional * (1.0 - df_T)
 
-    @computed_expr
-    def npv(self) -> Expr:
+    @traceable
+    def npv(self) -> float:
         """NPV: RECEIVER = fixed - float, PAYER = float - fixed."""
         if self.side == "PAYER":
-            return self.float_leg_pv() - self.fixed_leg_pv()
-        return self.fixed_leg_pv() - self.float_leg_pv()
+            return self.float_leg_pv - self.fixed_leg_pv
+        return self.fixed_leg_pv - self.float_leg_pv
 
-    @computed_expr
-    def par_rate(self) -> Expr:
+    @traceable
+    def par_rate(self) -> float:
         """Par rate: the fixed_rate at which NPV = 0."""
-        return self.float_leg_pv() / (self.dv01() * 10000.0)
+        return self.float_leg_pv / (self.dv01 * 10000.0)
 
     @computed
     def pnl_status(self) -> str:
@@ -151,7 +158,7 @@ class IRSwapFixedFloatApprox(Storable):
 
     @effect("npv")
     def on_npv(self, value):
-        if marketmodel.curve_fitter.IS_SOLVING or self.is_target:
+        if pricing.marketmodels.curve_fitter.IS_SOLVING or self.is_target:
             return
         self.tick()
 
@@ -215,7 +222,7 @@ class SwapPortfolio(Storable):
     @effect("total_npv")
     def on_total_npv(self, value):
         # Skip ticking during solver iterations.
-        if marketmodel.curve_fitter.IS_SOLVING:
+        if pricing.marketmodels.curve_fitter.IS_SOLVING:
             return
         self.tick()
 

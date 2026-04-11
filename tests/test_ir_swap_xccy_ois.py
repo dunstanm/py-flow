@@ -21,8 +21,8 @@ for mod in ["streaming", "store", "store.base"]:
     sys.modules[mod] = m
 
 # Imports
-import instruments.ir_scheduling as sched
-from instruments.ir_swap_xccy_ois import IRSwapXCCYOIS
+import pricing.pricing.pricing.instruments.ir_scheduling as sched
+from pricing.pricing.pricing.instruments.ir_swap_xccy_ois import IRSwapXCCYOIS
 
 class MockCurve:
     def __init__(self, rate: float = 0.05, today=datetime.date(2026, 1, 1)):

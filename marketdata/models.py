@@ -85,9 +85,15 @@ class JacobianTick(BaseModel):
     timestamp: datetime
 
 
+class TickBatch(BaseModel):
+    """A collection of ticks sent and processed atomically."""
+    type: Literal["batch"] = "batch"
+    ticks: list[Tick | FXTick | CurveTick | SwapTick | JacobianTick]
+
+
 # Discriminated union of all market data message types
 MarketDataMessage = Annotated[
-    Tick | FXTick | CurveTick | SwapTick | JacobianTick,
+    Tick | FXTick | CurveTick | SwapTick | JacobianTick | TickBatch,
     Field(discriminator="type"),
 ]
 
@@ -105,6 +111,8 @@ def get_symbol_key(msg: Any) -> str:
         return msg.symbol
     if t == "jacobian":
         return msg.symbol
+    if t == "batch":
+        return "batch"
     
     raise ValueError(f"Unknown message type: {t}")
 

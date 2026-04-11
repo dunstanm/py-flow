@@ -1,0 +1,215 @@
+
+============================================================
+  WARNING — the following port(s) are already in use:
+
+  Port 10000 (Deephaven Web IDE / streaming server): IN USE
+    Process : docker:dh-streaming-10000 (PID n/a)
+    Command : docker container running: ghcr.io/deephaven/server:latest
+    To free  : docker stop dh-streaming-10000
+
+
+  Port 8000 (Market data WebSocket server): IN USE
+    Process : python3 (PID 89434)
+    Command : /usr/bin/python3 -m uvicorn marketdata.server:app --host 0.0.0.0 --port 8000 --log-level warning
+    To free  : pkill -f uvicorn   # or: kill 89434
+
+============================================================
+  Continuing — kill the process(es) above and re-run if startup fails.
+
+======================================================================
+  Interest Rate Swap — Reactive Ticking Demo
+======================================================================
+
+  Starting streaming server...
+  Streaming server started on http://localhost:10000
+  Starting market data server...
+  Market data server started on port 8000
+/usr/lib/python3/dist-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.2
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+  Building reactive objects...
+  Solving initial curve...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[ 6.98491931e-18  1.21071935e-16  1.86264515e-16  3.72529030e-17
+ -2.23517418e-16]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  Curve solved.
+  Cleared 12 stale table(s) from previous session.
+  Publishing 12 tables to Deephaven...
+    [DH] Published table: integrated_rate_point_raw
+    [DH] Published table: integrated_rate_point_live
+    [DH] Published table: integrated_short_rate_curve_raw
+    [DH] Published table: integrated_short_rate_curve_live
+    [DH] Published table: swap_quote_raw
+    [DH] Published table: swap_quote_live
+    [DH] Published table: ir_swap_fixed_ois_raw
+    [DH] Published table: ir_swap_fixed_ois_live
+    [DH] Published table: swap_summary
+    [DH] Published table: swap_risk_ladder
+    [DH] Published table: interest_rate_swap_live
+    [DH] Published table: yield_curve_live
+  Built: 5 OIS quotes, 5 integrated knots, 1 IntegratedShortRateCurve, 5 fitter swaps, 1 portfolio swaps
+  All initial state pushed to DH via @effect (no manual push needed)
+
+======================================================================
+  DEMO READY — Fully Reactive IRS Grid via USD OIS Market Data
+  Web UI:  http://localhost:10000
+
+  Published tables (open in DH web IDE):
+    swap_quote_live         — USD OIS par rates (from market data server)
+    integrated_rate_point_live — integrated curve knots (average short rate R_i)
+    interest_rate_swap_live — IRS pricing: NPV, DV01 (@computed, full scheduler)
+    swap_summary            — aggregate NPV + DV01 (ticking summary)
+    swap_risk_ladder        — portfolio risk ladder: ∂Portfolio / ∂Quote
+    yield_curve_live        — IntegratedShortRateCurve (C² smooth, EXP DF)
+
+  Reactive chain (all from one batch_update):
+    OIS rate → @computed curve rate → @computed float_rate
+    → @computed npv → @computed total_npv
+    Every @effect fires automatically: DH push
+
+  Press Ctrl+C to stop.
+======================================================================
+
+2026-04-06 19:32:53,486 Connecting to Market Data Server at ws://localhost:8000/md/subscribe ...
+2026-04-06 19:32:53,495 Connected — consuming USD OIS swap ticks, full reactive cascade active
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[ 6.98491931e-18 -9.77888703e-17  0.00000000e+00  2.60770321e-16
+  0.00000000e+00]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  [Tick] Processed batch of 13 ticks #1
+
+------------------------------------------------------------
+  SUMMARY TICK #1 | Batch of 13 ticks
+  USD 5Y: 1.5033%  |  USD 10Y: 2.0306%
+------------------------------------------------------------
+
+  [Live Swap NPV Breakdown]
+symbol  fixed_leg_pv  float_leg_pv           npv         dv01
+USD-7Y  1.161322e+07  1.118315e+07 430065.027167 66361.250621
+
+  [Live Risk Ladder Snapshot]
+  (empty ladder)
+------------------------------------------------------------
+
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[ 6.98491931e-18  1.21071935e-16 -3.72529030e-17 -7.45058060e-17
+ -1.49011612e-16]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  [Tick] Processed batch of 13 ticks #2
+
+------------------------------------------------------------
+  SUMMARY TICK #2 | Batch of 13 ticks
+  USD 5Y: 1.5033%  |  USD 10Y: 2.0306%
+------------------------------------------------------------
+
+  [Live Swap NPV Breakdown]
+symbol  fixed_leg_pv  float_leg_pv           npv         dv01
+USD-7Y  1.161322e+07  1.118315e+07 430065.027167 66361.250621
+
+  [Live Risk Ladder Snapshot]
+  (empty ladder)
+------------------------------------------------------------
+
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[ 6.98491931e-18  1.21071935e-16 -3.72529030e-17  2.98023224e-16
+  0.00000000e+00]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  [Tick] Processed batch of 13 ticks #3
+
+------------------------------------------------------------
+  SUMMARY TICK #3 | Batch of 13 ticks
+  USD 5Y: 1.5033%  |  USD 10Y: 2.0306%
+------------------------------------------------------------
+
+  [Live Swap NPV Breakdown]
+symbol  fixed_leg_pv  float_leg_pv           npv         dv01
+USD-7Y  1.161322e+07  1.118315e+07 430065.027167 66361.250621
+
+  [Live Risk Ladder Snapshot]
+  (empty ladder)
+------------------------------------------------------------
+
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[4.65661287e-18 1.21071935e-16 3.72529030e-17 1.49011612e-16
+ 0.00000000e+00]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  [Tick] Processed batch of 13 ticks #4
+
+------------------------------------------------------------
+  SUMMARY TICK #4 | Batch of 13 ticks
+  USD 5Y: 1.5033%  |  USD 10Y: 2.0306%
+------------------------------------------------------------
+
+  [Live Swap NPV Breakdown]
+symbol  fixed_leg_pv  float_leg_pv           npv         dv01
+USD-7Y  1.161322e+07  1.118315e+07 430065.027167 66361.250621
+
+  [Live Risk Ladder Snapshot]
+  (empty ladder)
+------------------------------------------------------------
+
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.20Y...
+  [Fitter] Starting solve (5 pillars, method=trf)...
+    [Fitter] Iteration x=[0.01099208 0.01198312 0.015033   0.02030636 0.03235667] -> NormNPVs=[ 6.98491931e-18  1.21071935e-16  9.31322575e-18 -7.45058060e-17
+  0.00000000e+00]
+  [Fitter] Solve complete. Status: 1
+  [Fitter] Starting Jacobian calculation...
+  [Fitter] Jacobian published.
+  [Tick] Processed batch of 13 ticks #5
+
+------------------------------------------------------------
+  SUMMARY TICK #5 | Batch of 13 ticks
+  USD 5Y: 1.5033%  |  USD 10Y: 2.0306%
+------------------------------------------------------------
+
+  [Live Swap NPV Breakdown]
+symbol  fixed_leg_pv  float_leg_pv           npv         dv01
+USD-7Y  1.161322e+07  1.118315e+07 430065.027167 66361.250621
+
+  [Live Risk Ladder Snapshot]
+  (empty ladder)
+------------------------------------------------------------
+
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.1Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.2Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.5Y...
+    [Fitter] Initial guess bootstrap: IR_USD_DISC_USD.10Y...

@@ -134,13 +134,17 @@ class StreamingServer:
         # DH container always listens on 10000 internally
         internal_port = 10000
 
+        # We pass flags via both START_OPTS (older DH) and JAVA_OPTS (newer DH)
+        # to ensure anonymous mode is strictly enforced.
+        auth_flag = "-DAuthHandlers=io.deephaven.auth.AnonymousAuthenticationHandler"
+        console_flag = "-Ddeephaven.console.type=python"
+        
         cmd = [
             docker, "run", "-d",
             "--name", container_name,
             "-p", f"{self._port}:{internal_port}",
-            "-e", f"START_OPTS=-Xmx{self._max_heap} "
-                  f"-DAuthHandlers=io.deephaven.auth.AnonymousAuthenticationHandler "
-                  f"-Ddeephaven.console.type=python",
+            "-e", f"START_OPTS=-Xmx{self._max_heap} {auth_flag} {console_flag}",
+            "-e", f"JAVA_OPTS=-Xmx{self._max_heap} {auth_flag} {console_flag}",
             "ghcr.io/deephaven/server:latest",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)

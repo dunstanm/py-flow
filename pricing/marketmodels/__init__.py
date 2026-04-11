@@ -14,14 +14,14 @@ via abstract interfaces (fwd_at, df_at, df_array) defined by CurveBase.
         symbols.py              — Naming convention helpers
 """
 
-from marketmodel.curve_base import CurveBase
-from marketmodel.yield_curve import (
+from pricing.marketmodels.curve_base import CurveBase
+from pricing.marketmodels.yield_curve import (
     YieldCurvePoint, LinearTermDiscountCurve, CurveJacobianEntry,
 )
-from marketmodel.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
-from marketmodel.curve_fitter import CurveFitter
-from marketmodel.swap_curve import SwapQuote, SwapQuoteRisk
-from marketmodel.symbols import (
+from pricing.marketmodels.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
+from pricing.marketmodels.curve_fitter import CurveFitter
+from pricing.marketmodels.swap_curve import SwapQuote, SwapQuoteRisk
+from pricing.marketmodels.symbols import (
     quote_symbol, fit_symbol, jacobian_symbol,
     tenor_name, parse_symbol,
 )

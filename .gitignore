@@ -16,3 +16,4 @@ models/agent_generated/
 store/columns/agent_generated/
 datacube/static/perspective-viewer-datagrid.js
 .demo_runs/
+docs/reference/

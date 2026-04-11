@@ -217,9 +217,17 @@ class Expr(ABC):
 # ---------------------------------------------------------------------------
 
 def _wrap(value: object) -> Expr:
-    """Wrap a Python literal as a Const if it's not already an Expr."""
+    """Wrap a Python literal as a Const if it's not already an Expr.
+
+    Supports the ``__expr__`` protocol: if *value* defines ``__expr__()``,
+    the returned Expr is used directly.  This enables transparent
+    interop between ``TracedFloat`` / ``_TracedCallable`` and the Expr tree.
+    """
     if isinstance(value, Expr):
         return value
+    _get_expr = getattr(value, "__expr__", None)
+    if _get_expr is not None:
+        return _get_expr()
     return Const(value)
 
 
@@ -599,7 +607,16 @@ class Func(Expr):
         if fn is None:
             raise ValueError(f"Unknown function: {self.name}")
         evaluated = [a.eval(ctx) for a in self.args]
-        return fn(*evaluated)
+        try:
+             if self.name == "exp" and evaluated[0] > 700:
+                 return 1e100
+             if self.name == "exp" and evaluated[0] < -700:
+                 return 0.0
+             return fn(*evaluated)
+        except (OverflowError, FloatingPointError):
+             if self.name == "exp":
+                 return 1e100 if evaluated[0] > 0 else 0.0
+             return 1e100 # Fallback
 
     def to_sql(self, col: str = "data") -> str:
         sql_name = self._SQL_FUNCS.get(self.name, self.name.upper())
@@ -1319,7 +1336,21 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
                 fn = Func._PYTHON_FUNCS.get(node.name)
                 if fn is None:
                     raise ValueError(f"eval_cached: unknown Func '{node.name}'")
-                r = fn(*vals)
+                
+                try:
+                    # Defensive against extreme values in exp during solver iterations
+                    if node.name == "exp" and vals[0] > 700:
+                        r = 1e100
+                    elif node.name == "exp" and vals[0] < -700:
+                        r = 0.0
+                    else:
+                        r = fn(*vals)
+                except (OverflowError, FloatingPointError):
+                    if node.name == "exp":
+                        r = 1e100 if vals[0] > 0 else 0.0
+                    else:
+                        r = 1e100 # Fallback
+                
                 _cache[nkey] = r
                 result_stack.append(r)
             continue

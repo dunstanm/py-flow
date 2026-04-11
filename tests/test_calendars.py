@@ -21,7 +21,7 @@ sys.modules["strea" + "ming.decorator"] = MagicMock(ticking=mock_ticking)
 sys.modules["pydantic"] = MagicMock()
 sys.modules["pydantic.dataclasses"] = MagicMock(dataclass=lambda *args, **kwargs: lambda cls: cls if not args or not callable(args[0]) else args[0])
 
-from instruments.calendars import CalendarFactory, BusinessCalendar
+from pricing.pricing.pricing.instruments.calendars import CalendarFactory, BusinessCalendar
 
 try:
     import QuantLib as ql

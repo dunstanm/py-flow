@@ -25,6 +25,9 @@ from pathlib import Path
 
 import pytest
 
+# ── Shared Infrastructure ───────────────────────────────────────────────────
+from core.process import kill_process_on_port, kill_by_patterns
+
 # ── Port isolation ───────────────────────────────────────────────────────────
 # Set PORT_OFFSET env var to run multiple test suites in parallel.
 # run_demo_tests.sh sets PORT_OFFSET=100 so demo tests don't collide with main.
@@ -50,8 +53,32 @@ if not os.environ.get("GEMINI_API_KEY"):
     _warnings.warn(
         "GEMINI_API_KEY not set — AI-dependent tests will be skipped or fail.\n"
         "Create a .env file: echo 'GEMINI_API_KEY=your-key-here' > .env",
-        stacklevel=1,
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def global_cleanup():
+    """Aggressive cleanup of any stale servers from previous crashed runs.
+    
+    Ensures that we pick up 'new code' by forcing all servers to restart
+    if their ports are currently occupied.
+    """
+    # Standard ports used across the platform
+    _STALE_PORTS = [
+        10000, 8000, 8765, 9200, 9209, 8922, 5490, 8183, 
+        9004, 9005, 9102, 9103, 8050
+    ]
+    # Also clean offset ports if any
+    all_ports = _STALE_PORTS + [p + _PORT_OFFSET for p in _STALE_PORTS]
+    
+    # Patterns for hanging subprocesses
+    _STALE_PATTERNS = ["uvicorn", "deephaven", "lakekeeper", "minio", "postgres"]
+
+    print("\n[conftest] Performing global infrastructure purge...")
+    for port in set(all_ports):
+        kill_process_on_port(port)
+    kill_by_patterns(_STALE_PATTERNS)
+    return True
 
 
 # ── 1. Streaming (Deephaven JVM) ─────────────────────────────────────────
@@ -96,6 +123,9 @@ if _any_test_needs_streaming():
     print(f"  StreamingServer mode: {_mode}")
     print(f"  Port: {_streaming.port}")
     print(f"{'='*60}\n")
+    # Activate ticking tables now that the server is running
+    from streaming import activate
+    activate()
 
 
 @pytest.fixture(scope="session")

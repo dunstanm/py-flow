@@ -45,12 +45,12 @@ for mod in heavy_mods:
     sys.modules[mod] = m
 
 # Mock out unrelated instruments that trigger heavy loads
-sys.modules["instruments.ir_swap_fixed_floatapprox"] = MagicMock()
-sys.modules["instruments.portfolio"] = MagicMock()
+sys.modules["pricing.pricing.instruments.ir_swap_fixed_floatapprox"] = MagicMock()
+sys.modules["pricing.pricing.instruments.portfolio"] = MagicMock()
 
 # Now we can safely import our local modules
-import instruments.ir_scheduling as sched
-from instruments.ir_swap_fixed_ois import IRSwapFixedOIS
+import pricing.pricing.pricing.instruments.ir_scheduling as sched
+from pricing.pricing.pricing.instruments.ir_swap_fixed_ois import IRSwapFixedOIS
 
 class MockCurve:
     """Simple discount curve for testing."""

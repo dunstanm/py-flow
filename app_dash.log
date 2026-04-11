@@ -1,0 +1,14 @@
+============================================================
+  SWAP CURVE ANALYTICS DASHBOARD — LAUNCHER
+  Dual-Engine Fitting: py-flow vs QuantLib
+============================================================
+→ Starting MarketDataServer (Live OIS Feed)...
+→ Starting StreamingServer (Deephaven Engine)...
+Traceback (most recent call last):
+  File "/home/dunstanm/py-flow/launch_dashboard.py", line 61, in <module>
+    main()
+  File "/home/dunstanm/py-flow/launch_dashboard.py", line 43, in main
+    from dashboard.apps.swap_curve import create_app
+  File "/home/dunstanm/py-flow/dashboard/apps/swap_curve.py", line 12, in <module>
+    import panel as pn
+ModuleNotFoundError: No module named 'panel'

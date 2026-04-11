@@ -1,0 +1,5 @@
+# Antigravity Activity Log (Flight Recorder)
+# Used for recovery after window disconnects.
+
+[2026-04-07 20:52:45] Agent initialized. Diagnostics started.
+[2026-04-07 20:53:10] Applied coefficient caching to IntegratedShortRateCurve (Numerical & Symbolic).

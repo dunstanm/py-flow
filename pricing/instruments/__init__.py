@@ -10,8 +10,8 @@ Instruments depend on market models (marketmodel/) via abstract interfaces
         portfolio.py                 — Portfolio (named collections)
 """
 
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
-from instruments.portfolio import Portfolio
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
+from pricing.pricing.pricing.instruments.portfolio import Portfolio
 
 __all__ = [
     "IRSwapFixedFloatApprox",

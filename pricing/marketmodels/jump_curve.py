@@ -16,7 +16,7 @@ from store import Storable
 from reactive.computed import computed
 from reactive.computed_expr import computed_expr
 from reactive.expr import Expr, If, Const
-from marketmodel.curve_base import CurveBase
+from pricing.marketmodels.curve_base import CurveBase
 
 
 @dataclass

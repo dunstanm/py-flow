@@ -42,9 +42,15 @@ FX_BASE: dict[str, dict[str, Any]] = {
 # ── Swap Quotes (OIS) ────────────────────────────────────────────────────────
 SWAP_INSTRUMENTS = [
     "IR_USD_OIS_QUOTE.1Y",
+    "IR_USD_OIS_QUOTE.2Y",
+    "IR_USD_OIS_QUOTE.3Y",
     "IR_USD_OIS_QUOTE.5Y",
+    "IR_USD_OIS_QUOTE.7Y",
     "IR_USD_OIS_QUOTE.10Y",
+    "IR_USD_OIS_QUOTE.12Y",
+    "IR_USD_OIS_QUOTE.15Y",
     "IR_USD_OIS_QUOTE.20Y",
+    "IR_USD_OIS_QUOTE.30Y",
     "IR_JPY_OIS_QUOTE.1Y",
     "IR_JPY_OIS_QUOTE.5Y",
     "IR_JPY_OIS_QUOTE.10Y",
@@ -57,10 +63,16 @@ SWAP_INSTRUMENTS = [
 
 SWAP_BASE: dict[str, dict[str, Any]] = {
     # USD OIS
-    "IR_USD_OIS_QUOTE.1Y":  {"mid": 0.01,   "spread": 0.0002, "tenor": 1.0,  "currency": "USD"},
-    "IR_USD_OIS_QUOTE.5Y":  {"mid": 0.05,   "spread": 0.0003, "tenor": 5.0,  "currency": "USD"},
-    "IR_USD_OIS_QUOTE.10Y": {"mid": 0.10,   "spread": 0.0004, "tenor": 10.0, "currency": "USD"},
-    "IR_USD_OIS_QUOTE.20Y": {"mid": 0.20,   "spread": 0.0005, "tenor": 20.0, "currency": "USD"},
+    "IR_USD_OIS_QUOTE.1Y":  {"mid": 0.011,   "spread": 0.0002, "tenor": 1.0,  "currency": "USD"},
+    "IR_USD_OIS_QUOTE.2Y":  {"mid": 0.012,   "spread": 0.0002, "tenor": 2.0,  "currency": "USD"},
+    "IR_USD_OIS_QUOTE.3Y":  {"mid": 0.013,   "spread": 0.0002, "tenor": 3.0,  "currency": "USD"},
+    "IR_USD_OIS_QUOTE.5Y":  {"mid": 0.015,   "spread": 0.0003, "tenor": 5.0,  "currency": "USD"},
+    "IR_USD_OIS_QUOTE.7Y":  {"mid": 0.017,   "spread": 0.0003, "tenor": 7.0,  "currency": "USD"},
+    "IR_USD_OIS_QUOTE.10Y": {"mid": 0.020,   "spread": 0.0004, "tenor": 10.0, "currency": "USD"},
+    "IR_USD_OIS_QUOTE.12Y": {"mid": 0.022,   "spread": 0.0004, "tenor": 12.0, "currency": "USD"},
+    "IR_USD_OIS_QUOTE.15Y": {"mid": 0.025,   "spread": 0.0004, "tenor": 15.0, "currency": "USD"},
+    "IR_USD_OIS_QUOTE.20Y": {"mid": 0.030,   "spread": 0.0005, "tenor": 20.0, "currency": "USD"},
+    "IR_USD_OIS_QUOTE.30Y": {"mid": 0.040,   "spread": 0.0006, "tenor": 30.0, "currency": "USD"},
     
     # JPY OIS
     "IR_JPY_OIS_QUOTE.1Y":  {"mid": 0.001,  "spread": 0.0001, "tenor": 1.0,  "currency": "JPY"},
@@ -163,6 +175,7 @@ class SimulatorFeed(MarketDataFeed):
                     await bus.publish(fx_tick)
 
                 # ── Swap ticks ─────────────────────────────────────────────
+                swap_batch = []
                 for sym in SWAP_INSTRUMENTS:
                     base = SWAP_BASE[sym]
                     old_mid = self._current_swaps[sym]
@@ -183,7 +196,10 @@ class SimulatorFeed(MarketDataFeed):
                         rate=round(new_mid, 6),
                         timestamp=now,
                     )
-                    await bus.publish(swap_tick)
+                    swap_batch.append(swap_tick)
+
+                from marketdata.models import TickBatch
+                await bus.publish(TickBatch(ticks=swap_batch))
 
                 await asyncio.sleep(self._tick_interval)
             except asyncio.CancelledError:

@@ -106,6 +106,28 @@ class WebSocketPublisher:
                     clients = list(self._clients.values())
 
                 for client in clients:
+                    if msg.type == "batch":
+                        from marketdata.models import TickBatch
+                        filtered = []
+                        for t in msg.ticks:
+                            if client.types is not None and t.type not in client.types:
+                                continue
+                            # _symbol filter for batch ticks
+                            if client.symbols is not None and get_symbol_key(t) not in client.symbols:
+                                continue
+                            filtered.append(t)
+                        
+                        if not filtered:
+                            continue
+                        
+                        try:
+                            await client.websocket.send_text(
+                                TickBatch(ticks=filtered).model_dump_json()
+                            )
+                        except (WebSocketDisconnect, RuntimeError, Exception) as e:
+                            logger.debug("WS send failed for %s: %s", id(client.websocket), e)
+                        continue
+
                     if client.types is not None and msg.type not in client.types:
                         continue
                     if client.symbols is not None and sym_key not in client.symbols:

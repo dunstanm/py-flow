@@ -26,9 +26,9 @@ for mod in ["streaming", "store", "store.base", "reaktiv"]:
     sys.modules[mod] = m
 
 # Now import our components
-import instruments.ir_scheduling as sched
-from instruments.ir_swap_fixed_ois import IRSwapFixedOIS
-from instruments.ir_swap_xccy_ois import IRSwapXCCYOIS
+import pricing.pricing.pricing.instruments.ir_scheduling as sched
+from pricing.pricing.pricing.instruments.ir_swap_fixed_ois import IRSwapFixedOIS
+from pricing.pricing.pricing.instruments.ir_swap_xccy_ois import IRSwapXCCYOIS
 
 # Minimal Mock Curve that supports fitting
 class MockPillar:

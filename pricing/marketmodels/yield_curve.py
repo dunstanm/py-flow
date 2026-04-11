@@ -23,7 +23,7 @@ from store import Storable
 from reactive.computed import computed, effect
 from reactive.expr import VariableMixin
 from streaming import ticking
-from marketmodel.curve_base import CurveBase
+from pricing.marketmodels.curve_base import CurveBase
 
 
 # ── Interpolation (SQL-translatable: only +, -, *, /) ────────────────────
@@ -89,8 +89,8 @@ class YieldCurvePoint(Storable, VariableMixin):
     def set_fitted_rate(self, value: float):
         """Update the rate from a solver."""
         self.fitted_rate = value
-        import marketmodel.curve_fitter
-        if not marketmodel.curve_fitter.IS_SOLVING:
+        import pricing.marketmodels.curve_fitter
+        if not pricing.marketmodels.curve_fitter.IS_SOLVING:
             self.tick()
 
     def initial_guess(self) -> float:
@@ -102,12 +102,16 @@ class YieldCurvePoint(Storable, VariableMixin):
 
     @computed
     def discount_factor(self):
-        return 1.0 / (1.0 + self.rate) ** self.tenor_years
+        # Clip rate to avoid overflow/underflow
+        # Floors at -0.5 (50% negative) for extreme numerical safety.
+        r = float(self.rate)
+        r = max(-0.5, min(5.0, r))
+        return 1.0 / (1.0 + r) ** self.tenor_years
 
     @effect("rate")
     def on_rate(self, value):
-        import marketmodel.curve_fitter
-        if marketmodel.curve_fitter.IS_SOLVING:
+        import pricing.marketmodels.curve_fitter
+        if pricing.marketmodels.curve_fitter.IS_SOLVING:
             return
         self.tick()
 
@@ -161,6 +165,20 @@ class LinearTermDiscountCurve(Storable, CurveBase):
     def _sorted_points(self):
         """Sort points by tenor — helper to avoid lambda in @computed."""
         return sorted(self.points, key=_point_tenor_key)
+
+    def set_rates_numerical(self, rates: list[float] | np.ndarray):
+        """Update pillar rates without triggering reactive effects."""
+        pts = self._sorted_points()
+        for i, r in enumerate(rates):
+            pts[i].fitted_rate = float(r)
+        
+        # Invalidate internal caches
+        if hasattr(self, '_pillar_rates_cache'):
+            object.__setattr__(self, '_pillar_rates_cache', None)
+        if hasattr(self, '_interp_cache'):
+            object.__setattr__(self, '_interp_cache', {})
+        if hasattr(self, '_df_cache'):
+            object.__setattr__(self, '_df_cache', {})
 
     @computed
     def pillar_tenors(self) -> list:
@@ -282,16 +300,8 @@ class LinearTermDiscountCurve(Storable, CurveBase):
         cache[t] = expr
         return expr
 
-    def df(self, t: float) -> "Expr":
-        """Build an Expr tree for the discount factor at tenor t.
-
-        df(t) = (1 + interp(t)) ^ (-t)
-
-        Cached: same tenor → same Expr object (enables sub-expression sharing
-        across multiple swaps on the same curve).
-
-        Returns an Expr with Variable leaves, suitable for eval/to_sql/diff.
-        """
+    def _df_expr(self, t: float) -> "Expr":
+        """Build a cached Expr tree for DF(t) = (1 + R(t))^(-t)."""
         cache = getattr(self, '_df_cache', None)
         if cache is None:
             cache = {}
@@ -304,6 +314,22 @@ class LinearTermDiscountCurve(Storable, CurveBase):
         expr = (Const(1.0) + rate_expr) ** Const(-t)
         cache[t] = expr
         return expr
+
+    def df(self, t: float):
+        """Discount factor at tenor *t*.
+
+        Returns:
+            TracedFloat — when tracing is active (@traceable trace mode)
+            Expr        — when building is active (@computed_expr)
+            float       — otherwise (default debug mode)
+        """
+        from reactive.traced import _is_tracing, _is_building
+        if _is_tracing():
+            from reactive.traced import TracedFloat
+            return TracedFloat(self.df_at(t), self._df_expr(t))
+        if _is_building():
+            return self._df_expr(t)
+        return self.df_at(t)
 
     def fwd(self, start: float, end: float) -> "Expr":
         """Build an Expr tree for the forward rate between start and end.
@@ -367,7 +393,7 @@ class LinearTermDiscountCurve(Storable, CurveBase):
 
     @effect("pillar_rates")
     def on_rates_change(self, value):
-        import marketmodel.curve_fitter
-        if marketmodel.curve_fitter.IS_SOLVING:
+        import pricing.marketmodels.curve_fitter
+        if pricing.marketmodels.curve_fitter.IS_SOLVING:
             return
         self.tick()

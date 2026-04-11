@@ -76,7 +76,7 @@ class Page(param.Parameterized):
 
     def add_chart(self, fig: Any, title: str = "", span: int = 6, height: int = 400) -> _ChartComponent:
         """Add a Bokeh or Plotly chart."""
-        pane = pn.pane.Bokeh(fig, sizing_mode="stretch_both") if hasattr(fig, 'renderers') else pn.pane.Plotly(fig)
+        pane = pn.panel(fig, sizing_mode="stretch_both")
         comp = _ChartComponent(pane, title=title, span=span, height=height)
         self.components.append(comp)
         return comp
@@ -105,12 +105,12 @@ class Page(param.Parameterized):
     @property
     def layout(self) -> pn.FlexBox:
         """Assemble the 12-column grid layout."""
-        # We map span 1..12 to percentage widths for the FlexBox
         self._layout.objects = []
         for comp in self.components:
-            # We wrap the card to define its flex width
+            # We wrap the card to define its flex width. We remove 'width' to satisfy
+            # Panel's responsiveness requirements and rely on flex-basis instead.
             width_pct = (comp.span / 12) * 100
-            wrapper = pn.Column(comp.layout, width=int(width_pct), min_width=250, sizing_mode="stretch_width")
+            wrapper = pn.Column(comp.layout, min_width=250, sizing_mode="stretch_width")
             # Force basis to percentage for responsive grid
             wrapper.styles = {"flex-basis": f"calc({width_pct}% - 16px)"}
             self._layout.append(wrapper)
@@ -166,14 +166,14 @@ class Dashboard(param.Parameterized):
             return pn.pane.HTML("No page selected")
         return self.pages[self.active_page_name].layout
 
-    def serve(self, port: int = 8050, threaded: bool = False):
+    def serve(self, port: int = 8050, threaded: bool = False, **kwargs):
         """Serve the dashboard as a standalone web app."""
         template = pn.template.BootstrapTemplate(
             title=self.name,
             sidebar=[self._sidebar],
             main=[self._render_page]
         )
-        return pn.serve(template, port=port, threaded=threaded, show=not threaded)
+        return pn.serve(template, port=port, threaded=threaded, **kwargs)
 
     def show(self):
         """Return the servable template (for Jupyter usage)."""

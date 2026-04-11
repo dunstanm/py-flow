@@ -15,9 +15,9 @@ No external servers needed — DuckDB is in-process.
 import pytest
 import duckdb
 
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-from instruments.portfolio import Portfolio, expr_to_executable_sql
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.portfolio import Portfolio, expr_to_executable_sql
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.expr import diff, eval_cached
 
 
@@ -106,7 +106,7 @@ class TestSingleSwapPythonVsSQL:
     def test_df_matches(self, curve, ctx, db):
         """Individual discount factor expr: Python vs SQL."""
         for t in [1.0, 3.0, 5.0, 7.5, 10.0]:
-            expr = curve.df(t)
+            expr = curve._df_expr(t)
             py_val = eval_cached(expr, ctx)
             sql_val = _sql_eval(db, expr, ctx)
             assert sql_val == pytest.approx(py_val, rel=1e-12), \

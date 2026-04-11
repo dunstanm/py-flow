@@ -6,11 +6,11 @@ import pytest
 
 from streaming import agg, flush, get_tables
 
-from marketmodel.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
-from marketmodel.swap_curve import SwapQuote
-from marketmodel.curve_fitter import CurveFitter
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-from instruments.ir_swap_float_float import IRSwapFloatFloat
+from pricing.marketmodels.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
+from pricing.marketmodels.swap_curve import SwapQuote
+from pricing.marketmodels.curve_fitter import CurveFitter
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
 
 @pytest.fixture(scope="module")
 def xccy_system(streaming_server):

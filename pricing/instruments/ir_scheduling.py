@@ -432,7 +432,7 @@ class QuantLibCalendar(Calendar):
     Examples
     --------
     >>> import QuantLib as ql
-    >>> from instruments.ir_scheduling import QuantLibCalendar, BDConvention
+    >>> from pricing.pricing.pricing.instruments.ir_scheduling import QuantLibCalendar, BDConvention
     >>> cal = QuantLibCalendar(ql.UnitedStates(ql.UnitedStates.GovernmentBond))
     >>> from datetime import date
     >>> cal.is_business_day(date(2026, 7, 4))   # Independence Day
@@ -520,7 +520,7 @@ def calendar_for(currency: str, type: str = "payment") -> Calendar:
     Prioritizes the local YAML-based CalendarFactory. Falls back to 
     QuantLib if a specific YAML entry is not found.
     """
-    from instruments.calendars import CalendarFactory
+    from pricing.pricing.pricing.instruments.calendars import CalendarFactory
     
     # 1. Resolve logical calendar name from currency
     if type == "fixing":
@@ -901,29 +901,21 @@ def compounded_rate(
     total_tau = year_fraction(start, end, day_counter)
 
     # 1. Past fixings part (Compound Factor = Π (1 + r_i * δ_i))
-    # Standard OIS spans all business days in the calendar.
-    # For simplicity in this demo, we assume the provided fixings map
-    # covers all required historical business days.
     cf_past = 1.0
-    curr = start
-    while curr < end and curr < evaluation_date:
-        rate = fixings.get(curr)
-        if rate is None:
-            # Fallback to zero if missing, or we could raise error
-            rate = 0.0
-        
-        # OIS daily fixing covers 1 day (or more over weekends)
-        # We need the next date to get the span δ_i
-        # For simplicity, we use the calendar to find the next business day
-        # But we don't have the calendar here.
-        # Approximation: assume rate is constant until the next fixing or evaluation_date
-        # Real QuantLib logic uses the interestDates list.
-        # For this demo, we'll assume the fixings represent the accurate daily resets.
-        # Simplified: (1 + r * δ) where δ ≈ 1/360
-        # In a real implementation, we'd iterate the actual business days.
-        delta_t = 1.0 / 360.0 # Placeholder for exact day-count between internal resets
-        cf_past *= (1.0 + rate * delta_t)
-        curr += datetime.timedelta(days=1)
+    if start < evaluation_date:
+        if not fixings:
+            # Optimize: if no fixings, assume flat 0 or just skip the daily loop
+            # This avoids thousands of Python datetime additions during bootstrap.
+            curr = min(end, evaluation_date)
+        else:
+            curr = start
+            while curr < end and curr < evaluation_date:
+                rate = fixings.get(curr, 0.0)
+                delta_t = 1.0 / 360.0
+                cf_past *= (1.0 + rate * delta_t)
+                curr += datetime.timedelta(days=1)
+    else:
+        curr = start
 
     # 2. Future part (Telescopic Property)
     # Compound Factor = P(evaluation_date) / P(end)  [if start < evaluation_date]

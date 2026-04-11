@@ -1,6 +1,6 @@
 import pytest
-from instruments.ir_swap_float_float import IRSwapFloatFloat
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.pricing.pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.expr import eval_cached
 
 PILLARS = [

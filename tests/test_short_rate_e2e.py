@@ -18,12 +18,12 @@ import pytest
 
 from streaming import flush, get_tables
 
-from marketmodel.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
-from marketmodel.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
-from marketmodel.swap_curve import SwapQuote
-from marketmodel.curve_fitter import CurveFitter
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
-from instruments.portfolio import Portfolio
+from pricing.marketmodels.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
+from pricing.marketmodels.integrated_rate_curve import IntegratedRatePoint, IntegratedShortRateCurve
+from pricing.marketmodels.swap_curve import SwapQuote
+from pricing.marketmodels.curve_fitter import CurveFitter
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
+from pricing.pricing.pricing.instruments.portfolio import Portfolio
 from reactive.expr import Const, diff, eval_cached
 
 
@@ -327,7 +327,7 @@ def _count_nodes(expr, seen=None):
         return 0
     seen.add(id(expr))
     count = 1
-    from instruments.portfolio import _get_children
+    from pricing.pricing.pricing.instruments.portfolio import _get_children
     for child in _get_children(expr):
         count += _count_nodes(child, seen)
     return count
@@ -379,8 +379,8 @@ class TestSQLComplexity:
         new_curve = fitted_curves["new_curve"]
         old_curve = fitted_curves["old_curve"]
 
-        new_sql = new_curve.df(5.0).to_sql()
-        old_sql = old_curve.df(5.0).to_sql()
+        new_sql = new_curve._df_expr(5.0).to_sql()
+        old_sql = old_curve._df_expr(5.0).to_sql()
 
         assert "EXP" in new_sql, f"New SQL should use EXP: {new_sql}"
         # Old curve uses ^ (power) operator, not EXP
@@ -515,16 +515,16 @@ class TestPerformance:
 
         # Warm up caches
         for t in tenors:
-            curve.df(t)
+            curve._df_expr(t)
             for name in curve.pillar_names:
-                diff(curve.df(t), name)
+                diff(curve._df_expr(t), name)
 
         start = time.perf_counter()
         for _ in range(n_evals):
             for t in tenors:
-                eval_cached(curve.df(t), ctx)
+                eval_cached(curve._df_expr(t), ctx)
                 for name in curve.pillar_names:
-                    eval_cached(diff(curve.df(t), name), ctx)
+                    eval_cached(diff(curve._df_expr(t), name), ctx)
         elapsed = time.perf_counter() - start
         return elapsed
 

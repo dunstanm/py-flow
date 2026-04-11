@@ -1,8 +1,17 @@
 """
 streaming.decorator — @ticking class decorator.
 
-Auto-creates a TickingTable from a Storable dataclass, deriving column
-schema from dataclass fields and @computed properties.
+Annotates a Storable dataclass for *optional* streaming to a TickingTable.
+
+**Default mode (compute library):**
+  - @ticking is a pure metadata annotation — no tables, no connections.
+  - .tick() is a no-op.
+  - Zero Deephaven dependencies required.
+
+**Streaming mode (activated explicitly):**
+  - Call ``streaming.activate()`` to materialise TickingTable + LiveTable
+    for all decorated classes.
+  - .tick() then writes column values to the streaming engine.
 
 Usage::
 
@@ -21,25 +30,26 @@ Usage::
         ...
 
 Adds to the class:
-    cls._ticking_table   TickingTable instance
-    cls._ticking_live    LiveTable (last_by __key__)
+    cls._ticking_table   TickingTable instance (None until activated)
+    cls._ticking_live    LiveTable (None until activated)
     cls._ticking_cols    [(col_name, attr_name, python_type), ...]
     cls._ticking_name    snake_case name derived from class name
-    self.tick()          instance method — writes all column values
+    self.tick()          instance method — no-op unless streaming is active
 """
 
 import re
 from typing import Any
 
-from streaming.table import LiveTable, TickingTable
+# Global registry: table_name → registration dict
+# Tables/live views are None until streaming.activate() is called.
+_registry: dict[str, dict] = {}
 
-# Global registry: table_name → (TickingTable, LiveTable, write_count_list)
-# write_count_list is a single-element list [int] so it can be mutated via
-# closure in _tick without needing to attach state to TickingTable (which uses __slots__).
-_registry: dict[str, tuple[TickingTable, LiveTable, list]] = {}
+# Module-level flag: is streaming active?
+_streaming_active = False
 
 # Primitive types that map to ticking table columns
-_PRIMITIVE_TYPES = {str, float, int, bool}
+import datetime
+_PRIMITIVE_TYPES = {str, float, int, bool, datetime.date, datetime.datetime}
 
 
 def _to_snake_case(name: str) -> str:
@@ -72,7 +82,10 @@ def _resolve_column_specs(cls: type, exclude: set | None = None) -> list[tuple[s
             continue
         py_type = fobj.type
         if isinstance(py_type, str):
-            py_type = {"str": str, "float": float, "int": int, "bool": bool}.get(py_type)
+            py_type = {
+                "str": str, "float": float, "int": int, "bool": bool,
+                "date": datetime.date, "datetime": datetime.datetime
+            }.get(py_type)
         if py_type not in _PRIMITIVE_TYPES:
             continue  # skip object, list, etc.
         specs.append((fname, fname, py_type))
@@ -91,7 +104,10 @@ def _resolve_column_specs(cls: type, exclude: set | None = None) -> list[tuple[s
         
         # Handle "from __future__ import annotations" stringified types
         if isinstance(ret, str):
-            ret = {"str": str, "float": float, "int": int, "bool": bool}.get(ret)
+            ret = {
+                "str": str, "float": float, "int": int, "bool": bool,
+                "date": datetime.date, "datetime": datetime.datetime
+            }.get(ret)
 
         if ret not in _PRIMITIVE_TYPES:
             # Skip non-primitive return types (list, dict, object) 
@@ -103,24 +119,31 @@ def _resolve_column_specs(cls: type, exclude: set | None = None) -> list[tuple[s
     return specs
 
 
-def _tick(self: Any) -> None:
-    """Write all column values to the ticking table. Added to decorated classes."""
+def _tick_noop(self: Any) -> None:
+    """No-op tick — streaming not active. This is the default."""
+    pass
+
+
+def _tick_live(self: Any) -> None:
+    """Write all column values to the ticking table (streaming mode)."""
     cls = type(self)
+    table = cls._ticking_table
+    if table is None:
+        return
     entry = _registry.get(cls._ticking_name)
     try:
-        cls._ticking_table.write_row(*(getattr(self, attr) for _, attr, _ in cls._ticking_cols))
+        table.write_row(*(getattr(self, attr) for _, attr, _ in cls._ticking_cols))
         if entry is not None:
-            entry[2][0] += 1  # increment write counter
+            entry["write_count"][0] += 1
     except RuntimeError as e:
         if "Deephaven session not available" in str(e):
-            # Silent fallback if DH is not running (e.g. offline tests)
-            pass
+            pass  # Silent fallback if DH went away
         else:
             raise
 
 
 def _apply_ticking(cls: type, exclude: set | None = None) -> type:
-    """Core logic: create TickingTable, derive live table, attach to class."""
+    """Core logic: record metadata, attach no-op tick. Tables created later."""
     # Require __key__
     key = getattr(cls, "__key__", None)
     if key is None:
@@ -129,7 +152,7 @@ def _apply_ticking(cls: type, exclude: set | None = None) -> type:
             f"(e.g. __key__ = 'symbol')"
         )
 
-    # Resolve columns (pure Python types)
+    # Resolve columns (pure Python types — no DH imports)
     col_specs = _resolve_column_specs(cls, exclude)
     if not col_specs:
         raise ValueError(f"@ticking on {cls.__name__}: no columns resolved")
@@ -137,29 +160,33 @@ def _apply_ticking(cls: type, exclude: set | None = None) -> type:
     # Table name from class name
     table_name = _to_snake_case(cls.__name__)
 
-    # Create TickingTable with Python-typed schema
-    schema = {col_name: py_type for col_name, _, py_type in col_specs}
-    tt = TickingTable(schema)
-
-    # Derive live table (auto-locked via TickingTable.last_by)
-    live = tt.last_by(key)
-
-    # Attach to class
-    cls._ticking_table = tt  # type: ignore[attr-defined]
-    cls._ticking_live = live  # type: ignore[attr-defined]
-    cls._ticking_cols = col_specs  # type: ignore[attr-defined]
+    # Attach metadata — no tables, no connections
+    cls._ticking_table = None       # type: ignore[attr-defined]
+    cls._ticking_live = None        # type: ignore[attr-defined]
+    cls._ticking_cols = col_specs   # type: ignore[attr-defined]
     cls._ticking_name = table_name  # type: ignore[attr-defined]
-    cls.tick = _tick  # type: ignore[attr-defined]
+    cls.tick = _tick_noop            # type: ignore[attr-defined]
 
-    # Register — write_count is a mutable single-element list so _tick can
-    # increment it without needing to store state on TickingTable itself.
-    _registry[table_name] = (tt, live, [0])
+    # Register for deferred materialisation
+    _registry[table_name] = {
+        "schema": {col_name: py_type for col_name, _, py_type in col_specs},
+        "key": key,
+        "cls": cls,
+        "exclude": exclude,
+        "table": None,
+        "live": None,
+        "write_count": [0],
+    }
 
     return cls
 
 
 def ticking(cls: type | None = None, *, exclude: set | None = None) -> type:
-    """Class decorator: auto-create TickingTable + live table from Storable fields.
+    """Class decorator: annotate a Storable for optional streaming.
+
+    In default (compute) mode, this is pure metadata — no tables, no
+    connections, no overhead.  Call ``streaming.activate()`` to create
+    the underlying ticking tables when streaming is needed.
 
     Supports both bare and parameterized usage::
 
@@ -175,44 +202,93 @@ def ticking(cls: type | None = None, *, exclude: set | None = None) -> type:
     return decorator  # type: ignore[return-value]
 
 
+# ===========================================================================
+# Streaming activation (opt-in)
+# ===========================================================================
+
+def activate() -> None:
+    """Materialise TickingTable + LiveTable for all @ticking-decorated classes.
+
+    Call this *after* starting a StreamingServer.  Until this is called,
+    all @ticking classes run in compute-only mode with no-op .tick().
+
+    Example::
+
+        from streaming.admin import StreamingServer
+        from streaming.decorator import activate
+
+        server = StreamingServer(port=10000).start()
+        activate()   # tables created, .tick() becomes live
+    """
+    global _streaming_active
+    from streaming.table import TickingTable
+
+    for name, entry in _registry.items():
+        if entry["table"] is not None:
+            continue  # already materialised
+
+        schema = entry["schema"]
+        key = entry["key"]
+        cls = entry["cls"]
+
+        tt = TickingTable(schema)
+        live = tt.last_by(key)
+
+        entry["table"] = tt
+        entry["live"] = live
+
+        # Swap class-level pointers
+        cls._ticking_table = tt
+        cls._ticking_live = live
+        cls.tick = _tick_live
+
+    _streaming_active = True
+
+
+# ===========================================================================
+# Table accessors (for dashboard / streaming infrastructure)
+# ===========================================================================
+
 def get_tables() -> dict:
-    """Return dict of all registered tables: {name_raw: TickingTable, name_live: LiveTable}.
+    """Return dict of all materialised tables: {name_raw: table, name_live: live}.
 
-    Returns wrapped tables so all ops are auto-locked.
+    Returns only tables that have been activated.  In compute-only mode,
+    returns an empty dict.
     """
-    tables: dict[str, LiveTable] = {}
-    for name, (tt, live, _wc) in _registry.items():
-        tables[f"{name}_raw"] = tt          # TickingTable (inherits LiveTable)
-        tables[f"{name}_live"] = live       # LiveTable from last_by
-    return tables
-
-
-def get_active_tables() -> dict:
-    """Return only tables that have had at least one row written.
-
-    The global registry accumulates an entry for every ``@ticking``-decorated
-    class that is *imported*, even if no instances of that class are ever
-    created in the current run.  This function filters to only the tables
-    where ``.tick()`` was called at least once, keeping the DH panel list
-    clean and limited to classes that are actively in use.
-
-    Use instead of ``get_tables()`` when publishing to Deephaven::
-
-        tables = get_active_tables()   # only live classes
-        for name, tbl in tables.items():
-            tbl.publish(name)
-    """
-    tables: dict[str, LiveTable] = {}
-    for name, (tt, live, wc) in _registry.items():
-        if wc[0] > 0:
+    tables = {}
+    for name, entry in _registry.items():
+        tt = entry["table"]
+        live = entry["live"]
+        if tt is not None:
             tables[f"{name}_raw"] = tt
+        if live is not None:
             tables[f"{name}_live"] = live
     return tables
 
 
+def get_active_tables() -> dict:
+    """Return only materialised tables that have had at least one row written.
+
+    Use instead of ``get_tables()`` when publishing to Deephaven::
+
+        tables = get_active_tables()
+        for name, tbl in tables.items():
+            tbl.publish(name)
+    """
+    tables = {}
+    for name, entry in _registry.items():
+        tt = entry["table"]
+        live = entry["live"]
+        if tt is not None and entry["write_count"][0] > 0:
+            tables[f"{name}_raw"] = tt
+            if live is not None:
+                tables[f"{name}_live"] = live
+    return tables
+
+
 def get_ticking_tables() -> dict:
-    """Return dict of all registered TickingTable instances: {name: TickingTable}."""
-    return {name: tt for name, (tt, _live, _wc) in _registry.items()}
+    """Return dict of materialised TickingTable instances: {name: TickingTable}."""
+    return {name: entry["table"] for name, entry in _registry.items() if entry["table"] is not None}
 
 
 def clear_stale_tables(extra_names: list[str] | None = None) -> list[str]:
@@ -234,14 +310,15 @@ def clear_stale_tables(extra_names: list[str] | None = None) -> list[str]:
     list[str]
         The names that were successfully unbound.
     """
-    from streaming.table import _is_remote, _get_remote_session
+    from streaming.admin import _needs_docker
+    _REMOTE = _needs_docker()
 
     cleared: list[str] = []
 
     # Collect all registered table names (raw + live variants) that are INACTIVE
     stale: list[str] = []
-    for name, (tt, _live, wc) in _registry.items():
-        if wc[0] == 0:
+    for name, entry in _registry.items():
+        if entry["write_count"][0] == 0:
             stale.append(f"{name}_raw")
             stale.append(f"{name}_live")
 
@@ -252,16 +329,13 @@ def clear_stale_tables(extra_names: list[str] | None = None) -> list[str]:
     if not stale:
         return cleared
 
-    if _is_remote():
-        session = _get_remote_session()
+    if _REMOTE:
+        from streaming.table import _get_session
+        session = _get_session()
         if session is None:
             return cleared
         for name in stale:
             try:
-                # pydeephaven: remove a binding by pushing None-equivalent.
-                # The cleanest approach is via the session's publish_table with
-                # an empty / null binding, but the public API uses bind_table.
-                # We use the internal console execute to delete the variable.
                 session.run_script(f"if '{name}' in globals(): del {name}")
                 cleared.append(name)
             except Exception:

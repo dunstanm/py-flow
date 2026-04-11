@@ -18,7 +18,7 @@ from reactive.computed import computed
 from reactive.computed_expr import computed_expr
 from reactive.expr import Expr
 from streaming import ticking
-import instruments.ir_scheduling as sched
+import pricing.pricing.pricing.instruments.ir_scheduling as sched
 
 
 @ticking(exclude={"discount_curve", "fixings"})

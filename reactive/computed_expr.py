@@ -75,24 +75,50 @@ class computed_expr(ComputedProperty):
         return CallableFloat(val, expr)
 
     def get_expr(self, instance):
+        # 1. Return from cache if we already built it
+        attr = f"_{self.name}_expr_cache"
+        if hasattr(instance, attr):
+            return getattr(instance, attr)
+
         curve = getattr(instance, "curve", getattr(instance, "discount_curve", getattr(instance, "leg1_discount_curve", getattr(instance, "leg2_discount_curve", None))))
         if curve is None:
             return None
-        # Short-circuit if curve has no points (causes Expr generation issues)
+        
+        # 2. Check for points availability (required to build symbolic nodes)
+        if hasattr(curve, "_points") and not curve._points:
+             return None
         if not hasattr(curve, "df"):
             return None
 
         from reactive.expr import _wrap, Expr
-        result = self.expr_fn(instance)
-        # Allow @computed_expr bodies to return plain scalars (0.0, 1.0, "text")
-        # without requiring explicit Const(...) wrapping at the call site.
+        from reactive.traced import _start_building, _stop_building
+
+        # 3. Build the tree (expensive O(N) step)
+        #    Activate "building" context so curve.df() returns raw Expr
+        #    (backward compat with functions that use Const() explicitly).
+        _start_building()
+        try:
+            result = self.expr_fn(instance)
+        finally:
+            _stop_building()
+        
         if result is None:
             return None
-        if isinstance(result, dict):
-            return result  # dicts are handled separately in _compute_val
-        if not isinstance(result, Expr):
-            return _wrap(result)
-        return result
+
+        # Handle TracedFloat returns (via __expr__ protocol)
+        _get_expr = getattr(result, "__expr__", None)
+        if _get_expr is not None:
+            final_tree = _get_expr()
+        elif isinstance(result, dict):
+            final_tree = result
+        elif not isinstance(result, Expr):
+            final_tree = _wrap(result)
+        else:
+            final_tree = result
+            
+        # 4. Cache it for future evaluations
+        setattr(instance, attr, final_tree)
+        return final_tree
 
     def __set_name__(self, owner, name):
         super().__set_name__(owner, name)

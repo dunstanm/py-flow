@@ -16,7 +16,7 @@ from reactive.expr import (
     BinOp, UnaryOp, Func, If, Coalesce, IsNull, StrOp,
     _cast_numeric_sql
 )
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
 
 
 class Portfolio:
@@ -53,7 +53,7 @@ class Portfolio:
 
     @property
     def names(self) -> list[str]:
-        return list(self._instruments.keys())
+        return list(self._pricing.pricing.instruments.keys())
 
     @property
     def pillar_names(self) -> list[str]:
@@ -64,13 +64,13 @@ class Portfolio:
     @property
     def npv_exprs(self) -> dict[str, Expr]:
         """Named NPV expressions: {name: npv_expr}."""
-        return {name: inst.npv() for name, inst in self._instruments.items()}
+        return {name: inst.npv() for name, inst in self._pricing.pricing.instruments.items()}
 
     @property
     def residual_exprs(self) -> dict[str, Expr]:
         """NPV / notional for each instrument (what the fitter minimizes)."""
         res = {}
-        for name, inst in self._instruments.items():
+        for name, inst in self._pricing.pricing.instruments.items():
             notional = getattr(inst, "notional", 
                        getattr(inst, "leg1_notional", 1.0))
             res[name] = inst.npv() * Const(1.0 / notional)
@@ -80,7 +80,7 @@ class Portfolio:
     def total_npv_expr(self) -> Expr:
         """Sum of all NPVs — a single Expr tree."""
         from reactive.expr import Sum
-        return Sum([inst.npv() for inst in self._instruments.values()])
+        return Sum([inst.npv() for inst in self._pricing.pricing.instruments.values()])
 
     @property
     def risk_exprs(self) -> dict[str, dict[str, Expr]]:
@@ -92,7 +92,7 @@ class Portfolio:
                 pillar_name: diff(inst.npv(), pillar_name, _memo=memo)
                 for pillar_name in pillars
             }
-            for name, inst in self._instruments.items()
+            for name, inst in self._pricing.pricing.instruments.items()
         }
 
     @property
@@ -103,7 +103,7 @@ class Portfolio:
         result = {}
         memo: dict = {}
         pillars = self.pillar_names
-        for name, inst in self._instruments.items():
+        for name, inst in self._pricing.pricing.instruments.items():
             notional = getattr(inst, "notional", 
                        getattr(inst, "leg1_notional", 1.0))
             scale = Const(1.0 / notional)
@@ -118,7 +118,7 @@ class Portfolio:
     def pillar_context(self) -> dict[str, float]:
         """Current pillar rates aggregated from all instruments' curves."""
         ctx = {}
-        for inst in self._instruments.values():
+        for inst in self._pricing.pricing.instruments.values():
             if hasattr(inst, "pillar_context"):
                 ctx.update(inst.pillar_context())
         return ctx
@@ -140,7 +140,7 @@ class Portfolio:
         }
 
     def eval_total_risk(self, ctx: dict) -> dict[str, float]:
-        """Aggregate ∂(Σnpv)/∂pillar across all instruments."""
+        """Aggregate ∂(Σnpv)/∂pillar across all pricing.pricing.instruments."""
         total_expr = self.total_npv_expr
         cache: dict = {}
         return {
@@ -153,7 +153,7 @@ class Portfolio:
     def shared_nodes(self) -> dict[str, int]:
         """Count how many instruments reference each cached node."""
         node_ids: Counter[int] = Counter()
-        for inst in self._instruments.values():
+        for inst in self._pricing.pricing.instruments.values():
             seen = set()
             _walk_ids(inst.npv(), seen)
             for nid in seen:

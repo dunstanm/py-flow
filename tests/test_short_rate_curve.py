@@ -17,11 +17,11 @@ import pytest
 from reactive.expr import (
     Const, Variable, Exp, Log, Func, diff, eval_cached, BinOp,
 )
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
-from marketmodel.integrated_rate_curve import (
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.marketmodels.integrated_rate_curve import (
     IntegratedShortRateCurve, IntegratedRatePoint,
 )
-from marketmodel.curve_base import CurveBase
+from pricing.marketmodels.curve_base import CurveBase
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -289,7 +289,7 @@ class TestSymbolicExpr:
 
         for t_x10 in [5, 15, 30, 50, 75, 95]:
             t = t_x10 / 10.0
-            expr_val = eval_cached(curve.df(t), ctx)
+            expr_val = eval_cached(curve._df_expr(t), ctx)
             num_val = curve.df_at(t)
             assert math.isclose(expr_val, num_val, rel_tol=1e-10), \
                 f"Expr DF({t}) = {expr_val} != numerical {num_val}"
@@ -309,9 +309,9 @@ class TestSymbolicExpr:
     def test_df_expr_caching(self):
         """df(t) called twice returns the SAME Expr object."""
         curve = _make_steep_curve()
-        expr1 = curve.df(3.0)
-        expr2 = curve.df(3.0)
-        assert expr1 is expr2, "df(t) should return cached Expr"
+        expr1 = curve._df_expr(3.0)
+        expr2 = curve._df_expr(3.0)
+        assert expr1 is expr2, "_df_expr(t) should return cached Expr"
 
     def test_interp_expr_caching(self):
         """interp(t) called twice returns the SAME Expr object."""
@@ -323,14 +323,14 @@ class TestSymbolicExpr:
     def test_df_uses_exp(self):
         """df(t) Expr should use Func('exp'), not BinOp('**')."""
         curve = _make_steep_curve()
-        expr = curve.df(3.0)
+        expr = curve._df_expr(3.0)
         assert isinstance(expr, Func) and expr.name == "exp", \
-            f"df(t) should be Func('exp'), got {type(expr).__name__}"
+            f"_df_expr(t) should be Func('exp'), got {type(expr).__name__}"
 
     def test_df_sql_uses_exp(self):
         """df(t).to_sql() should use EXP(), not POWER()."""
         curve = _make_steep_curve()
-        sql = curve.df(3.0).to_sql()
+        sql = curve._df_expr(3.0).to_sql()
         assert "EXP" in sql, f"SQL should use EXP: {sql}"
         assert "POWER" not in sql, f"SQL should NOT use POWER: {sql}"
 
@@ -349,7 +349,7 @@ class TestJacobianSparsity:
         ctx = {pt.name: pt.rate for pt in pts}
 
         # DF at t=3.0 — bracket is [R_1Y, R_5Y], not R_10Y
-        df_expr = curve.df(3.0)
+        df_expr = curve._df_expr(3.0)
 
         # Should have non-zero derivative w.r.t. R_1Y and R_5Y
         d_R1 = eval_cached(diff(df_expr, "R_1Y"), ctx)
@@ -380,7 +380,7 @@ class TestJacobianSparsity:
         pts = curve._sorted_points()
         ctx = {pt.name: pt.rate for pt in pts}
 
-        df_expr = curve.df(3.0)
+        df_expr = curve._df_expr(3.0)
         bump = 1e-7
 
         for pt in pts:
@@ -420,7 +420,7 @@ class TestSqlRoundTrip:
         curve = _make_flat_curve(rate=0.05)
         pts = curve._sorted_points()
 
-        df_expr = curve.df(3.0)
+        df_expr = curve._df_expr(3.0)
         sql_body = df_expr.to_sql()
 
         # Build a SELECT with the pillar values as column aliases
@@ -437,7 +437,7 @@ class TestSqlRoundTrip:
         curve = _make_flat_curve(rate=0.05)
         pts = curve._sorted_points()
 
-        df_expr = curve.df(3.0)
+        df_expr = curve._df_expr(3.0)
         deriv = diff(df_expr, "R_5Y")
         sql_body = deriv.to_sql()
 

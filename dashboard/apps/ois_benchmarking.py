@@ -5,10 +5,10 @@ import panel as pn
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, HoverTool
 
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint, _interp
-from marketmodel.jump_curve import JumpCurveLayer, RateJump
-from instruments.ir_swap_fixed_ois import IRSwapFixedOIS
-from instruments.ir_future_ois import IRFutureOIS
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint, _interp
+from pricing.marketmodels.jump_curve import JumpCurveLayer, RateJump
+from pricing.pricing.pricing.instruments.ir_swap_fixed_ois import IRSwapFixedOIS
+from pricing.pricing.pricing.instruments.ir_future_ois import IRFutureOIS
 
 def create_bench_dashboard():
     pn.extension(sizing_mode="stretch_width")

@@ -1,12 +1,12 @@
 import pytest
 import numpy as np
 import pandas as pd
-from instruments.portfolio import Portfolio
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-from instruments.ir_swap_fixed_float import IRSwapFixedFloat
-from instruments.ir_swap_float_float import IRSwapFloatFloat
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
-from marketmodel.integrated_rate_curve import IntegratedShortRateCurve, IntegratedRatePoint
+from pricing.pricing.pricing.instruments.portfolio import Portfolio
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
+from pricing.pricing.pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.marketmodels.integrated_rate_curve import IntegratedShortRateCurve, IntegratedRatePoint
 from reactive.basis_extractor import BasisExtractor
 
 # ─── Helpers for creating market data ────────────────────────────────────────

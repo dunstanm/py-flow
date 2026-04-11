@@ -9,9 +9,9 @@ import pytest
 
 from streaming import agg, flush, get_tables
 
-from marketmodel.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
-from marketmodel.swap_curve import SwapQuote
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
+from pricing.marketmodels.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
+from pricing.marketmodels.swap_curve import SwapQuote
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ def reactive_graph(streaming_server):
     # ── Fitter Step ───────────────────────────────────────────────
     # We must run the fitter to ensure the zero rates represent par rates
     # otherwise NPV will not be zero because zero_rate != par_rate.
-    from marketmodel.curve_fitter import CurveFitter
+    from pricing.marketmodels.curve_fitter import CurveFitter
     fitter = CurveFitter(
         name="USD_FIT", currency="USD", curve=usd_curve,
         points=[usd_1y, usd_5y, usd_10y],

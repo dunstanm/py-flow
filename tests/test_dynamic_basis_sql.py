@@ -11,9 +11,9 @@ import duckdb
 import pandas as pd
 from typing import Dict
 
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-from instruments.portfolio import Portfolio
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.portfolio import Portfolio
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached
 

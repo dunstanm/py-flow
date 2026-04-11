@@ -23,7 +23,7 @@ from reactive.computed import computed, effect
 from reactive.computed_expr import computed_expr
 from reactive.expr import diff, Expr
 from streaming import ticking
-import instruments.ir_scheduling as sched
+import pricing.pricing.pricing.instruments.ir_scheduling as sched
 
 
 @ticking(exclude={"discount_curve", "risk", "fixings"})
@@ -59,13 +59,15 @@ class IRSwapFixedOIS(Storable):
     symbol: str = ""
     notional: float = 0.0
     fixed_rate: float = 0.0
-    effective_date: Optional[datetime.date] = None
-    termination_date: Optional[datetime.date] = None
+    effective_date_override: Optional[datetime.date] = None
+    termination_date_override: Optional[datetime.date] = None
+    tenor_years: float = 0.0
     frequency_months: int = 12
     side: str = "RECEIVER"
     currency: str = "USD"
+    is_target: bool = False
     
-    discount_curve: Any = field(default=None, repr=False)
+    discount_curve: object = field(default=None, repr=False)
     fixings: dict[datetime.date, float] = field(default_factory=dict, repr=False)
     
     evaluation_date_override: Optional[datetime.date] = None
@@ -87,11 +89,20 @@ class IRSwapFixedOIS(Storable):
         return mapping.get(self.currency.upper(), f"{self.currency.upper()}_OIS")
 
     @computed
-    def tenor_years(self) -> float:
-        """Tenor of the swap in years (used by fitter)."""
-        if not self.effective_date or not self.termination_date:
-            return 0.0
-        return (self.termination_date - self.effective_date).days / 365.2425
+    def effective_date(self) -> datetime.date:
+        """Effective date (start of swap). Uses override or evaluation date."""
+        if self.effective_date_override:
+            return self.effective_date_override
+        return self.evaluation_date
+
+    @computed
+    def termination_date(self) -> datetime.date:
+        """Termination date (end of swap). Uses override or effective_date + tenor."""
+        if self.termination_date_override:
+            return self.termination_date_override
+        # Add tenor_years to effective_date. Rough approx is fine for demo
+        days = int(self.tenor_years * 365.2425)
+        return self.effective_date + datetime.timedelta(days=days)
 
     @computed
     def evaluation_date(self) -> datetime.date:
@@ -176,11 +187,15 @@ class IRSwapFixedOIS(Storable):
             return self.float_leg_pv() - self.fixed_leg_pv()
         return self.fixed_leg_pv() - self.float_leg_pv()
 
-    def pillar_context(self) -> dict[str, Any]:
-        """Context for solver: helps resolve cross-curve dependencies."""
-        if hasattr(self.discount_curve, 'pillar_context'):
-            return self.discount_curve.pillar_context()
-        return {}
+    def pillar_context(self) -> dict[str, float]:
+        """Build a context dict from the curve's current pillar rates."""
+        ctx = {}
+        if self.discount_curve:
+            if hasattr(self.discount_curve, "_sorted_points"):
+                pts = self.discount_curve._sorted_points()
+                for p in pts:
+                    ctx[p.name] = getattr(p, "rate", 0.0)
+        return ctx
 
     @computed_expr
     def dv01(self) -> Expr:
@@ -230,6 +245,19 @@ class IRSwapFixedOIS(Storable):
             for name in self.pillar_names
         }
 
-    def tick(self):
-        """Manual tick if needed for dashboard/streaming."""
-        pass
+    @computed
+    def pnl_status(self) -> str:
+        val = self.npv
+        if val > 0:
+            return "PROFIT"
+        elif val < 0:
+            return "LOSS"
+        return "FLAT"
+
+    @effect("npv")
+    def on_npv(self, value):
+        import pricing.marketmodels.curve_fitter
+        if pricing.marketmodels.curve_fitter.IS_SOLVING or getattr(self, "is_target", False):
+            return
+        if hasattr(self, "tick"):
+            self.tick()

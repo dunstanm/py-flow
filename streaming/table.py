@@ -9,6 +9,10 @@ auto-acquire the UG shared lock so callers never segfault.
 (``DynamicTableWriter``).  On Linux ARM64, uses ``pydeephaven`` to talk
 to a Docker-hosted Deephaven server.
 
+These classes are only instantiated when streaming is explicitly activated
+via ``streaming.activate()``.  In default compute-library mode, no tables
+are created and no Deephaven connections are made.
+
 Classes:
     LiveTable     Read-only derived table (all ops auto-locked).
     TickingTable  Writable table (inherits LiveTable, adds write_row/flush).
@@ -20,6 +24,7 @@ import itertools
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
+import math
 from typing import Any
 
 import pandas as pd
@@ -274,11 +279,14 @@ if _REMOTE:
     _remote_port = 10000  # default; overridden by conftest
 
     def _get_session():
-        """Return the shared pydeephaven session, creating if needed."""
+        """Return the shared pydeephaven session, creating if needed.
+        
+        Strictly enforces Anonymous authentication to match platform-started instances.
+        """
         global _remote_session
         if _remote_session is None:
             from pydeephaven import Session
-            _remote_session = Session(host="localhost", port=_remote_port)
+            _remote_session = Session(host="localhost", port=_remote_port, auth_type="Anonymous")
         return _remote_session
 
     def set_remote_port(port: int) -> None:
@@ -413,6 +421,9 @@ if _REMOTE:
                 if isinstance(v, datetime):
                     # Convert to ISO format string and parse server-side
                     parts.append(f"to_j_instant('{v.isoformat()}')")
+                elif isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
+                    # Handle inf/nan which are not default names in DH scope
+                    parts.append(f"float('{v}')")
                 else:
                     parts.append(repr(v))
             vals = ", ".join(parts)
@@ -433,4 +444,3 @@ if _REMOTE:
     # -- Monkey-patch the module-level names so callers see the right type -
     LiveTable = RemoteLiveTable  # type: ignore[misc]
     TickingTable = RemoteTickingTable  # type: ignore[misc]
-

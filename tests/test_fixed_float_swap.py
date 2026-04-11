@@ -6,9 +6,9 @@ FixedFloatApproxSwapExpr.
 
 import pytest
 
-from instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-from instruments.ir_swap_fixed_float import IRSwapFixedFloat
-from marketmodel.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.pricing.pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.pricing.pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
+from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.expr import eval_cached
 
 PILLARS = [
