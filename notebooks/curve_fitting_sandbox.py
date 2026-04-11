@@ -22,14 +22,20 @@ def _():
         sys.path.insert(0, project_root)
 
     # Internal Imports
-    from pricing.marketmodels.integrated_rate_curve import IntegratedShortRateCurve, IntegratedRatePoint
-    from pricing.marketmodels.curve_fitter import CurveFitter
-    from pricing.marketmodels.yield_curve import YieldCurvePoint, LinearTermDiscountCurve
+    from pricing.instruments.eq_option import EquityOption
+    from pricing.instruments.eq_forward import EquityForward
+    from pricing.marketmodels.eq_curve_dividend import DividendCurve
+    from pricing.marketmodels.ir_curve_integrated_rate import IntegratedShortRateCurve, IntegratedRatePoint
+    from pricing.marketmodels.ir_curve_fitter import CurveFitter
+    from pricing.marketmodels.ir_curve_yield import YieldCurvePoint, LinearTermDiscountCurve
     from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
-    from pricing.marketmodels.swap_curve import SwapQuote
+    from pricing.marketmodels.ir_curve_swap import SwapQuote
 
     return (
         CurveFitter,
+        DividendCurve,
+        EquityForward,
+        EquityOption,
         IRSwapFixedFloatApprox,
         IntegratedShortRateCurve,
         LinearTermDiscountCurve,
@@ -334,6 +340,87 @@ def _(curve, fwds, go, manual_inputs, mo, np, plot_tenors):
 
     mo.md(f"{mo.as_html(m_fig)}")
     return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ---
+    # 📈 Equity Options Lab (@traceable cascade)
+    Testing the purely reactive Black-Scholes pricing engine using the natively refactored `eq_option` domain models.
+    """)
+    return
+
+
+@app.cell
+def _(
+    DividendCurve,
+    EquityForward,
+    EquityOption,
+    IntegratedShortRateCurve,
+    YieldCurvePoint,
+    curve,
+    mo,
+):
+    # Base setup using the IR curve generated above
+    spot_price = 4500.0
+    div_yield = 0.015
+
+    # 1. Dividend curve
+    div_curve = DividendCurve(
+        name="SPX_DIV",
+        base_yield=div_yield
+    )
+
+    # 2. Equity Forward Tracker (ties Spot, Yield Curve, and Div Curve)
+    fwd_model = EquityForward(
+        symbol="SPX_FWD",
+        spot=spot_price,
+        discount_curve=curve,          # References the interactively fitted Sandbox curve!
+        dividend_curve=div_curve
+    )
+
+    # 3. Option
+    strike = 4600.0
+    expiry_years = 1.0
+    volatility = 0.18
+
+    option = EquityOption(
+        symbol="SPX_CALL",
+        forward_model=fwd_model,
+        strike=strike,
+        expiry_years=expiry_years,
+        is_call=True,
+        volatility=volatility
+    )
+
+    # Trigger reactive cascade
+    pv = option.npv
+
+    # Trace dependencies automatically
+    try:
+        from reactive.traceable import ExecutionTracer
+        tracer = ExecutionTracer()
+        trace_str = "\n".join([f"• {dep.name}" for dep in tracer._dependencies])
+    except Exception:
+        trace_str = "Tracer not available"
+
+    mo.md(
+        f"""
+        ### Option Configuration
+        * **Option**: 1Y Call over SPX (Strike: {strike})
+        * **Market Forward**: {fwd_model.forward_at(expiry_years):.2f} (Uses Sandbox curve)
+        * **Vol**: {volatility*100}%
+
+        ### Valuation
+        * **Black-Scholes NPV**: `${pv:.2f}`
+
+        ### `@traceable` Dependency Graph Activation
+        The computation successfully traversed:
+        {trace_str}
+        """
+    )
+    return div_curve, div_yield, expiry_years, fwd_model, option, pv, spot_price, strike, trace_str, tracer, volatility
 
 
 if __name__ == "__main__":

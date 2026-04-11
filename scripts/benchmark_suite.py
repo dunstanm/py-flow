@@ -24,15 +24,15 @@ SEED = 42
 os.environ["STREAMING_MODE"] = "mock"
 
 # Force solve mode for symbolic extractor
-import pricing.marketmodels.curve_fitter
-pricing.marketmodels.curve_fitter.IS_SOLVING = True
+import pricing.marketmodels.ir_curve_fitter
+pricing.marketmodels.ir_curve_fitter.IS_SOLVING = True
 
 from pricing.instruments.portfolio import Portfolio
 from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
 from pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
 from pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
-from pricing.marketmodels.yield_curve import LinearTermDiscountCurve, YieldCurvePoint
-from pricing.marketmodels.integrated_rate_curve import IntegratedShortRateCurve, IntegratedRatePoint
+from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCurvePoint
+from pricing.marketmodels.ir_curve_integrated_rate import IntegratedShortRateCurve, IntegratedRatePoint
 from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached, diff, Const
 from streaming.admin import StreamingServer
