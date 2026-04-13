@@ -13,6 +13,13 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
     Communication between child and parent nodes is handled entirely
     through the _cache (keyed by id(node)), ensuring correctness for DAGs.
     """
+    if hasattr(expr, "__expr__"):
+        expr = expr.__expr__()
+        
+    if not isinstance(expr, Expr):
+        # Already evaluated or constant
+        return expr
+
     if _cache is None:
         _cache = {}
 

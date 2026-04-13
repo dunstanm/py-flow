@@ -85,7 +85,16 @@ def _resolve_column_specs(cls: type, exclude: set | None = None) -> list[tuple[s
     )
     for name in computed_names:
         cp = getattr(cls, name)
-        ret = getattr(cp.fn, "__annotations__", {}).get("return", float)
+        # Use the underlying user function for annotations if it's a @traceable
+        # traceable properties store the original quant function in _user_fn
+        fn = getattr(cp, "_user_fn", cp.fn)
+        ann = getattr(fn, "__annotations__", {})
+        ret = ann.get("return", float)
+        
+        # Resolve string annotations (from from __future__ import annotations)
+        if isinstance(ret, str):
+            ret = {"str": str, "float": float, "int": int, "bool": bool}.get(ret, float)
+             
         if ret not in _PRIMITIVE_TYPES:
             ret = float  # default to float for unannotated computed
         specs.append((name, name, ret))
@@ -96,7 +105,34 @@ def _resolve_column_specs(cls: type, exclude: set | None = None) -> list[tuple[s
 def _tick(self: Any) -> None:
     """Write all column values to the ticking table. Added to decorated classes."""
     cls = type(self)
-    cls._ticking_table.write_row(*(getattr(self, attr) for _, attr, _ in cls._ticking_cols))
+    raw_values = (getattr(self, attr) for _, attr, _ in cls._ticking_cols)
+    final_values = []
+    
+    import sys
+    for name, attr, py_type in cls._ticking_cols:
+        val = getattr(self, attr)
+        # Robust numeric resolution for symbolic leakage or dual-mode objects
+        if hasattr(val, "eval") or hasattr(val, "__expr__"):
+            from reactive.evaluation import eval_cached
+            # Get current context (pillar values) for evaluation
+            ctx = getattr(self, "pillar_context", None)
+            ctx = ctx() if callable(ctx) else {}
+            try:
+                val = eval_cached(val, ctx)
+            except Exception:
+                # If evaluation fails, try a simple float cast as fallback
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    pass
+        
+        # Diagnostic: check for string-to-number mismatch
+        if py_type in (float, int) and isinstance(val, str):
+            sys.stderr.write(f"  [Ticking Error] {cls.__name__}.{attr}: expected {py_type}, got string '{val}'\n")
+            
+        final_values.append(val)
+        
+    cls._ticking_table.write_row(*final_values)
 
 
 def _apply_ticking(cls: type, exclude: set | None = None) -> type:

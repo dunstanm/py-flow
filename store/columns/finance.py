@@ -446,6 +446,28 @@ REGISTRY.define("fx_base_mid", float,
     category="fx",
 )
 
+REGISTRY.define("fitted_rate", float,
+    description="Rate produced by the curve solver/fitter",
+    semantic_type="percentage",
+    role="measure",
+    unit="ratio",
+    format=".4%",
+    display_name="Fitted Rate",
+    category="fixed_income",
+)
+
+REGISTRY.define("is_fitted", bool,
+    description="If True, the rate is set by a Solver (not pass-through)",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("quote_ref", object,
+    description="Reference to the input SwapQuote/MarketQuote object",
+    role="attribute",
+    category="market_data",
+)
+
 REGISTRY.define("fx_ref", object,
     description="Cross-entity reference to an FXSpot instance",
     role="attribute",
@@ -595,6 +617,190 @@ REGISTRY.define("var_pct_99", float,
 REGISTRY.define("hhi", float,
     description="Herfindahl-Hirschman Index for concentration",
     role="measure", unit="ratio",
+    category="risk",
+)
+
+
+# ── Interest Rate Curve Fitting & Jacobians ────────────────────────
+
+REGISTRY.define("output_tenor", float,
+    description="The output tenor of a Jacobian entry or fitting point",
+    role="measure", unit="years",
+    category="fixed_income",
+)
+
+REGISTRY.define("input_tenor", float,
+    description="The input tenor of a Jacobian entry",
+    role="measure", unit="years",
+    category="fixed_income",
+)
+
+REGISTRY.define("quote_symbol", str,
+    description="The symbol of the input quote being sensitized",
+    role="dimension",
+    category="market_data",
+)
+
+REGISTRY.define("jacobian", list,
+    description="Matrix of sensitivies (∂fitted / ∂quoted)",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("points", list,
+    description="Collection of curve knot points",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("point_count", int,
+    description="Number of knot points in the curve",
+    role="measure", unit="units",
+    category="fixed_income",
+)
+
+REGISTRY.define("pillar_tenors", list,
+    description="Sorted list of pillar tenors",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("pillar_rates", list,
+    description="Sorted list of pillar rates",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("pillar_names", list,
+    description="Sorted list of pillar names",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("zero_rate", float,
+    description="The continuously compounded zero rate",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("integrated_rate", float,
+    description="The integral of the short rate (used for DFs)",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("short_rate", float,
+    description="The instantaneous short rate",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("mean_reversion", float,
+    description="Mean reversion speed (kappa)",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("degree", int,
+    description="Polynomial degree for splines (2=Quadratic, 3=Cubic)",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("is_local", bool,
+    description="If True, uses local spline conditions; if False, match slopes",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("collateral_currency", str,
+    description="ISO currency code for collateral discounting",
+    role="dimension",
+    category="fx",
+)
+
+REGISTRY.define("is_target", bool,
+    description="If True, this instrument is a target for the CurveFitter",
+    role="attribute",
+    category="fixed_income",
+)
+
+
+REGISTRY.define("curve", object,
+    description="Reference to a curve implementation (CurveBase)",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("projection_curve", object,
+    description="Reference to a curve used for forward rate projections",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("discount_curve", object,
+    description="Reference to a curve used for discounting cash flows",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("float_spread", float,
+    description="Spread added to the floating rate (in bps or decimal)",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("target_swaps", list,
+    description="List of target instruments for the CurveFitter",
+    role="attribute",
+    category="fixed_income",
+)
+
+REGISTRY.define("quotes", list,
+    description="List of market quotes used as inputs for curve fitting",
+    role="attribute",
+    category="market_data",
+)
+
+REGISTRY.define("quote_trigger", float,
+    description="Cumulative trigger value computed from input quote rates",
+    role="measure", unit="ratio",
+    category="market_data",
+)
+
+REGISTRY.define("tenor", float,
+    description="Benchmark tenor in years (e.g. 1.0, 5.0)",
+    role="measure", unit="years",
+    category="fixed_income",
+)
+
+REGISTRY.define("portfolio", str,
+    description="Name of the portfolio being risk-analyzed",
+    role="dimension",
+    category="risk",
+)
+
+REGISTRY.define("quote", str,
+    description="Symbol of the benchmark quote for risk ladder mapping",
+    role="dimension",
+    category="market_data",
+)
+
+REGISTRY.define("equiv_notional", float,
+    description="Equivalent notional amount for a basis point move",
+    role="measure", unit="USD",
+    category="risk",
+)
+
+REGISTRY.define("par_rate", float,
+    description="Fixed rate at which the swap NPV is zero",
+    role="measure", unit="ratio",
+    category="fixed_income",
+)
+
+REGISTRY.define("pillar_risk", dict,
+    description="Dictionary of symbolic sensitivities (Greeks)",
+    role="attribute",
     category="risk",
 )
 
