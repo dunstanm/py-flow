@@ -189,7 +189,7 @@ class QuestDBManager:
         # Find extracted dir and flatten jar into bin_dir
         for child in bin_dir.iterdir():
             if child.is_dir() and child.name.startswith("questdb"):
-                for jar in child.glob("questdb*.jar"):
+                for jar in child.rglob("questdb*.jar"):
                     shutil.move(str(jar), str(bin_dir / jar.name))
                 # Keep lib dir if it exists
                 lib_src = child / "lib"
