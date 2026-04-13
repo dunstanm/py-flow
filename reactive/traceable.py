@@ -87,9 +87,15 @@ class _TracedCallable(float):
     def _to_traced(self):
         """Convert to TracedFloat by lazily building the Expr tree."""
         from reactive.traced import TracedFloat
+        # Optimization: the result of self._ensure_expr() might already be 
+        # a TracedFloat or have a tree ready.
         return TracedFloat(float(self), self._ensure_expr())
 
     def __add__(self, other):
+        if isinstance(other, float) and not hasattr(other, "__expr__"):
+             # Fast path for plain float addition if no tracing needed? 
+             # No, if self is traceable, the result MUST be traced.
+             pass
         return self._to_traced().__add__(other)
 
     def __radd__(self, other):
@@ -197,15 +203,24 @@ class traceable(ComputedProperty):
         """Builds and caches an exact equivalent analytic mapping implicitly identical to python AST parsing by feeding structural Field variables dynamically."""
         if not hasattr(self, "_cached_expr") or self._cached_expr is None:
             from reactive.expr import Field, Const, Expr
+            
             class _StructProxy:
                 def __getattr__(self, name):
                     return Field(name)
+                def __getitem__(self, key):
+                    return Field(str(key))
+                def __bool__(self):
+                    return True  # Avoid crashes in 'if self.attr:'
+                def __repr__(self):
+                    return f"<TracingProxy for {self.__class__.__name__}>"
             
             from reactive.traced import _start_tracing, _stop_tracing
             _start_tracing()
             try:
+                # We pass an instance of the proxy.
                 res = self._user_fn(_StructProxy())
             except Exception:
+                # If it still crashes, we fallback to None (cannot trace formula)
                 res = None
             finally:
                 _stop_tracing()

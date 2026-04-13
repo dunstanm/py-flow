@@ -27,6 +27,9 @@ from reaktiv import Computed, Effect, Signal, batch
 from reaktiv.signal import ComputeSignal as _ComputeSignal
 from workflow.engine import WorkflowEngine
 
+# Tracing interop
+from reactive.traced import _is_tracing, TracedFloat
+
 from store._active_record import ActiveRecordMixin
 from store.registry import ColumnRegistry
 from store.state_machine import StateMachine
@@ -263,21 +266,18 @@ class Storable(ActiveRecordMixin):
 
     def __getattribute__(self, name: str) -> Any:
         """Route reactive field/computed reads through Signals/Computeds."""
-        # Avoid recursion on _reactive
-        if name == "_reactive" or name.startswith("__"):
+        # Fast-path for internals and dunders (zero overhead)
+        if name.startswith("_"):
             return object.__getattribute__(self, name)
             
         reactive = object.__getattribute__(self, '_reactive')
         node = reactive.get(name)
         if node is not None:
             val = node.read()
-            # If tracing is active, rebuild structural tracing identity seamlessly
-            # bridging standard numerical evaluation cached out of reaktiv correctly 
-            from reactive.traced import _is_tracing
+            
             if _is_tracing():
                 desc = getattr(self.__class__, name, None)
-                if hasattr(desc, "_trace_for_expr"):
-                    from reactive.traced import TracedFloat
+                if desc is not None and hasattr(desc, "_trace_for_expr"):
                     if isinstance(val, (int, float)):
                         return TracedFloat(float(val), desc._trace_for_expr(self))
             return val
