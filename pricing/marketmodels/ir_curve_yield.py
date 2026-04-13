@@ -355,13 +355,13 @@ class LinearTermDiscountCurve(Storable, CurveBase):
         For N tenors and M pillars, this is O(N log N + N + M) instead of
         O(N * M) from calling df_at() in a loop.
         """
-        if not tenors:
-            return []
-        p_tenors = self.pillar_tenors
-        p_rates = self.pillar_rates
-        n = len(p_tenors)
+        n = len(self.points)
         if n == 0:
             return [1.0] * len(tenors)
+            
+        pts = self._sorted_points()
+        p_tenors = [p.tenor_years for p in pts]
+        p_rates = [float(p.rate) for p in pts]
 
         # Sort query tenors but remember original order
         indexed = sorted(enumerate(tenors), key=lambda x: x[1])

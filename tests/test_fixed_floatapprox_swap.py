@@ -10,7 +10,13 @@ Proves that:
   5. Sub-expression sharing works across swaps on the same curve
 """
 
+from __future__ import annotations
 import pytest
+import numpy as np
+
+# Trigger conftest.py to start the StreamingServer (JVM) before collection
+import streaming  # noqa: F401
+
 from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox, SwapPortfolio, payment_dates, rack_dates
 from pricing.instruments.portfolio import Portfolio
 from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCurvePoint
@@ -168,7 +174,9 @@ class TestSymbolicRisk:
     def test_risk_nonzero(self, swap, ctx):
         """At least some pillar sensitivities should be non-zero."""
         from reactive.evaluation import eval_cached
-        risk = {k: eval_cached(v, ctx) for k, v in swap.risk.items()}
+        # 2. Symbolic risk
+        ctx = swap.pillar_context()
+        risk = {k: eval_cached(v, ctx) for k, v in swap.pillar_risk.items()}
         nonzero = [v for v in risk.values() if abs(v) > 1e-10]
         assert len(nonzero) > 0, "All risk sensitivities are zero — something is wrong"
 

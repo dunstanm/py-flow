@@ -60,20 +60,17 @@ class IntegratedRatePoint(Storable, VariableMixin):
     @traceable
     def rate(self):
         """The average short rate R_i = (1/t_i) ∫₀ᵗⁱ r(s) ds.
-
-        Has the same units as a zero rate, making it easy to reason about.
-        The cumulative integral is R_i × t_i.
+        Supports symbolic differentiation by returning a Variable during tracing.
         """
-        if self.is_fitted:
-            return self.fitted_rate
+        from reactive.traced import _is_tracing
+        from reactive.expr import Variable
+        val = self.fitted_rate if self.is_fitted else 0.0
+        if not self.is_fitted and self.quote_ref:
+            val = float(getattr(self.quote_ref, 'rate', 0.0))
 
-        if self.quote_ref is None:
-            return 0.0
-        # Default: use quoted rate directly (it's already in rate units)
-        r = getattr(self.quote_ref, 'rate', 0.0)
-        if r is None:
-            return 0.0
-        return float(r)
+        if _is_tracing():
+            return Variable(self.name)
+        return float(val)
 
     def set_fitted_rate(self, value: float):
         """Update R_i from a solver."""
@@ -118,7 +115,7 @@ class IntegratedRatePoint(Storable, VariableMixin):
 
 # ── Integrated short rate curve ──────────────────────────────────────────
 
-@ticking(exclude={"points", "jacobian"})
+@ticking(exclude={"points", "jacobian", "pillar_names", "pillar_tenors", "pillar_rates"})
 @dataclass
 class IntegratedShortRateCurve(Storable, CurveBase):
     """

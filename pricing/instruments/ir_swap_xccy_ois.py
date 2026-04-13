@@ -202,7 +202,7 @@ class IRSwapXCCYOIS(Storable):
         return leg1_val - self.leg2_pv()
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def pillar_risk(self) -> dict[str, Expr]:
         expr = self.npv()
         if expr is None: return {}
         return {name: diff(expr, name) for name in self.pillar_names}

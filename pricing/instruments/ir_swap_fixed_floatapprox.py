@@ -52,7 +52,7 @@ from reactive.traceable import traceable
 # IRSwapFixedFloatApprox  (shortcut float leg)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@ticking(exclude={"curve", "risk"})
+@ticking(exclude={"curve", "risk", "pillar_risk", "pillar_names"})
 @dataclass
 class IRSwapFixedFloatApprox(Storable):
     """IRS with telescoping float leg — single class for both reactive and Expr.
@@ -162,7 +162,7 @@ class IRSwapFixedFloatApprox(Storable):
         self.tick()
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def pillar_risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         val = self.npv
         expr = val.__expr__() if hasattr(val, "__expr__") else val

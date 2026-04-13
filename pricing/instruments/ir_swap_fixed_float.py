@@ -21,7 +21,7 @@ from streaming import ticking
 from pricing.instruments.ir_scheduling import payment_dates, reset_dates
 
 
-@ticking(exclude={"discount_curve", "projection_curve", "risk"})
+@ticking(exclude={"discount_curve", "projection_curve", "risk", "pillar_risk", "pillar_names"})
 @dataclass
 class IRSwapFixedFloat(Storable):
     """IRS with explicit float leg tracking fwd inputs.
@@ -151,9 +151,10 @@ class IRSwapFixedFloat(Storable):
         self.tick()
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def pillar_risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
-        expr = self.npv
+        # Grab the structural AST directly from the descriptor to avoid primitive coercion
+        expr = type(self).npv._trace_for_expr(self)
         if getattr(expr, "__expr__", None) is not None:
             expr = expr.__expr__()
         if getattr(expr, "eval", None) is None: return {}

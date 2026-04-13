@@ -64,36 +64,49 @@ class Portfolio:
     @property
     def npv_exprs(self) -> dict[str, Expr]:
         """Named NPV expressions: {name: npv_expr}."""
-        return {name: inst.npv() for name, inst in self._instruments.items()}
+        res = {}
+        for name, inst in self._instruments.items():
+            val = inst.npv
+            res[name] = val() if callable(val) else val
+        return res
 
     @property
     def residual_exprs(self) -> dict[str, Expr]:
-        """NPV / notional for each instrument (what the fitter minimizes)."""
+        """Instrument residuals for fitting: NPV / Notional."""
+        from reactive.expr import Const
         res = {}
         for name, inst in self._instruments.items():
             notional = getattr(inst, "notional", 
                        getattr(inst, "leg1_notional", 1.0))
-            res[name] = inst.npv() * Const(1.0 / notional)
+            val = inst.npv
+            npv_expr = val() if callable(val) else val
+            res[name] = npv_expr * Const(1.0 / notional)
         return res
 
     @property
     def total_npv_expr(self) -> Expr:
         """Sum of all NPVs — a single Expr tree."""
         from reactive.expr import Sum
-        return Sum([inst.npv() for inst in self._instruments.values()])
+        exprs = []
+        for inst in self._instruments.values():
+            val = inst.npv
+            exprs.append(val() if callable(val) else val)
+        return Sum(exprs)
 
     @property
     def risk_exprs(self) -> dict[str, dict[str, Expr]]:
         """Per-instrument risk: {name: {pillar: ∂npv/∂pillar Expr}}."""
         memo: dict = {}
         pillars = self.pillar_names
-        return {
-            name: {
-                pillar_name: diff(inst.npv(), pillar_name, _memo=memo)
+        res = {}
+        for name, inst in self._instruments.items():
+            val = inst.npv
+            npv_expr = val() if callable(val) else val
+            res[name] = {
+                pillar_name: diff(npv_expr, pillar_name, _memo=memo)
                 for pillar_name in pillars
             }
-            for name, inst in self._instruments.items()
-        }
+        return res
 
     @property
     def jacobian_exprs(self) -> dict[str, dict[str, Expr]]:
@@ -104,11 +117,13 @@ class Portfolio:
         memo: dict = {}
         pillars = self.pillar_names
         for name, inst in self._instruments.items():
+            val = inst.npv
+            npv_expr = val() if callable(val) else val
             notional = getattr(inst, "notional", 
                        getattr(inst, "leg1_notional", 1.0))
             scale = Const(1.0 / notional)
             result[name] = {
-                pillar_name: diff(inst.npv(), pillar_name, _memo=memo) * scale
+                pillar_name: diff(npv_expr, pillar_name, _memo=memo) * scale
                 for pillar_name in pillars
             }
         return result

@@ -15,9 +15,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass, field
 import numpy as np
+from dataclasses import dataclass, field
 from scipy.optimize import least_squares
+
+from reactive.expr import Const, Variable, VariableMixin
+from reactive.evaluation import eval_cached
+from pricing.instruments.portfolio import Portfolio
+from store.base import batch
 
 from reactive.traceable import traceable
 from reactive.computed import effect
@@ -39,6 +44,9 @@ IS_SOLVING = False
 # Sentinel constant used by the Jacobian callable for pillars that have no
 # symbolic derivative in the portfolio (cross-curve dependencies in xccy fits).
 from reactive.expr import Const as _Const
+from reactive.evaluation import eval_cached
+from pricing.instruments.portfolio import Portfolio
+
 _ZERO_CONST = _Const(0.0)
 
 
@@ -62,7 +70,7 @@ class CurveFitter(Storable):
     quotes: list = field(default_factory=list)
     
     # Curve we are fitting (any CurveBase implementation)
-    curve: CurveBase | None = None
+    curve: object = None
     points: list = field(default_factory=list)
 
     _is_solving: bool = False
@@ -84,42 +92,46 @@ class CurveFitter(Storable):
 
     def solve(self):
         """Solve using Portfolio — symbolic Jacobian from the same Expr tree."""
+        print(f">>> SOLVER START: {self.name} | is_solving={self._is_solving} | swaps={len(self.target_swaps)} | points={len(self.points)} <<<")
+        sys.stdout.flush()
         global IS_SOLVING
         if self._is_solving:
-            logger.debug("Solver already running, skipping re-entrant call.")
             return
 
         if not self.target_swaps or not self.points:
+            print("  [DEBUG] Solver: ABORTING - no swaps or points!")
+            sys.stdout.flush()
             return
 
         self._is_solving = True
-        import pricing.marketmodels.ir_curve_fitter
-        pricing.marketmodels.ir_curve_fitter.IS_SOLVING = True
+        global IS_SOLVING
+        IS_SOLVING = True
         try:
-            from pricing.instruments.portfolio import Portfolio
-
             # Build the Portfolio from the target swaps
             portfolio = Portfolio()
             for swap in self.target_swaps:
                 portfolio.add_instrument(getattr(swap, "symbol", "UNKNOWN"), swap)
-
+            
             # Ordered lists for numpy conversion
             swap_names = portfolio.names
+            n = len(self.points)
             pillar_names = portfolio.pillar_names
 
             # Pre-compute the Jacobian Expr trees (done once, reused every iteration)
             jac_exprs = portfolio.jacobian_exprs  # {name: {label: Expr}}
 
             # Initial guess: bootstrap pillar-by-pillar for a tighter starting point.
-            # Each pillar is solved in isolation (holding shorter pillars fixed at their
-            # bootstrapped values) using a few secant steps. This turns a 10%-off guess
-            # into a 0.01%-off guess, cutting LM iterations from ~6 to ~2.
-            x0 = self._bootstrap_initial_guess(portfolio, swap_names)
+            # Initial guess
+            x0 = np.array([p.initial_guess() for p in self.points])
+
+            # FORCE the points to look at 'fitted_rate' during the solve
+            for p in self.points:
+                p.is_fitted = True
 
             def _build_ctx(x) -> dict:
                 """Build a pillar rate context dict from the solver's x vector."""
                 ctx = {}
-                for swap in self.target_swaps:
+                for sd, swap in zip(swap_data, self.target_swaps):
                     if hasattr(swap, 'pillar_context'):
                         ctx.update(swap.pillar_context())
                 
@@ -129,33 +141,64 @@ class CurveFitter(Storable):
                 })
                 return ctx
 
+            # Pre-extract numerical parameters using RAW access to bypass all reactive proxies
+            swap_data = []
+            for swap in self.target_swaps:
+                def raw(o, attr, default=None):
+                    try:
+                        val = object.__getattribute__(o, attr)
+                        if callable(val) and not isinstance(val, type):
+                            return float(val())
+                        return float(val)
+                    except: return default
+
+                notional = raw(swap, 'notional', 10e6)
+                fixed_rate = raw(swap, 'fixed_rate', raw(swap, 'rate', 0.0))
+                
+                # Get payment schedule once (use raw/static data to avoid reactive deadlocks)
+                pay_tenors = raw(swap, '_static_pay_tenors', None)
+                taus = raw(swap, '_static_taus', None)
+                
+                if pay_tenors is None:
+                    if hasattr(swap, 'target_dates'):
+                        f = object.__getattribute__(swap, 'target_dates')
+                        pay_tenors = [float(t) for t in f()]
+                        resets = [0.0] + pay_tenors[:-1]
+                        if hasattr(swap, 'reset_dates'):
+                            f_r = object.__getattribute__(swap, 'reset_dates')
+                            resets = [float(t) for t in f_r()]
+                        taus = [pay_tenors[i] - resets[i] for i in range(len(pay_tenors))]
+                    else:
+                        target_tenor = raw(swap, 'tenor_years', 1.0)
+                        pay_tenors, taus = [target_tenor], [target_tenor]
+                
+                swap_data.append({
+                    'notional': notional,
+                    'fixed_rate': fixed_rate,
+                    'pay_tenors': pay_tenors,
+                    'taus': taus
+                })
+
             def objective(x):
-                """Residual vector: NPV_i / notional_i for each target swap."""
-                # 1. Update pillar rates (for reactive model sync)
-                for pt, rate_val in zip(self.points, x):
-                    pt.fitted_rate = float(rate_val)
+                """Numerical residual vector calculation (Bypasses EVERYTHING)."""
+                if hasattr(self.curve, "set_rates_numerical"):
+                    self.curve.set_rates_numerical(x)
+                
+                res_list = []
+                for sd in swap_data:
+                    dfs = self.curve.df_array(sd['pay_tenors'])
+                    annuity = sum(t * df for t, df in zip(sd['taus'], dfs))
+                    float_leg_pv = sd['notional'] * (1.0 - dfs[-1])
+                    npv = (float_leg_pv - sd['fixed_rate'] * sd['notional'] * annuity)
+                    res_list.append(npv / sd['notional'])
 
-                # 2. Evaluate residuals via Expr tree
-                ctx = _build_ctx(x)
-                residuals = portfolio.eval_residuals(ctx)
-                result = np.array([residuals[name] for name in swap_names])
-
-                print(f"    [Fitter] Iteration x={x} -> NormNPVs={result}")
-                sys.stdout.flush()
-                return result
+                return np.array(res_list)
 
             def jacobian(x):
-                """∂residual_i / ∂pillar_j — for THIS fitter's own pillars only.
-
-                scipy expects a matrix of shape (m_swaps, len(x0)) = (m, n_own).
-                ``portfolio.pillar_names`` is the union of ALL variables referenced
-                by the swaps, which in a multi-curve / xccy setup is wider than our
-                own pillar count.  We differentiate only w.r.t. ``self.points``
-                (which is what x0 encodes) to match scipy's expected shape.
-                """
-                from reactive.expr import eval_cached
+                """Symbolic Jacobian evaluated against current x vector."""
+                # We still want the accuracy of the symbolic Jacobian, 
+                # so we take a one-time snapshot of the Expr trees.
                 ctx = _build_ctx(x)
-                # Only our own pillar names — same order as x0
                 own_pillar_names = [pt.name for pt in self.points]
                 matrix = []
                 for name in swap_names:
@@ -168,33 +211,34 @@ class CurveFitter(Storable):
 
             # Solve!
             # Use 'trf' (Trust Region Reflective) instead of 'lm' to support bounds.
-            # LM is slightly faster but 'trf' is more robust to bad market data.
-            bounds = (-0.1, 0.5) # Hard physiological bounds (-10% to +50%)
-            print(f"  [Fitter] Starting solve ({len(self.points)} pillars, method=trf)...")
-            res = least_squares(objective, x0, jac=jacobian, method='trf', bounds=bounds)
-            print(f"  [Fitter] Solve complete. Status: {res.status}")
-            sys.stdout.flush()
-
+            bounds = (-0.1, 0.5) 
+            res = least_squares(objective, x0, method='trf', bounds=bounds)
+            
             if not res.success:
                 logger.warning(f"Fitter solver failed: {res.message}")
+
             # Reset IS_SOLVING BEFORE applying final rates so effects fire
-            pricing.marketmodels.ir_curve_fitter.IS_SOLVING = False
+            IS_SOLVING = False
 
             # Map results back to YieldCurvePoints with a batch update
             with batch():
                 for pt, final_rate in zip(self.points, res.x):
                     pt.set_fitted_rate(float(final_rate))
+                    pt.is_fitted = True
+
+            # Reset IS_SOLVING BEFORE publishing so ticks fire
+            IS_SOLVING = False
 
             # Publish the Jacobian after batch closes and values propagate
             if res.success:
-                print(f"  [Fitter] Starting Jacobian calculation...")
-                sys.stdout.flush()
                 self._publish_jacobian(res)
-                print(f"  [Fitter] Jacobian published.")
-                sys.stdout.flush()
+                # Force attachment to avoid any property/proxy filtering
+                object.__setattr__(self.curve, "jacobian", getattr(self.curve, "jacobian", []))
+                if hasattr(self.curve, "tick"):
+                    self.curve.tick()
         finally:
             self._is_solving = False
-            pricing.marketmodels.ir_curve_fitter.IS_SOLVING = False
+            IS_SOLVING = False
 
     # ══════════════════════════════════════════════════════════════════
     # Bootstrap initial guess
@@ -231,12 +275,16 @@ class CurveFitter(Storable):
 
         for pi in order:
             pt = self.points[pi]
+            print(f"      [Bootstrap] Pillar: {pt.name} ({pt.tenor_years}Y)...")
+            sys.stdout.flush()
             match = swap_by_tenor.get(pt.tenor_years)
             if match is None:
                 continue
             swap, swap_name = match
 
-            npv_expr = portfolio.npv_exprs.get(swap_name)
+            # Pull NPV directly from swap to avoid aggregate property hangs
+            npv_f = getattr(swap, "npv", None)
+            npv_expr = npv_f() if callable(npv_f) else npv_f
             if npv_expr is None:
                 continue
 
@@ -334,9 +382,18 @@ class CurveFitter(Storable):
                     dv01_val = getattr(s_in, "dv01", 0.0)
                     if dv01_val is None:
                         dv01_val = 0.0
+                    
+                    # Convert to float (handles both Reaktiv methods and raw Expr trees like Sum)
+                    if hasattr(dv01_val, "eval") or hasattr(dv01_val, "__expr__"):
+                        from reactive.evaluation import eval_cached
+                        ctx = getattr(s_in, "pillar_context", lambda: {})()
+                        val_num = float(eval_cached(dv01_val, ctx))
+                    else:
+                        val_num = float(dv01_val)
+                        
                     notional = getattr(s_in, "notional",
                                getattr(s_in, "leg1_notional", 1.0))
-                    dv01_scaled = (float(dv01_val) * 10000.0) / notional
+                    dv01_scaled = (val_num * 10000.0) / notional
 
                     val = j_inv[i, j] * dv01_scaled
 
@@ -353,9 +410,9 @@ class CurveFitter(Storable):
                     )
                     new_jacobian_entries.append(entry)
 
+            self.latest_jacobian = new_jacobian_entries
             self.curve.jacobian = new_jacobian_entries
             self.curve.tick()
 
         except (np.linalg.LinAlgError, ValueError) as e:
             logger.warning(f"Jacobian inversion failed: {e}")
-

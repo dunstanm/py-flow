@@ -42,3 +42,11 @@ class SwapQuoteRisk(Storable):
     quote: str = ""
     risk: float = 0.0
     equiv_notional: float = 0.0
+
+    @effect("risk")
+    def on_risk(self, *args):
+        self.tick()
+
+    @effect("equiv_notional")
+    def on_notional(self, *args):
+        self.tick()

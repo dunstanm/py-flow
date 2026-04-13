@@ -236,7 +236,7 @@ class IRSwapFixedOIS(Storable):
         return self.float_leg_pv() / annuity if annuity_terms else 0.0
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def pillar_risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate."""
         expr = self.npv()
         if expr is None: return {}

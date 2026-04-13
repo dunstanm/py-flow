@@ -175,7 +175,7 @@ class IRSwapFloatFloat(Storable):
         self.tick()
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def pillar_risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         expr = self.npv()
         if expr is None: return {}
