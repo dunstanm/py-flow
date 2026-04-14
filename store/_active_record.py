@@ -14,7 +14,7 @@ import dataclasses
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, Self, TypeVar
 
 from store.query_result import QueryResult
 
@@ -692,7 +692,7 @@ class ActiveRecordMixin:
         return self._sql_audit(self._get_conn(), self._store_entity_id)
 
     def as_of(self, *, tx_time: datetime | None = None,
-              valid_time: datetime | None = None) -> Any | None:
+              valid_time: datetime | None = None) -> Self | None:
         """Return this entity at a different point in time.
 
         - tx_time only: "what did we know at time T?"
@@ -724,14 +724,14 @@ class ActiveRecordMixin:
         return unshare_read(conn, self._store_entity_id, user)
 
     @classmethod
-    def find(cls, entity_id: str | None) -> Any | None:
+    def find(cls, entity_id: str | None) -> Self | None:
         """Read the latest non-deleted version of an entity by ID."""
         if entity_id is None:
             return None
         return cls._sql_read(cls._get_conn(), cls, entity_id)  # type: ignore[return-value]
 
     @classmethod
-    def get(cls, entity_id: str | None) -> Any:
+    def get(cls, entity_id: str | None) -> Self:
         """Read an entity by ID, raising KeyError if not found."""
         if entity_id is None:
             raise KeyError(f"{cls.__name__}: entity_id is None")
@@ -742,7 +742,7 @@ class ActiveRecordMixin:
 
     @classmethod
     def query(cls, filters: dict | None = None, limit: int = 100,
-              cursor: Any = None) -> QueryResult[Any]:
+              cursor: Any = None) -> QueryResult[Self]:
         """Query current entities of this type with optional filters."""
         return cls._sql_query(cls._get_conn(), cls, filters=filters, limit=limit, cursor=cursor)  # type: ignore[return-value]
 
@@ -752,25 +752,25 @@ class ActiveRecordMixin:
         return cls._sql_count(cls._get_conn(), cls)
 
     @classmethod
-    def write_many(cls, objects: list[Any],
+    def write_many(cls, objects: list[Self],
                    valid_from: datetime | None = None) -> list[str]:
         """Write multiple new entities in a single transaction."""
         return cls._sql_write_many(cls._get_conn(), cls._get_user(), objects, valid_from=valid_from)  # type: ignore[arg-type]
 
     @classmethod
-    def update_many(cls, objects: list[Any],
+    def update_many(cls, objects: list[Self],
                     valid_from: datetime | None = None) -> None:
         """Update multiple entities in a single transaction."""
         cls._sql_update_many(cls._get_conn(), cls._get_user(), objects, valid_from=valid_from)  # type: ignore[arg-type]
 
     @classmethod
-    def history_of(cls, entity_id: str) -> list[Any]:
+    def history_of(cls, entity_id: str) -> list[Self]:
         """Return all versions of an entity by ID."""
         return cls._sql_history(cls._get_conn(), cls, entity_id)  # type: ignore[return-value]
 
     @classmethod
     def as_of_entity(cls, entity_id: str, *, tx_time: datetime | None = None,
-                     valid_time: datetime | None = None) -> Any | None:
+                     valid_time: datetime | None = None) -> Self | None:
         """Bi-temporal point-in-time query by entity ID."""
         return cls._sql_as_of(cls._get_conn(), cls, entity_id, tx_time=tx_time, valid_time=valid_time)  # type: ignore[return-value]
 
