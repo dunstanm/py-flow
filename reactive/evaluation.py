@@ -6,24 +6,43 @@ from .sum_expr import Sum
 # Cached evaluation (for DAGs produced by memoized diff)
 # ---------------------------------------------------------------------------
 
+class PillarContext(dict):
+    """A dictionary for context data that tracks changes via a version counter.
+    
+    Used by eval_cached to ensure the cache is invalidated if any market 
+    data is updated between calls using the same context object.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.version = 0
+
+    def __setitem__(self, key, value):
+        if self.get(key) != value:
+            super().__setitem__(key, value)
+            self.version += 1
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self.version += 1
+
+
 def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
     """Evaluate an Expr DAG with sub-expression caching.
 
-    After memoized diff(), the derivative is a DAG (not a tree).
-    Naive expr.eval(ctx) would re-evaluate shared sub-nodes exponentially.
-    The cache is transient and tied to the specific ID of ``ctx``. 
-    Reusing a cache across different context objects will raise a 
-    ValueError to prevent returning stale, memoized values.
+    The cache is transient and tied to the specific ID and version of ``ctx``. 
+    Reusing a cache across different versions of a context will raise 
+    a ValueError to prevent returning stale, memoized values.
 
     ITERATIVE implementation — uses an explicit stack to avoid
     hitting Python's recursion limit on deep expression trees.
     """
+    ctx_handle = (id(ctx), getattr(ctx, "version", 0))
     if _cache is None:
-        _cache = {'__ctx__': id(ctx)}
-    elif _cache.get('__ctx__') != id(ctx):
+        _cache = {'__ctx_handle__': ctx_handle}
+    elif _cache.get('__ctx_handle__') != ctx_handle:
         raise ValueError(
-            "eval_cached: _cache is bound to a different ctx object. "
-            "Never reuse a memo dict across different context snapshots."
+            f"eval_cached: _cache is bound to context handle {_cache.get('__ctx_handle__')} "
+            f"but received {ctx_handle}. Never reuse a memo dict across context updates."
         )
 
     key = id(expr)
