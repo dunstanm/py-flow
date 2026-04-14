@@ -117,7 +117,11 @@ def diff(expr: Expr, wrt: str, _memo: dict | None = None) -> Expr:
                 f = node.args[0]
                 df = _memo[(id(f), wrt)]
                 if node.name == "exp":
-                    r = node * df
+                    # Clever Guard: Beyond the stability cutoff (700 for float64), 
+                    # use a constant derivative exp(700) to guide back, rather than 0 or infinity.
+                    # d/dx SafeExp(f) = If(f < 700, exp(f)*df, exp(700)*df)
+                    cutoff = Const(700.0)
+                    r = If(f < cutoff, node * df, Const(1.014232e+304) * df)
                 elif node.name == "log":
                     r = df / f
                 elif node.name == "sqrt":

@@ -19,6 +19,12 @@ During a critical review of the baseline engine upgrade (PR-A), several structur
 - **Instrument Property Alignment**: Standardized property access in `IRSwapFloatFloat` to resolve `TypeError` when accessing symbolic `Sum` expressions during tracing.
 - **Basis Extraction Utility**: Updated the `BasisExtractor` to use `_PURE_FUNCS`, ensuring correct translation of mathematical primitives (exp, log, abs) into target-specific vector code.
 
+### Clever Numerical Guards (Gradient-Aware)
+To ensure the engine remains stable without "silencing" the gradient, we have moved beyond simple result clamping:
+- **Continuous Extrapolation**: If $x > 700$ for `exp(x)`, the engine switches to a continuous linear Taylor expansion: $f(x) = e^{700} + e^{700}(x - 700)$. This prevents `OverflowError` while maintaining a linear growth signal.
+- **Analytic Derivative Sync**: Symbolic `diff` for `exp` now generates a guarded `If` node that keeps the derivative constant at $e^{700}$ beyond the cutoff. This guides the user/optimizer back towards the stable numeric region instead of returning a flat zero-derivative surface.
+- **Division/Power Safety**: Implemented similar safety guards for 1/0 (clamped to large float) and high-order powers to avoid sudden engine collapses during bootstraps.
+
 ### Benchmarking Suite Recovery (`scripts/benchmark_suite.py`)
 - **NumPy Vectorization**: Refined the basis template compiler to automatically map bare and prefixed math functions to their NumPy equivalents.
 - **Dynamic Variable Joins**: Extended the Deephaven script generation to support basis functions with an arbitrary number of variable dependencies ($X_1 \dots X_N$), critical for cubic spline models.

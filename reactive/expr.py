@@ -528,10 +528,15 @@ class Func(Expr):
             raise ValueError(f"Unknown function: {self.name}")
         evaluated = [a.eval(ctx) for a in self.args]
         try:
-             if self.name == "exp" and evaluated[0] > 700:
-                 return 1e100
-             if self.name == "exp" and evaluated[0] < -700:
-                 return 0.0
+             if self.name == "exp":
+                 x = evaluated[0]
+                 if x > 700:
+                     # Linear extrapolation beyond stability cutoff
+                     # f(x) = exp(700) + exp(700)*(x - 700)
+                     val_700 = 1.014232e+304
+                     return val_700 + val_700 * (x - 700.0)
+                 if x < -700:
+                     return 0.0
              return fn(*evaluated)
         except (OverflowError, FloatingPointError):
              if self.name == "exp":
