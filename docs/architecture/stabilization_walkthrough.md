@@ -4,6 +4,16 @@ We have successfully stabilized the reactive pricing engine and restored the per
 
 ## 1. Key Accomplishments
 
+### Architectural Refinement & Skeptical Review (PR-A Oversight)
+During a critical review of the baseline engine upgrade (PR-A), several structural flaws were identified that prevented stable execution in high-concurrency or streaming environments:
+- **Symbolic Leakage**: The initial `Sum` implementation was leaking symbolic `Expr` objects into the storage layer during standard numeric `get()` calls, causing `ValueError` in downstream Java/Deephaven consumers.
+- **Property-Call Ambiguity**: Inconsistent usage of `@traceable` as both a property and a method led to `Sum object not callable` errors. The engine now enforces strict property-based access for all reactive nodes.
+- **Decorator Overhead**: Refined the `@traceable` descriptor to ensure that tracing only occurs when a `VariableContext` is active, otherwise falling back to high-speed numeric recomputation.
+
+### Robust Ticking Layer
+- **Automatic Resolution**: Enhanced `streaming/decorator.py` to automatically resolve symbolic expressions (`Expr` or `_TracedCallable`) into numeric values using the instance's current context.
+- **Type Inference**: Correctly infer categorical types (like `str` for `pnl_status`) from python annotations, preventing `ClassCastException`.
+
 ### Reactive Engine Stabilization
 - **Numerical Robustness**: Implemented safety guards for the power operator (`**`) in `reactive/evaluation.py` to prevent `OverflowError` during symbolic differentiation of high-order polynomials.
 - **Instrument Property Alignment**: Standardized property access in `IRSwapFloatFloat` to resolve `TypeError` when accessing symbolic `Sum` expressions during tracing.
