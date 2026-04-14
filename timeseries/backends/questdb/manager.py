@@ -32,11 +32,14 @@ def _detect_archive_name() -> str:
     machine = platform.machine().lower()
 
     if system == "darwin":
-        if machine in ("arm64", "aarch64"):
-            return f"questdb-{QUESTDB_VERSION}-no-jre-bin.tar.gz"
+        # macOS — use platform-independent archive (runs on both x86 and ARM)
         return f"questdb-{QUESTDB_VERSION}-no-jre-bin.tar.gz"
     elif system == "linux":
-        return f"questdb-{QUESTDB_VERSION}-rt-linux-amd64.tar.gz"
+        if machine in ("x86_64", "amd64"):
+            return f"questdb-{QUESTDB_VERSION}-rt-linux-x86-64.tar.gz"
+        else:
+            # ARM64 / other — use platform-independent archive (requires Java)
+            return f"questdb-{QUESTDB_VERSION}-no-jre-bin.tar.gz"
     elif system == "windows":
         return f"questdb-{QUESTDB_VERSION}-no-jre-bin.tar.gz"
     else:
@@ -186,7 +189,7 @@ class QuestDBManager:
         # Find extracted dir and flatten jar into bin_dir
         for child in bin_dir.iterdir():
             if child.is_dir() and child.name.startswith("questdb"):
-                for jar in child.glob("questdb*.jar"):
+                for jar in child.rglob("questdb*.jar"):
                     shutil.move(str(jar), str(bin_dir / jar.name))
                 # Keep lib dir if it exists
                 lib_src = child / "lib"
