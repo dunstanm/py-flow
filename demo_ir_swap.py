@@ -69,11 +69,11 @@ print(f"  Market data server started on port {_md_server.port}")
 # ── 2. Import instrument models from instruments/ ─────────────────────────
 from streaming import agg, flush, get_active_tables, get_tables, clear_stale_tables
 
-from pricing.marketmodels.ir_curve_integrated_rate import IntegratedRatePoint, IntegratedShortRateCurve
+from pricing.marketmodels.ir_curve_yield import YieldCurvePoint, LinearTermDiscountCurve
 from pricing.marketmodels.ir_curve_fitter import CurveFitter
 from pricing.marketmodels.symbols import fit_symbol, tenor_name
 from pricing.marketmodels.ir_curve_swap import SwapQuote, SwapQuoteRisk
-from pricing.instruments.ir_swap_fixed_ois import IRSwapFixedOIS
+from pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
 
 # ── 3. Build reactive objects — cross-entity refs wired at construction ───
 print("  Building reactive objects...")
@@ -87,21 +87,19 @@ swap_quotes = {
     "IR_USD_OIS_QUOTE.20Y": SwapQuote(symbol="IR_USD_OIS_QUOTE.20Y", tenor=20.0, rate=0.030),
 }
 
-# 2. Integrated rate curve pillars (average short rate knots)
-# IntegratedRatePoint stores R_i = (1/t_i) ∫₀ᵗⁱ r(s)ds — rate-like units.
+# 2. Linear Term Discount Curve pillars
 curve_points = {}
 for q_sym, q in swap_quotes.items():
     t_label = tenor_name(q.tenor)
     label = fit_symbol("USD", t_label)
-    curve_points[label] = IntegratedRatePoint(
+    curve_points[label] = YieldCurvePoint(
         name=label, symbol=label, tenor_years=q.tenor,
         currency="USD", quote_ref=q, is_fitted=True,
     )
 
 # 3. Integrated short rate curve (C² smooth, EXP-based discount factors)
-# Drop-in replacement for LinearTermDiscountCurve. df() and fwd() build Expr
-# trees that compile to EXP() of quadratic polynomials in SQL.
-usd_curve = IntegratedShortRateCurve(
+# 3. Linear Term Discount Curve builds Expr trees that compile directly TO_SQL.
+usd_curve = LinearTermDiscountCurve(
     name="USD_OIS", currency="USD",
     points=list(curve_points.values())
 )
@@ -111,10 +109,9 @@ usd_curve = IntegratedShortRateCurve(
 # that the fitter solves is consistent with portfolio pricing.
 target_swaps = []
 for q in swap_quotes.values():
-    target_swaps.append(IRSwapFixedOIS(
+    target_swaps.append(IRSwapFixedFloat(
         symbol=f"FIT.{q.symbol}", notional=50_000_000,
         fixed_rate=q.rate, tenor_years=q.tenor,
-        frequency_months=3, # Quarterly scheduling
         discount_curve=usd_curve, projection_curve=usd_curve,
         is_target=True,
     ))
@@ -135,9 +132,9 @@ print("  Curve solved.")
 
 # 6. Portfolio — one 7Y IRS to test interpolation risk split across 5Y/10Y pillars
 swaps = {
-    "USD-7Y": IRSwapFixedOIS(
+    "USD-7Y": IRSwapFixedFloat(
         symbol="USD-7Y", notional=100_000_000, fixed_rate=0.0175,
-        tenor_years=7.0, frequency_months=3,
+        tenor_years=7.0, 
         discount_curve=usd_curve, projection_curve=usd_curve,
         is_live=True,
     )
@@ -160,14 +157,14 @@ if cleared:
 tables = get_active_tables()
 
 # Aggregates and curated views
-swap_summary = IRSwapFixedOIS._ticking_live.agg_by([  # type: ignore[attr-defined]
+swap_summary = IRSwapFixedFloat._ticking_live.agg_by([  # type: ignore[attr-defined]
     agg.sum(["TotalNPV=npv", "TotalDV01=dv01"]),
     agg.count("NumSwaps"),
     agg.avg(["AvgNPV=npv"]),
 ], by=[])
 tables["swap_summary"]           = swap_summary
 tables["swap_risk_ladder"]       = SwapQuoteRisk._ticking_live       # type: ignore[attr-defined]
-tables["interest_rate_swap_live"] = IRSwapFixedOIS._ticking_live   # type: ignore[attr-defined]
+tables["interest_rate_swap_live"] = IRSwapFixedFloat._ticking_live   # type: ignore[attr-defined]
 tables["yield_curve_live"]       = usd_curve._ticking_live           # type: ignore[attr-defined]
 
 print(f"  Publishing {len(tables)} tables to Deephaven...")
@@ -179,8 +176,8 @@ for name, tbl in tables.items():
 # Just flush the DH update graph once.
 flush()
 
-print(f"  Built: {len(swap_quotes)} OIS quotes, {len(curve_points)} integrated knots, "
-      f"1 IntegratedShortRateCurve, {len(target_swaps)} fitter swaps, {len(swaps)} portfolio swaps")
+print(f"  Built: {len(swap_quotes)} OIS quotes, {len(curve_points)} knots, "
+      f"1 LinearTermDiscountCurve, {len(target_swaps)} fitter swaps, {len(swaps)} portfolio swaps")
 print("  All initial state pushed to DH via @effect (no manual push needed)")
 
 
@@ -353,13 +350,17 @@ print("=" * 70)
 print("  DEMO READY — Fully Reactive IRS Grid via USD OIS Market Data")
 print("  Web UI:  http://localhost:10000")
 print()
+print(f"  Built: {len(swap_quotes)} OIS quotes, {len(curve_points)} knots, "
+      f"1 LinearTermDiscountCurve, {len(target_swaps)} fitter swaps, {len(swaps)} portfolio swaps")
+print("  All initial state pushed to DH via @effect (no manual push needed)")
+print()
 print("  Published tables (open in DH web IDE):")
 print("    swap_quote_live         — USD OIS par rates (from market data server)")
-print("    integrated_rate_point_live — integrated curve knots (average short rate R_i)")
-print("    interest_rate_swap_live — IRS pricing: NPV, DV01 (@computed, full scheduler)")
+print("    yield_curve_point_live  — curve knots (Zero Rates)")
+print("    interest_rate_swap_live — IRS pricing: NPV, DV01 (@computed, basic IRS)")
 print("    swap_summary            — aggregate NPV + DV01 (ticking summary)")
 print("    swap_risk_ladder        — portfolio risk ladder: ∂Portfolio / ∂Quote")
-print("    yield_curve_live        — IntegratedShortRateCurve (C² smooth, EXP DF)")
+print("    yield_curve_live        — LinearTermDiscountCurve (Linear Interpolation)")
 print()
 print("  Reactive chain (all from one batch_update):")
 print("    OIS rate → @computed curve rate → @computed float_rate")

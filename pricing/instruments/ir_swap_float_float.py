@@ -12,8 +12,8 @@ from pydantic import ConfigDict, Field
 from dataclasses import field
 
 from store import Storable
-from reactive.traceable import traceable
-from reactive.computed import effect
+from reactive.computed import computed, effect
+from reactive.computed_expr import computed_expr
 from reactive.expr import diff, Expr, If
 import pricing.marketmodels.ir_curve_fitter
 from streaming import ticking
@@ -77,7 +77,7 @@ class IRSwapFloatFloat(Storable):
         return sorted(list(names))
 
 
-    @traceable
+    @computed_expr
     def dv01(self) -> Expr:
         """Approximate DV01 using leg1's discount curve to support fitter scaling.
 
@@ -132,7 +132,7 @@ class IRSwapFloatFloat(Storable):
             
         return pv
 
-    @traceable
+    @computed_expr
     def leg1_float_leg_pv(self) -> Expr:
         """PV of Leg 1."""
         return self._calc_leg_pv(
@@ -142,7 +142,7 @@ class IRSwapFloatFloat(Storable):
             self.float_spread
         )
 
-    @traceable
+    @computed_expr
     def leg2_float_leg_pv(self) -> Expr:
         """PV of Leg 2."""
         return self._calc_leg_pv(
@@ -151,7 +151,7 @@ class IRSwapFloatFloat(Storable):
             self.leg2_projection_curve
         )
 
-    @traceable
+    @computed_expr
     def npv(self) -> Expr:
         """NPV: RECEIVER = Leg1_in_leg2_ccy - Leg2, PAYER = Leg2 - Leg1_in_leg2_ccy."""
         leg1_net = self.leg1_float_leg_pv() * self.initial_fx
@@ -159,7 +159,7 @@ class IRSwapFloatFloat(Storable):
             return self.leg2_float_leg_pv() - leg1_net
         return leg1_net - self.leg2_float_leg_pv()
 
-    @traceable
+    @computed
     def pnl_status(self) -> str:
         val = self.npv
         if val > 0:
@@ -174,7 +174,7 @@ class IRSwapFloatFloat(Storable):
             return
         self.tick()
 
-    @traceable
+    @computed_expr
     def risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         expr = self.npv()

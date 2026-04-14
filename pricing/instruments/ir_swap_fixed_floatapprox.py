@@ -36,7 +36,7 @@ from pydantic import ConfigDict, Field
 from dataclasses import field
 
 from store import Storable
-from reactive.computed import effect
+from reactive.computed import computed, effect
 from reactive.expr import Const, diff, eval_cached, If, Expr
 import pricing.marketmodels.ir_curve_fitter
 from streaming import ticking
@@ -44,7 +44,8 @@ from streaming import ticking
 
 from pricing.instruments.ir_scheduling import rack_dates, payment_dates, reset_dates, day_count_fraction
 
-from reactive.computed import effect
+from reactive.computed import computed, effect
+from reactive.computed_expr import computed_expr
 from reactive.traceable import traceable
 
 
@@ -146,7 +147,7 @@ class IRSwapFixedFloatApprox(Storable):
         """Par rate: the fixed_rate at which NPV = 0."""
         return self.float_leg_pv / (self.dv01 * 10000.0)
 
-    @traceable
+    @computed
     def pnl_status(self) -> str:
         val = self.npv
         if val > 0:
@@ -161,7 +162,7 @@ class IRSwapFixedFloatApprox(Storable):
             return
         self.tick()
 
-    @traceable
+    @computed_expr
     def risk(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         expr = self.npv()
@@ -197,23 +198,23 @@ class SwapPortfolio(Storable):
     name: str = ""
     swaps: list = field(default_factory=list)
 
-    @traceable
+    @computed
     def total_npv(self):
         return sum(s.npv for s in self.swaps) if self.swaps else 0.0
 
-    @traceable
+    @computed
     def total_dv01(self):
         return sum(s.dv01 for s in self.swaps) if self.swaps else 0.0
 
-    @traceable
+    @computed
     def max_npv(self):
         return max(s.npv for s in self.swaps) if self.swaps else 0.0
 
-    @traceable
+    @computed
     def min_npv(self):
         return min(s.npv for s in self.swaps) if self.swaps else 0.0
 
-    @traceable
+    @computed
     def swap_count(self) -> int:
         return len(self.swaps) if self.swaps else 0
 

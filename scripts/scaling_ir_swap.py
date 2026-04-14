@@ -32,7 +32,6 @@ from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
 from pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
 from pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
 from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCurvePoint
-from pricing.marketmodels.ir_curve_integrated_rate import IntegratedShortRateCurve, IntegratedRatePoint
 from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached, diff, Const
 from streaming.admin import StreamingServer
@@ -45,19 +44,12 @@ def get_mem():
     return process.memory_info().rss / (1024 * 1024)
 
 def build_curve(name, rates_dict, tenors=[0.25, 1.0, 5.0, 10.0, 30.0], curve_type="LTDC"):
-    """Generic builder for LTDC or ISRC curves."""
-    if curve_type == "LTDC":
-        points = [
-            YieldCurvePoint(name=f"{name}_{t}Y", tenor_years=t, fitted_rate=rates_dict.get(t, 0.04), is_fitted=True)
-            for t in tenors
-        ]
-        return LinearTermDiscountCurve(name=name, points=points)
-    else:
-        points = [
-            IntegratedRatePoint(name=f"{name}_{t}Y", tenor_years=t, fitted_rate=rates_dict.get(t, 0.04), is_fitted=True)
-            for t in tenors
-        ]
-        return IntegratedShortRateCurve(name=name, points=points)
+    """Generic builder for LTDC curves."""
+    points = [
+        YieldCurvePoint(name=f"{name}_{t}Y", tenor_years=t, fitted_rate=rates_dict.get(t, 0.04), is_fitted=True)
+        for t in tenors
+    ]
+    return LinearTermDiscountCurve(name=name, points=points)
 
 def generate_portfolio(size, mode="GLOBAL_MIX"):
     """Generates a portfolio according to different complexity modes."""
