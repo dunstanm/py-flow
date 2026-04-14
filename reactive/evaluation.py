@@ -93,7 +93,13 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
                 elif op == "-": r = lv - rv
                 elif op == "*": r = lv * rv
                 elif op == "/": r = lv / rv if rv != 0 else 0
-                elif op == "**": r = lv ** rv
+                elif op == "**":
+                    try:
+                        # Force to float to catch overflow early
+                        r = float(lv) ** float(rv)
+                    except (OverflowError, FloatingPointError, ZeroDivisionError):
+                        if rv < 0: r = 1e308 # Approximation for 1/0
+                        else: r = 0.0
                 elif op == ">": r = lv > rv
                 elif op == "<": r = lv < rv
                 elif op == ">=": r = lv >= rv

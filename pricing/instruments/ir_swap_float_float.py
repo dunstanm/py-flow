@@ -154,10 +154,10 @@ class IRSwapFloatFloat(Storable):
     @traceable
     def npv(self) -> Expr:
         """NPV: RECEIVER = Leg1_in_leg2_ccy - Leg2, PAYER = Leg2 - Leg1_in_leg2_ccy."""
-        leg1_net = self.leg1_float_leg_pv() * self.initial_fx
+        leg1_net = self.leg1_float_leg_pv * self.initial_fx
         if self.side == "PAYER":
-            return self.leg2_float_leg_pv() - leg1_net
-        return leg1_net - self.leg2_float_leg_pv()
+            return self.leg2_float_leg_pv - leg1_net
+        return leg1_net - self.leg2_float_leg_pv
 
     @traceable
     def pnl_status(self) -> str:

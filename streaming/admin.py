@@ -53,9 +53,13 @@ def _needs_docker() -> bool:
     Set ``FORCE_DOCKER_STREAMING=1`` to force Docker mode on any platform
     (useful for local testing of the remote code path).
     """
-    if os.environ.get("FORCE_DOCKER_STREAMING") == "1":
+    force = os.environ.get("FORCE_DOCKER_STREAMING")
+    if force == "1":
+        logger.debug("FORCE_DOCKER_STREAMING detected")
         return True
-    return platform.system() == "Linux" and platform.machine() in _ARM_MACHINES
+    res = platform.system() == "Linux" and platform.machine() in _ARM_MACHINES
+    logger.debug(f"Determined _needs_docker: {res} (machine={platform.machine()})")
+    return res
 
 
 # ---------------------------------------------------------------------------
@@ -134,10 +138,15 @@ class StreamingServer:
         # DH container always listens on 10000 internally
         internal_port = 10000
 
+        # Mount the jars directory to /apps/libs inside the container
+        jars_dir = os.path.abspath(os.path.join(os.getcwd(), "lib", "jars"))
+        os.makedirs(jars_dir, exist_ok=True)
+
         cmd = [
             docker, "run", "-d",
             "--name", container_name,
             "-p", f"{self._port}:{internal_port}",
+            "-v", f"{jars_dir}:/apps/libs",
             "-e", f"START_OPTS=-Xmx{self._max_heap} "
                   f"-DAuthHandlers=io.deephaven.auth.AnonymousAuthenticationHandler "
                   f"-Ddeephaven.console.type=python",

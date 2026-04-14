@@ -23,6 +23,19 @@ NUM_SWAPS = int(os.environ.get("NUM_SWAPS", 100))
 SEED = 42
 os.environ["STREAMING_MODE"] = "mock"
 
+# --- BOOTSTRAP DEEPHAVEN ---
+import os
+from streaming.admin import StreamingServer
+try:
+    # Kill any stale server if necessary (aggressive for benchmarking)
+    os.system("fuser -k 10000/tcp > /dev/null 2>&1")
+    srv = StreamingServer(port=10000)
+    srv.start()
+    HAS_DH = True
+except Exception as e:
+    print(f" (!) Warning: Could not start Deephaven for benchmark: {e}")
+    HAS_DH = False
+
 # Force solve mode for symbolic extractor
 import pricing.marketmodels.ir_curve_fitter
 pricing.marketmodels.ir_curve_fitter.IS_SOLVING = True
@@ -35,7 +48,6 @@ from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCu
 from pricing.marketmodels.ir_curve_integrated_rate import IntegratedShortRateCurve, IntegratedRatePoint
 from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached, diff, Const
-from streaming.admin import StreamingServer
 from streaming import StreamingClient
 
 # ─── 1. PORTFOLIO GENERATION ──────────────────────────────────────────────
@@ -124,7 +136,12 @@ def bench_numpy(port):
     type_map = {bf.component_type: bf for bf in extractor.registry.values()}
     for bf in type_map.values():
         if not hasattr(bf, "_compiled_np"):
-            py_code = bf.dh_template.replace("Math.pow", "np.power").replace("Math.exp", "np.exp")
+            # Replace common Math functions and bare functions with np equivalents
+            py_code = bf.dh_template.replace("Math.pow", "np.power").replace("Math.exp", "np.exp").replace("Math.abs", "np.abs").replace("Math.log", "np.log")
+            # Also handle bare calls if they weren't prefixed
+            for fn in ["exp", "log", "abs"]:
+                if f"{fn}(" in py_code and f"np.{fn}(" not in py_code:
+                    py_code = py_code.replace(f"{fn}(", f"np.{fn}(")
             bf._compiled_np = compile(py_code, f"<basis_{bf.component_type}>", "eval")
             
     ctx = port.pillar_context()
@@ -219,12 +236,29 @@ def bench_deephaven(port):
         dh_lines.append(f"Component_Type == {bf.component_type} ? {tmpl} :")
     full_ternary = " ".join(dh_lines) + " 0.0"
 
-    script = f"""
-t_c = dhpd.to_table(pd.read_parquet("/apps/libs/bench_dh.parquet"))
-t_p = dhpd.to_table(pd.read_parquet("/apps/libs/bench_pillars.parquet"))
+    max_vars = max(bf.num_vars for bf in extractor.registry.values()) if extractor.registry else 1
+    join_lines = []
+    for j in range(1, max_vars + 1):
+        join_lines.append(f"t_mapped = t_mapped.natural_join(t_p, on=['X{j}=Knot_Id'], joins=['X{j}_Val=Knot_Value'])")
+    join_code = "\n".join(join_lines)
 
-t_mapped = t_c.natural_join(t_p, on=['X1=Knot_Id'], joins=['X1_Val=Knot_Value'])
-t_mapped = t_mapped.natural_join(t_p, on=['X2=Knot_Id'], joins=['X2_Val=Knot_Value'])
+    # If running in Docker, we must use the container-internal path /apps/libs
+    from streaming.admin import _needs_docker
+    is_docker = _needs_docker()
+    
+    parquet_base = "/apps/libs" if is_docker else jars_dir
+    parquet_dh = os.path.join(parquet_base, "bench_dh.parquet")
+    parquet_pillars = os.path.join(parquet_base, "bench_pillars.parquet")
+
+    script = f"""
+t_c = dhpd.to_table(pd.read_parquet("{parquet_dh}"))
+t_p = dhpd.to_table(pd.read_parquet("{parquet_pillars}"))
+
+t_mapped = t_c
+{join_code}
+
+# Handle potential nulls for variables not present in every row
+t_mapped = t_mapped.update({[f'X{j}_Val = (double)((X{j}_Val == null) ? 0.04 : X{j}_Val)' for j in range(1, max_vars + 1)]})
 
 t_evaluated = t_mapped.update(["Out = (double)(Weight * ({full_ternary}))"])
 t_filtered = t_evaluated.view(["Swap_Id", "Component_Class", "Out"])
@@ -233,11 +267,6 @@ t_npv_res = t_filtered.where(["Component_Class == `NPV`"]).agg_by([agg.sum_("Out
 t_risk_swap_res = t_filtered.agg_by([agg.sum_("Out")], ["Swap_Id", "Component_Class"])
 t_risk_total_res = t_filtered.agg_by([agg.sum_("Out")], ["Component_Class"])
 """
-    # Use fallback values for optional variables if not joined (e.g. X2 might not exist for some basics)
-    script = script.replace("joins=['X2_Val=Knot_Value']", "joins=['X2_Val=Knot_Value']").replace("joins=['X1_Val=Knot_Value']", "joins=['X1_Val=Knot_Value']")
-    # Actually, we should just ensure X1_Val and X2_Val are initialized if null
-    script = script.replace('t_evaluated = t_mapped.update(["Out = (double)', 't_mapped = t_mapped.update(["X1_Val = (X1_Val == null) ? 0.04 : X1_Val", "X2_Val = (X2_Val == null) ? 0.04 : X2_Val"])\nt_evaluated = t_mapped.update(["Out = (double)')
-
     client.run_script(script)
     
     time.sleep(1.0) # Propagation
@@ -265,13 +294,7 @@ def main():
     print(f"  Swaps: {NUM_SWAPS:,}   |   Seed: {SEED}   |   Mem: {get_mem():.1f} MB")
     print("═" * 84)
 
-    try:
-        srv = StreamingServer(port=10000)
-        srv.start()
-        has_dh = True
-    except Exception as e:
-        print(f"  (!) StreamingServer failed to start: {e}")
-        has_dh = False
+    has_dh = HAS_DH
 
     scenarios = [
         ("USD_ONLY", "USD Baseline (Approx)"), 

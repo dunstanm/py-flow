@@ -217,6 +217,7 @@ REGISTRY.define("notional", float,
     display_name="Notional",
     category="risk",
     synonyms=["notional amount", "exposure"],
+    allowed_prefixes=["leg1", "leg2", "leg"],
 )
 
 REGISTRY.define("daily_vol", float,
@@ -389,6 +390,7 @@ REGISTRY.define("currency", str,
     display_name="Currency",
     category="fx",
     synonyms=["ccy"],
+    allowed_prefixes=["leg1", "leg2", "collateral", "leg"],
 )
 
 REGISTRY.define("discount_factor", float,
@@ -401,12 +403,14 @@ REGISTRY.define("fixed_leg_pv", float,
     description="Present value of fixed leg cash flows",
     role="measure", unit="USD",
     category="fixed_income",
+    allowed_prefixes=["leg1", "leg2", "leg"],
 )
 
 REGISTRY.define("float_leg_pv", float,
     description="Present value of floating leg cash flows",
     role="measure", unit="USD",
     category="fixed_income",
+    allowed_prefixes=["leg1", "leg2", "leg"],
 )
 
 REGISTRY.define("npv", float,
@@ -453,6 +457,18 @@ REGISTRY.define("fitted_rate", float,
     unit="ratio",
     format=".4%",
     display_name="Fitted Rate",
+    category="fixed_income",
+)
+
+REGISTRY.define("initial_fx", float,
+    description="Initial FX rate for multi-currency instruments",
+    role="measure", unit="ratio",
+    category="fx",
+)
+
+REGISTRY.define("exchange_notional", bool,
+    description="Whether notional is exchanged at start/end",
+    role="attribute",
     category="fixed_income",
 )
 
@@ -736,12 +752,14 @@ REGISTRY.define("projection_curve", object,
     description="Reference to a curve used for forward rate projections",
     role="attribute",
     category="fixed_income",
+    allowed_prefixes=["leg1", "leg2", "leg"],
 )
 
 REGISTRY.define("discount_curve", object,
     description="Reference to a curve used for discounting cash flows",
     role="attribute",
     category="fixed_income",
+    allowed_prefixes=["leg1", "leg2", "leg"],
 )
 
 REGISTRY.define("float_spread", float,
