@@ -11,17 +11,20 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
 
     After memoized diff(), the derivative is a DAG (not a tree).
     Naive expr.eval(ctx) would re-evaluate shared sub-nodes exponentially.
-    This function caches by node id(), evaluating each unique node once.
+    The cache is transient and tied to the specific ID of ``ctx``. 
+    Reusing a cache across different context objects will raise a 
+    ValueError to prevent returning stale, memoized values.
 
     ITERATIVE implementation — uses an explicit stack to avoid
     hitting Python's recursion limit on deep expression trees.
-
-    Usage:
-        deriv = diff(npv_expr, "USD_OIS_5Y")
-        val = eval_cached(deriv, ctx)  # fast
     """
     if _cache is None:
-        _cache = {}
+        _cache = {'__ctx__': id(ctx)}
+    elif _cache.get('__ctx__') != id(ctx):
+        raise ValueError(
+            "eval_cached: _cache is bound to a different ctx object. "
+            "Never reuse a memo dict across different context snapshots."
+        )
 
     key = id(expr)
     if key in _cache:
