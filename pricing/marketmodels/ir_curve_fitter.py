@@ -29,6 +29,7 @@ from reaktiv import batch
 from pricing.marketmodels.curve_base import CurveBase
 from pricing.marketmodels.ir_curve_yield import CurveJacobianEntry
 from pricing.marketmodels.symbols import fit_symbol, jacobian_symbol
+from pricing.engines import PythonEngine
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class CurveFitter(Storable):
         pricing.marketmodels.ir_curve_fitter.IS_SOLVING = True
         try:
             from pricing.instruments.portfolio import Portfolio
+            engine = PythonEngine()
 
             # Build the Portfolio from the target swaps
             portfolio = Portfolio()
@@ -135,9 +137,9 @@ class CurveFitter(Storable):
                 for pt, rate_val in zip(self.points, x):
                     pt.fitted_rate = float(rate_val)
 
-                # 2. Evaluate residuals via Expr tree
+                # 2. Evaluate residuals via Engine
                 ctx = _build_ctx(x)
-                residuals = portfolio.eval_residuals(ctx)
+                residuals = engine.residuals(portfolio, ctx)
                 result = np.array([residuals[name] for name in swap_names])
 
                 print(f"    [Fitter] Iteration x={x} -> NormNPVs={result}")

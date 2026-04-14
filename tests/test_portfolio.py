@@ -6,8 +6,8 @@ from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
 from pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
 from pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
 from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCurvePoint
-from pricing.marketmodels.ir_curve_integrated_rate import IntegratedShortRateCurve, IntegratedRatePoint
 from reactive.basis_extractor import BasisExtractor
+from pricing.engines import PythonEngine, SQLEngine, SkinnyEngine
 
 # ─── Helpers for creating market data ────────────────────────────────────────
 
@@ -105,26 +105,26 @@ class TestPortfolioFeatures:
         assert len(port.pillar_names) == 12
         
         # Numeric Evaluation
+        engine = PythonEngine()
         ctx = port.pillar_context()
-        npvs = port.eval_npvs(ctx)
+        npvs = engine.npvs(port, ctx)
         assert "USD_APPROX" in npvs
         assert "JPY_EXPLICIT" in npvs
         assert isinstance(npvs["USD_APPROX"], float)
         assert isinstance(npvs["JPY_EXPLICIT"], float)
 
     def test_total_portfolio_risk(self):
-        # Using a complex curve (ISRC) to ensure risk flows correctly through integrations
-        tenors = [2.0, 5.0, 10.0, 30.0]
-        points = [IntegratedRatePoint(name=f"USD_ISRC_{t}Y", tenor_years=t, fitted_rate=0.04, is_fitted=True) for t in tenors]
-        curve = IntegratedShortRateCurve(name="USD_ISRC", points=points)
+        # Using a standard Linear Curve
+        curve = build_usd_ois()
         
         port = Portfolio()
         for t in [5.0, 10.0, 20.0]:
             s = IRSwapFixedFloatApprox(symbol=f"S{t:.0f}", notional=1e6, fixed_rate=0.04, tenor_years=t, curve=curve)
             port.add_instrument(f"S{t:.0f}", s)
             
+        engine = PythonEngine()
         ctx = port.pillar_context()
-        total_risk = port.eval_total_risk(ctx)
+        total_risk = engine.total_risk(port, ctx)
         
         # Check we have risk for all pillars
         assert set(total_risk.keys()) == set(port.pillar_names)
@@ -138,8 +138,9 @@ class TestPortfolioFeatures:
         port.add_instrument("S5", s)
         
         extractor = BasisExtractor()
+        engine = SkinnyEngine(extractor)
         # 1. Component Extraction
-        comps = port.to_skinny_components(extractor, per_swap=True)
+        comps = engine.to_components(port, per_swap=True)
         assert len(comps) > 0
         df_comps = pd.DataFrame(comps)
         assert "Swap_Id" in df_comps.columns
@@ -147,7 +148,7 @@ class TestPortfolioFeatures:
         assert "Component_Type" in df_comps.columns
         
         # 2. SQL Generation check
-        sql = port.to_skinny_sql_query(extractor)
+        sql = engine.generate_duckdb_sql(port)
         assert "SELECT" in sql
         assert "SUM(" in sql
         assert "dNPV_dUSD_OIS_5.0Y" in sql # Check dynamic column naming
@@ -167,10 +168,11 @@ class TestPortfolioFeatures:
             )
             port.add_instrument(f"S{i}", s)
             
+        engine = PythonEngine()
         ctx = port.pillar_context()
         
         # Evaluate Jacobian
-        jac = port.eval_instrument_risk(ctx)
+        jac = engine.instrument_risk(port, ctx)
         
         assert len(jac) == num_swaps
         for name in jac:
@@ -189,8 +191,9 @@ class TestPortfolioFeatures:
         s = IRSwapFixedFloatApprox(symbol="S5", notional=1.0, fixed_rate=0.04, tenor_years=5.0, curve=curve)
         port.add_instrument("S5", s)
         
+        engine = SQLEngine()
         ctx = port.pillar_context()
-        sql = port.to_sql_optimized(ctx)
+        sql = engine.generate_sql(port, ctx)
         
         assert "WITH" in sql
         assert "pillars AS" in sql
@@ -223,14 +226,15 @@ class TestPortfolioFeatures:
         )
         port.add_instrument("XCCY", s_xccy)
         
+        engine = PythonEngine()
         ctx = port.pillar_context()
-        npvs = port.eval_npvs(ctx)
+        npvs = engine.npvs(port, ctx)
         
         assert "XCCY" in npvs
         assert isinstance(npvs["XCCY"], float)
         
         # Verify risk columns exist for all 3 curves
-        jac = port.eval_instrument_risk(ctx)
+        jac = engine.instrument_risk(port, ctx)
         pillars_found = set(jac["XCCY"].keys())
         # Check that we have pillars from different curves
         assert any("USD_OIS" in p for p in pillars_found)

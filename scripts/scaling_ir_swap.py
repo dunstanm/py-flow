@@ -36,6 +36,7 @@ from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached, diff, Const
 from streaming.admin import StreamingServer
 from streaming import StreamingClient
+from pricing.engines import PythonEngine, SQLEngine, SkinnyEngine
 
 # ─── 1. PORTFOLIO GENERATION ──────────────────────────────────────────────
 
@@ -86,21 +87,20 @@ def generate_portfolio(size, mode="GLOBAL_MIX"):
             port.add_instrument(f"S{i}", s)
     return port
 
-# ─── 2. BENCHMARK ENGINES ─────────────────────────────────────────────────
-
 def bench_python(port):
     """Engine 1: Python Symbolic evaluation."""
+    engine = PythonEngine()
     ctx = port.pillar_context()
     t0 = time.perf_counter()
-    port.eval_npvs(ctx)
+    engine.npvs(port, ctx)
     t_npv = (time.perf_counter() - t0) * 1000
     
     t0 = time.perf_counter()
-    port.eval_total_risk(ctx) 
+    engine.total_risk(port, ctx) 
     t_risk_total = (time.perf_counter() - t0) * 1000
 
     t0 = time.perf_counter()
-    port.eval_instrument_risk(ctx) 
+    engine.instrument_risk(port, ctx) 
     t_risk_swap = (time.perf_counter() - t0) * 1000
     
     return {"engine": "Python Symbolic", "npv_ms": t_npv, "risk_swap_ms": t_risk_swap, "risk_total_ms": t_risk_total}
@@ -108,8 +108,9 @@ def bench_python(port):
 def bench_numpy(port):
     """Engine 2: NumPy Vectorized Basis."""
     extractor = BasisExtractor()
-    comps_swap = port.to_skinny_components(extractor, per_swap=True)
-    comps_total = port.to_skinny_components(extractor, per_swap=False)
+    engine = SkinnyEngine(extractor)
+    comps_swap = engine.to_components(port, per_swap=True)
+    comps_total = engine.to_components(port, per_swap=False)
     df_swap = pd.DataFrame(comps_swap)
     df_total = pd.DataFrame(comps_total)
     
@@ -151,7 +152,8 @@ def bench_numpy(port):
 def bench_duckdb(port):
     """Engine 3: DuckDB Skinny Table."""
     extractor = BasisExtractor()
-    comps = port.to_skinny_components(extractor, per_swap=True)
+    engine = SkinnyEngine(extractor)
+    comps = engine.to_components(port, per_swap=True)
     df_c = pd.DataFrame(comps)
     
     con = duckdb.connect()
@@ -162,10 +164,10 @@ def bench_duckdb(port):
     con.executemany("INSERT INTO t_scenarios VALUES (?, ?)", scenarios)
     con.execute("ALTER TABLE t_scenarios ADD COLUMN Scenario_Id INTEGER DEFAULT 1")
     
-    sql_base = port.to_skinny_sql_query(extractor, per_swap=True)
-    sql_npv = sql_base.replace("FROM t_components c", "FROM (SELECT * FROM t_components WHERE Component_Class = 'NPV') c")
+    sql_base = engine.generate_duckdb_sql(port, per_swap=True)
+    sql_npv = sql_base.replace("Component_Class = 'NPV'", "Component_Class = 'NPV'") # No change needed but keep structure
     sql_swap = sql_base 
-    sql_total = port.to_skinny_sql_query(extractor, per_swap=False)
+    sql_total = engine.generate_duckdb_sql(port, per_swap=False)
     
     # Warm up
     con.execute(sql_swap).fetchdf()
@@ -188,7 +190,8 @@ def bench_duckdb(port):
 def bench_deephaven(port):
     """Engine 4: Deephaven Streaming Snapshot."""
     extractor = BasisExtractor()
-    comps = port.to_skinny_components(extractor, per_swap=True)
+    engine = SkinnyEngine(extractor)
+    comps = engine.to_components(port, per_swap=True)
     df_c = pd.DataFrame(comps)
     
     client = StreamingClient()
