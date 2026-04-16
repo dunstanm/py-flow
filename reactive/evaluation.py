@@ -39,6 +39,9 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
     ctx_handle = (id(ctx), getattr(ctx, "version", 0))
     if _cache is None:
         _cache = {'__ctx_handle__': ctx_handle}
+    elif '__ctx_handle__' not in _cache:
+        # First use of this cache dict — bind it to this ctx handle
+        _cache['__ctx_handle__'] = ctx_handle
     elif _cache.get('__ctx_handle__') != ctx_handle:
         raise ValueError(
             f"eval_cached: _cache is bound to context handle {_cache.get('__ctx_handle__')} "
@@ -126,7 +129,11 @@ def eval_cached(expr: Expr, ctx: dict, _cache: dict | None = None) -> Any:
                 elif op == "/":
                     r = lv / rv if rv != 0 else 0
                 elif op == "**":
-                    r = lv ** rv
+                    try:
+                        r = lv ** rv
+                    except (OverflowError, ValueError):
+                        # Graceful degradation for floating point overflows
+                        r = 1e100 if lv > 0 else 0.0
                 elif op == ">":
                     r = lv > rv
                 elif op == "<":

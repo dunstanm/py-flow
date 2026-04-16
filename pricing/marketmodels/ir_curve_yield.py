@@ -137,7 +137,7 @@ class CurveJacobianEntry(Storable):
     quote_symbol: str = ""          # the quote's symbol (e.g. IR_USD_OIS_QUOTE.5Y)
 
 
-@ticking(exclude={"points", "jacobian"})
+@ticking(exclude={"points", "jacobian", "pillar_names", "pillar_rates", "pillar_tenors"})
 @dataclass
 class LinearTermDiscountCurve(Storable, CurveBase):
     """Linear zero-rate interpolation curve.
@@ -337,15 +337,14 @@ class LinearTermDiscountCurve(Storable, CurveBase):
         
         fwd(start, end) = (df(start) / df(end) - 1.0) / (end - start)
         """
-        from reactive.expr import Const
         dt = end - start
         if dt <= 0:
-            return Const(0.0)
+            return 0.0
             
         df_start = self.df(start)
         df_end = self.df(end)
         
-        return (df_start / df_end - Const(1.0)) / Const(dt)
+        return (df_start / df_end - 1.0) / dt
 
 
 

@@ -53,9 +53,11 @@ from reactive.traceable import traceable
 # IRSwapFixedFloatApprox  (shortcut float leg)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@ticking(exclude={"curve", "risk"})
+from pricing.instruments.base import Instrument
+
+@ticking(exclude={"curve", "risk_ladder", "pillar_names"})
 @dataclass
-class IRSwapFixedFloatApprox(Storable):
+class IRSwapFixedFloatApprox(Instrument):
     """IRS with telescoping float leg — single class for both reactive and Expr.
 
     Used for single-curve USD OIS swaps. Uses PR1 stabilization patterns
@@ -84,12 +86,6 @@ class IRSwapFixedFloatApprox(Storable):
         super().__post_init__()
         if self.currency != self.collateral_currency:
             raise ValueError(f"IRSwapFixedFloatApprox cannot have differing currency ({self.currency}) and collateral_currency ({self.collateral_currency}). Please use IRSwapFixedFloat instead.")
-
-    @property
-    def pillar_names(self) -> list[str]:
-        if getattr(self, "curve", None) is None: return []
-        pts = getattr(self.curve, "_sorted_points", lambda: [])()
-        return [p.name for p in pts]
 
     def coupon_payment_dates(self) -> list[float]:
         """Payment dates for this swap (short front stub, no 0.0)."""
@@ -163,7 +159,7 @@ class IRSwapFixedFloatApprox(Storable):
         self.tick()
 
     @computed_expr
-    def risk(self) -> dict[str, Expr]:
+    def risk_ladder(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         expr = self.npv()
         if expr is None: return {}
@@ -177,11 +173,6 @@ class IRSwapFixedFloatApprox(Storable):
         expr = self.npv()
         if expr is None: return "0.0"
         return expr.to_sql()
-
-    def pillar_context(self) -> dict[str, float]:
-        """Build a context dict from the curve's current pillar rates."""
-        pts = self.curve._sorted_points()
-        return {p.name: p.rate for p in pts}
 
 
 

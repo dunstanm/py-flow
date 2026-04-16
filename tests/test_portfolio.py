@@ -1,4 +1,5 @@
 import pytest
+# streaming - force conftest.py to start Deephaven for recursive deps
 import numpy as np
 import pandas as pd
 from pricing.instruments.portfolio import Portfolio
@@ -7,7 +8,7 @@ from pricing.instruments.ir_swap_fixed_float import IRSwapFixedFloat
 from pricing.instruments.ir_swap_float_float import IRSwapFloatFloat
 from pricing.marketmodels.ir_curve_yield import LinearTermDiscountCurve, YieldCurvePoint
 from reactive.basis_extractor import BasisExtractor
-from pricing.engines import PythonEngine, SQLEngine, SkinnyEngine
+from pricing.engines import PythonEngineExpr, SQLEngineCTE, SkinnyEngineDuckDB
 
 # ─── Helpers for creating market data ────────────────────────────────────────
 
@@ -62,9 +63,11 @@ class TestPortfolioFeatures:
         s2 = IRSwapFixedFloatApprox(symbol="JPY_10Y", notional=100e6, fixed_rate=0.02, tenor_years=10.0, curve=jpy_curve)
         port.add_instrument("JPY_S2", s2)
         
-        # Verify 8 pillars (4 from each curve)
+        # USD 10Y uses 3 pillars (1, 5, 10)
+        # JPY 10Y uses 3 pillars (1, 5, 10)
+        # Total = 6
         pillars = port.pillar_names
-        assert len(pillars) == 8
+        assert len(pillars) == 6
         assert all(p.startswith("USD_OIS_") or p.startswith("JPY_OIS_") for p in pillars)
         
         # Verify context gathering
@@ -99,13 +102,13 @@ class TestPortfolioFeatures:
         
         assert port.names == ["USD_APPROX", "JPY_EXPLICIT"]
         
-        # JPY Explicit depends on both OIS and TIBOR pillars
-        # USD Approx depends on USD OIS
-        # Total pillars = 4 (USD OIS) + 4 (JPY OIS) + 4 (JPY TIBOR) = 12
-        assert len(port.pillar_names) == 12
+        # JPY Explicit depends on both OIS and TIBOR pillars (3+3 = 6)
+        # USD Approx depends on USD OIS (2 used)
+        # Total pillars = 8 (Discovery is now precise via Expr.variables)
+        assert len(port.pillar_names) == 8
         
         # Numeric Evaluation
-        engine = PythonEngine()
+        engine = PythonEngineExpr()
         ctx = port.pillar_context()
         npvs = engine.npvs(port, ctx)
         assert "USD_APPROX" in npvs
@@ -122,7 +125,7 @@ class TestPortfolioFeatures:
             s = IRSwapFixedFloatApprox(symbol=f"S{t:.0f}", notional=1e6, fixed_rate=0.04, tenor_years=t, curve=curve)
             port.add_instrument(f"S{t:.0f}", s)
             
-        engine = PythonEngine()
+        engine = PythonEngineExpr()
         ctx = port.pillar_context()
         total_risk = engine.total_risk(port, ctx)
         
@@ -138,7 +141,7 @@ class TestPortfolioFeatures:
         port.add_instrument("S5", s)
         
         extractor = BasisExtractor()
-        engine = SkinnyEngine(extractor)
+        engine = SkinnyEngineDuckDB(extractor)
         # 1. Component Extraction
         comps = engine.to_components(port, per_swap=True)
         assert len(comps) > 0
@@ -148,7 +151,7 @@ class TestPortfolioFeatures:
         assert "Component_Type" in df_comps.columns
         
         # 2. SQL Generation check
-        sql = engine.generate_duckdb_sql(port)
+        sql = engine.generate_sql(port)
         assert "SELECT" in sql
         assert "SUM(" in sql
         assert "dNPV_dUSD_OIS_5.0Y" in sql # Check dynamic column naming
@@ -168,7 +171,7 @@ class TestPortfolioFeatures:
             )
             port.add_instrument(f"S{i}", s)
             
-        engine = PythonEngine()
+        engine = PythonEngineExpr()
         ctx = port.pillar_context()
         
         # Evaluate Jacobian
@@ -176,10 +179,11 @@ class TestPortfolioFeatures:
         
         assert len(jac) == num_swaps
         for name in jac:
-            assert len(jac[name]) == len(port.pillar_names)
+            # Sparse discovery: only used pillars are returned.
+            assert len(jac[name]) >= 1
+            assert len(jac[name]) <= len(port.pillar_names)
             
         # Verify specific sensitivity: 1Y swap risk to 1Y pillar should be dominant
-        # (Assuming linear interpolation, S1Y mostly depends on P1Y)
         s0_risk = jac["S0"]
         p1y_risk = s0_risk["USD_OIS_1.0Y"]
         assert abs(p1y_risk) > 1e-10
@@ -191,7 +195,7 @@ class TestPortfolioFeatures:
         s = IRSwapFixedFloatApprox(symbol="S5", notional=1.0, fixed_rate=0.04, tenor_years=5.0, curve=curve)
         port.add_instrument("S5", s)
         
-        engine = SQLEngine()
+        engine = SQLEngineCTE()
         ctx = port.pillar_context()
         sql = engine.generate_sql(port, ctx)
         
@@ -226,7 +230,7 @@ class TestPortfolioFeatures:
         )
         port.add_instrument("XCCY", s_xccy)
         
-        engine = PythonEngine()
+        engine = PythonEngineExpr()
         ctx = port.pillar_context()
         npvs = engine.npvs(port, ctx)
         

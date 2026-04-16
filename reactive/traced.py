@@ -119,15 +119,21 @@ class TracedFloat(float):
         if o_expr is not None:
             try:
                 o_val = float(other)
+                val = py_op(float(self), o_val)
             except (TypeError, ValueError):
                 # other is pure Expr (no float value) — return Expr
                 return py_op(self._expr, o_expr)
-            return TracedFloat(py_op(float(self), o_val), py_op(self._expr, o_expr))
+            except OverflowError:
+                val = 1e100 # Graceful limit
+            return TracedFloat(val, py_op(self._expr, o_expr))
         try:
             o_val = float(other)
+            val = py_op(float(self), o_val)
         except (TypeError, ValueError):
             return NotImplemented
-        return TracedFloat(py_op(float(self), o_val),
+        except OverflowError:
+            val = 1e100
+        return TracedFloat(val,
                            py_op(self._expr, Const(o_val)))
 
     def _rbinop(self, other: object, py_op) -> TracedFloat | float:
@@ -136,14 +142,20 @@ class TracedFloat(float):
         if o_expr is not None:
             try:
                 o_val = float(other)
+                val = py_op(o_val, float(self))
             except (TypeError, ValueError):
                 return py_op(o_expr, self._expr)
-            return TracedFloat(py_op(o_val, float(self)), py_op(o_expr, self._expr))
+            except OverflowError:
+                val = 1e100
+            return TracedFloat(val, py_op(o_expr, self._expr))
         try:
             o_val = float(other)
+            val = py_op(o_val, float(self))
         except (TypeError, ValueError):
             return NotImplemented
-        return TracedFloat(py_op(o_val, float(self)),
+        except OverflowError:
+            val = 1e100
+        return TracedFloat(val,
                            py_op(Const(o_val), self._expr))
 
     # -- Arithmetic operators ---------------------------------------------

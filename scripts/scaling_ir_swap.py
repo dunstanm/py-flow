@@ -36,7 +36,13 @@ from reactive.basis_extractor import BasisExtractor
 from reactive.expr import eval_cached, diff, Const
 from streaming.admin import StreamingServer
 from streaming import StreamingClient
-from pricing.engines import PythonEngine, SQLEngine, SkinnyEngine
+from pricing.engines import (
+    PythonEngineFloat, 
+    PythonEngineExpr, 
+    SkinnyEngineNumPy, 
+    SkinnyEngineDuckDB,
+    SkinnyEngineDeephaven
+)
 
 # ─── 1. PORTFOLIO GENERATION ──────────────────────────────────────────────
 
@@ -87,72 +93,75 @@ def generate_portfolio(size, mode="GLOBAL_MIX"):
             port.add_instrument(f"S{i}", s)
     return port
 
-def bench_python(port):
-    """Engine 1: Python Symbolic evaluation."""
-    engine = PythonEngine()
+def bench_python_float(port):
+    """Baseline: Pure Python Floats (No Exprs)."""
+    engine = PythonEngineFloat()
     ctx = port.pillar_context()
-    t0 = time.perf_counter()
-    engine.npvs(port, ctx)
-    t_npv = (time.perf_counter() - t0) * 1000
+    iters = 10 if NUM_SWAPS <= 100 else 1
     
     t0 = time.perf_counter()
-    engine.total_risk(port, ctx) 
-    t_risk_total = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        engine.npvs(port, ctx)
+    t_npv = (time.perf_counter() - t0) * 1000 / iters
+    
+    t0 = time.perf_counter()
+    for _ in range(iters):
+        engine.total_risk(port, ctx) 
+    t_risk_total = (time.perf_counter() - t0) * 1000 / iters
 
     t0 = time.perf_counter()
-    engine.instrument_risk(port, ctx) 
-    t_risk_swap = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        engine.instrument_risk(port, ctx) 
+    t_risk_swap = (time.perf_counter() - t0) * 1000 / iters
     
-    return {"engine": "Python Symbolic", "npv_ms": t_npv, "risk_swap_ms": t_risk_swap, "risk_total_ms": t_risk_total}
+    return {"engine": "Python Float", "npv_ms": t_npv, "risk_swap_ms": t_risk_swap, "risk_total_ms": t_risk_total}
+
+def bench_python_expr(port):
+    """Engine 1: Python Symbolic evaluation."""
+    engine = PythonEngineExpr()
+    ctx = port.pillar_context()
+    iters = 10 if NUM_SWAPS <= 100 else 1
+    
+    t0 = time.perf_counter()
+    for _ in range(iters):
+        engine.npvs(port, ctx)
+    t_npv = (time.perf_counter() - t0) * 1000 / iters
+    
+    t0 = time.perf_counter()
+    for _ in range(iters):
+        engine.total_risk(port, ctx) 
+    t_risk_total = (time.perf_counter() - t0) * 1000 / iters
+
+    t0 = time.perf_counter()
+    for _ in range(iters):
+        engine.instrument_risk(port, ctx) 
+    t_risk_swap = (time.perf_counter() - t0) * 1000 / iters
+    
+    return {"engine": "Python Expr", "npv_ms": t_npv, "risk_swap_ms": t_risk_swap, "risk_total_ms": t_risk_total}
 
 def bench_numpy(port):
     """Engine 2: NumPy Vectorized Basis."""
-    extractor = BasisExtractor()
-    engine = SkinnyEngine(extractor)
-    comps_swap = engine.to_components(port, per_swap=True)
-    comps_total = engine.to_components(port, per_swap=False)
-    df_swap = pd.DataFrame(comps_swap)
-    df_total = pd.DataFrame(comps_total)
-    
-    type_map = {bf.component_type: bf for bf in extractor.registry.values()}
-    for bf in type_map.values():
-        if not hasattr(bf, "_compiled_np"):
-            py_code = bf.dh_template.replace("Math.pow", "np.power").replace("Math.exp", "np.exp")
-            bf._compiled_np = compile(py_code, f"<basis_{bf.component_type}>", "eval")
-            
+    engine = SkinnyEngineNumPy()
     ctx = port.pillar_context()
     
-    def _eval_df(df, filter_class=None):
-        work_df = df if filter_class is None else df[df["Component_Class"] == filter_class]
-        groups = work_df.groupby("Component_Type")
-        for c_type, group in groups:
-            bf = type_map[c_type]
-            params = {f"p{j}": group[f"p{j}"].values for j in range(1, bf.num_params + 1)}
-            vars = {f"X{j}": np.array([ctx.get(k, 0.04) for k in group[f"X{j}"]]) for j in range(1, bf.num_vars + 1)}
-            ns = {"np": np, **params, **vars}
-            eval(bf._compiled_np, {"np": np}, ns)
-            
-    # Warm up
-    _eval_df(df_swap)
+    iters = 10 if NUM_SWAPS <= 100 else 1
+    
+    # Warm up / Extraction
+    t0 = time.perf_counter()
+    engine.evaluate(port, ctx)
+    t_warm = (time.perf_counter() - t0) * 1000
     
     t0 = time.perf_counter()
-    _eval_df(df_swap, filter_class="NPV")
-    t_npv = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        engine.evaluate(port, ctx) 
+    t_eval = (time.perf_counter() - t0) * 1000 / iters
     
-    t0 = time.perf_counter()
-    _eval_df(df_swap) 
-    t_risk_swap = (time.perf_counter() - t0) * 1000
-    
-    t0 = time.perf_counter()
-    _eval_df(df_total) 
-    t_risk_total = (time.perf_counter() - t0) * 1000
-    
-    return {"engine": "NumPy Vectorized", "npv_ms": t_npv, "risk_swap_ms": t_risk_swap, "risk_total_ms": t_risk_total, "atoms": len(comps_swap)}
+    # Note: NumPy engine currently evaluates both NPV and Risk in one pass
+    return {"engine": "NumPy Vectorized", "npv_ms": t_eval/2, "risk_swap_ms": t_eval/2, "risk_total_ms": t_eval/2}
 
 def bench_duckdb(port):
     """Engine 3: DuckDB Skinny Table."""
-    extractor = BasisExtractor()
-    engine = SkinnyEngine(extractor)
+    engine = SkinnyEngineDuckDB()
     comps = engine.to_components(port, per_swap=True)
     df_c = pd.DataFrame(comps)
     
@@ -164,33 +173,37 @@ def bench_duckdb(port):
     con.executemany("INSERT INTO t_scenarios VALUES (?, ?)", scenarios)
     con.execute("ALTER TABLE t_scenarios ADD COLUMN Scenario_Id INTEGER DEFAULT 1")
     
-    sql_base = engine.generate_duckdb_sql(port, per_swap=True)
+    sql_base = engine.generate_sql(port, per_swap=True)
     sql_npv = sql_base.replace("Component_Class = 'NPV'", "Component_Class = 'NPV'") # No change needed but keep structure
     sql_swap = sql_base 
-    sql_total = engine.generate_duckdb_sql(port, per_swap=False)
+    sql_total = engine.generate_sql(port, per_swap=False)
+    
+    iters = 10 if NUM_SWAPS <= 100 else 1
     
     # Warm up
     con.execute(sql_swap).fetchdf()
     
     t0 = time.perf_counter()
-    con.execute(sql_npv).fetchdf()
-    t_npv = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        con.execute(sql_npv).fetchdf()
+    t_npv = (time.perf_counter() - t0) * 1000 / iters
     
     t0 = time.perf_counter()
-    con.execute(sql_swap).fetchdf()
-    t_swap = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        con.execute(sql_swap).fetchdf()
+    t_swap = (time.perf_counter() - t0) * 1000 / iters
     
     t0 = time.perf_counter()
-    con.execute(sql_total).fetchdf()
-    t_total = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        con.execute(sql_total).fetchdf()
+    t_total = (time.perf_counter() - t0) * 1000 / iters
     
     con.close()
     return {"engine": "DuckDB Skinny", "npv_ms": t_npv, "risk_swap_ms": t_swap, "risk_total_ms": t_total, "atoms": len(comps)}
 
 def bench_deephaven(port):
     """Engine 4: Deephaven Streaming Snapshot."""
-    extractor = BasisExtractor()
-    engine = SkinnyEngine(extractor)
+    engine = SkinnyEngineDeephaven()
     comps = engine.to_components(port, per_swap=True)
     df_c = pd.DataFrame(comps)
     
@@ -206,48 +219,34 @@ def bench_deephaven(port):
     df_p = pd.DataFrame(pillar_data)
     df_p.to_parquet(os.path.join(jars_dir, "bench_pillars.parquet"))
 
-    dh_lines = []
-    for bf in extractor.registry.values():
-        tmpl = bf.dh_template.replace("Math.pow", "pow").replace("Math.exp", "exp")
-        for j in range(1, bf.num_vars + 1):
-            tmpl = tmpl.replace(f"X{j}", f"X{j}_Val")
-        dh_lines.append(f"Component_Type == {bf.component_type} ? {tmpl} :")
-    full_ternary = " ".join(dh_lines) + " 0.0"
-
-    script = f"""
+    # Use the script generated by the engine
+    dh_script = engine.generate_script(port)
+    
+    setup_script = f"""
 t_c = dhpd.to_table(pd.read_parquet("/apps/libs/bench_dh.parquet"))
 t_p = dhpd.to_table(pd.read_parquet("/apps/libs/bench_pillars.parquet"))
-
-t_mapped = t_c.natural_join(t_p, on=['X1=Knot_Id'], joins=['X1_Val=Knot_Value'])
-t_mapped = t_mapped.natural_join(t_p, on=['X2=Knot_Id'], joins=['X2_Val=Knot_Value'])
-
-t_evaluated = t_mapped.update(["Out = (double)(Weight * ({full_ternary}))"])
-t_filtered = t_evaluated.view(["Swap_Id", "Component_Class", "Out"])
-
-t_npv_res = t_filtered.where(["Component_Class == `NPV`"]).agg_by([agg.sum_("Out")], ["Swap_Id"])
-t_risk_swap_res = t_filtered.agg_by([agg.sum_("Out")], ["Swap_Id", "Component_Class"])
-t_risk_total_res = t_filtered.agg_by([agg.sum_("Out")], ["Component_Class"])
+{dh_script}
 """
-    # Use fallback values for optional variables if not joined (e.g. X2 might not exist for some basics)
-    script = script.replace("joins=['X2_Val=Knot_Value']", "joins=['X2_Val=Knot_Value']").replace("joins=['X1_Val=Knot_Value']", "joins=['X1_Val=Knot_Value']")
-    # Actually, we should just ensure X1_Val and X2_Val are initialized if null
-    script = script.replace('t_evaluated = t_mapped.update(["Out = (double)', 't_mapped = t_mapped.update(["X1_Val = (X1_Val == null) ? 0.04 : X1_Val", "X2_Val = (X2_Val == null) ? 0.04 : X2_Val"])\nt_evaluated = t_mapped.update(["Out = (double)')
-
-    client.run_script(script)
+    client.run_script(setup_script)
+    
+    iters = 10 if NUM_SWAPS <= 100 else 1
     
     time.sleep(1.0) # Propagation
     
     t0 = time.perf_counter()
-    client.open_table("t_npv_res").to_arrow()
-    t_npv = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        client.open_table("t_npv_res").to_arrow()
+    t_npv = (time.perf_counter() - t0) * 1000 / iters
     
     t0 = time.perf_counter()
-    client.open_table("t_risk_swap_res").to_arrow()
-    t_swap = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        client.open_table("t_risk_swap_res").to_arrow()
+    t_swap = (time.perf_counter() - t0) * 1000 / iters
     
     t0 = time.perf_counter()
-    client.open_table("t_risk_total_res").to_arrow()
-    t_total = (time.perf_counter() - t0) * 1000
+    for _ in range(iters):
+        client.open_table("t_risk_total_res").to_arrow()
+    t_total = (time.perf_counter() - t0) * 1000 / iters
     
     client.close()
     return {"engine": "Deephaven", "npv_ms": t_npv, "risk_swap_ms": t_swap, "risk_total_ms": t_total, "atoms": len(comps)}
@@ -285,24 +284,32 @@ def main():
         
         results = []
 
-        if NUM_SWAPS <= 2000:
-            print("  Starting Python Engine...")
-            results.append(bench_python(port))
+        if NUM_SWAPS <= 500:
+            print(f"  Starting Python Float Engine... (Mem: {get_mem():.1f} MB)")
+            results.append(bench_python_float(port))
         else:
-            print("  Skipping Python Symbolic Engine (Scale > 2000)...")
+            print("  Skipping Python Float Engine (Scale > 500)...")
+            
+        if NUM_SWAPS <= 3000:
+            print(f"  Starting Python Expr Engine... (Mem: {get_mem():.1f} MB)")
+            results.append(bench_python_expr(port))
+        else:
+            print("  Skipping Python Expr Engine (Scale > 3000)...")
         
-        print("  Starting NumPy Engine...")
+        print(f"  Starting NumPy Engine... (Mem: {get_mem():.1f} MB)")
         results.append(bench_numpy(port))
         
-        print("  Starting DuckDB Engine...")
+        print(f"  Starting DuckDB Engine... (Mem: {get_mem():.1f} MB)")
         results.append(bench_duckdb(port))
         
         if has_dh:
-            print("  Starting Deephaven Engine...")
+            print(f"  Starting Deephaven Engine... (Mem: {get_mem():.1f} MB)")
             try:
                 results.append(bench_deephaven(port))
             except Exception as e:
                 print(f"      Deephaven failed in this scenario: {e}")
+                
+        print(f"  Finished Engines... (Mem: {get_mem():.1f} MB)")
 
         print(f"\n  {'Engine':<20} | {'NPV':>8} | {'Per-Instr':>10} | {'Port-Total':>10} | {'Atoms':>8}")
         print(f"  {'-'*20}-|-{'-'*8}-|-{'-'*10}-|-{'-'*10}-|-{'-'*8}")

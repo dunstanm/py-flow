@@ -16,14 +16,15 @@ from store import Storable
 from reactive.traceable import traceable
 from reactive.computed import effect
 from reactive.expr import diff, Expr
+from pricing.instruments.base import Instrument
 import pricing.marketmodels.ir_curve_fitter
 from streaming import ticking
 from pricing.instruments.ir_scheduling import payment_dates, reset_dates
 
 
-@ticking(exclude={"discount_curve", "projection_curve", "risk"})
+@ticking(exclude={"discount_curve", "projection_curve", "risk_ladder", "pillar_names"})
 @dataclass
-class IRSwapFixedFloat(Storable):
+class IRSwapFixedFloat(Instrument):
     """IRS with explicit float leg tracking fwd inputs.
 
     Two execution paths from the same object:
@@ -50,12 +51,7 @@ class IRSwapFixedFloat(Storable):
     def reset_dates(self) -> list[float]:
         return reset_dates(self.tenor_years)
 
-    @property
-    def pillar_names(self) -> list[str]:
-        names1 = self.discount_curve.pillar_names if self.discount_curve else []
-        names2 = self.projection_curve.pillar_names if self.projection_curve else []
-        merged = set(names1) | set(names2)
-        return sorted(list(merged))
+    # pillar_names is inherited and automated via Instrument
 
     def _safe_dt(self, t1: float, t2: float) -> float:
         # Simple accrual assumption for demo: actual time in years
@@ -64,7 +60,6 @@ class IRSwapFixedFloat(Storable):
     @traceable
     def dv01(self) -> Expr:
         """Sum of payment periods * discount(T) * notional * 0.0001."""
-        from reactive.expr import Sum
         if not self.discount_curve:
             return 0.0
         
@@ -76,12 +71,11 @@ class IRSwapFixedFloat(Storable):
             df = self.discount_curve.df(targets[i])
             terms.append(df * (dt * 0.0001 * self.notional))
             
-        return Sum(terms) if terms else 0.0
+        return sum(terms) if terms else 0.0
 
     @traceable
     def fixed_leg_pv(self) -> Expr:
         """PV of fixed leg = sum of fixed_rate * notional * dt * df"""
-        from reactive.expr import Sum
         if not self.discount_curve:
             return 0.0
             
@@ -93,14 +87,13 @@ class IRSwapFixedFloat(Storable):
             df = self.discount_curve.df(targets[i])
             terms.append(df * (dt * self.fixed_rate * self.notional))
             
-        return Sum(terms) if terms else 0.0
+        return sum(terms) if terms else 0.0
 
     @traceable
     def float_leg_pv(self) -> Expr:
         """Explicit floating PV for multi-curve pricing.
         For each period: PV = notional * rate * dt * df_end
         """
-        from reactive.expr import Sum
         if not self.discount_curve or not self.projection_curve:
             return 0.0
             
@@ -118,22 +111,22 @@ class IRSwapFixedFloat(Storable):
             
             terms.append(rate * df * self.notional * dt)
             
-        return Sum(terms) if terms else 0.0
+        return sum(terms) if terms else 0.0
 
     @traceable
     def npv(self) -> Expr:
         """NPV: RECEIVER = fixed - float, PAYER = float - fixed."""
         if self.side == "PAYER":
-            return self.float_leg_pv() - self.fixed_leg_pv()
-        return self.fixed_leg_pv() - self.float_leg_pv()
+            return self.float_leg_pv - self.fixed_leg_pv
+        return self.fixed_leg_pv - self.float_leg_pv
 
     @traceable
     def par_rate(self) -> Expr:
         """Par rate: the fixed_rate at which NPV = 0."""
-        dv01_val = self.dv01()
+        dv01_val = self.dv01
         if dv01_val is None:
             return 0.0
-        return self.float_leg_pv() / (dv01_val * 10000.0)
+        return self.float_leg_pv / (dv01_val * 10000.0)
 
     @traceable
     def pnl_status(self) -> str:
@@ -151,7 +144,7 @@ class IRSwapFixedFloat(Storable):
         self.tick()
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def risk_ladder(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate via symbolic differentiation."""
         expr = self.npv()
         if expr is None: return {}
@@ -159,16 +152,3 @@ class IRSwapFixedFloat(Storable):
             name: diff(expr, name)
             for name in self.pillar_names
         }
-
-    def pillar_context(self) -> dict[str, float]:
-        """Build a context dict from the curve's current pillar rates."""
-        ctx = {}
-        if self.discount_curve:
-            pts = self.discount_curve._sorted_points()
-            for p in pts:
-                ctx[p.name] = p.rate
-        if self.projection_curve:
-            pts = self.projection_curve._sorted_points()
-            for p in pts:
-                ctx[p.name] = p.rate
-        return ctx

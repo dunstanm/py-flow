@@ -175,6 +175,11 @@ class traceable(ComputedProperty):
         # We pass None for expr (cross-entity / proxy-based)
         super().__init__(self._compute, None, fn.__name__)
         self._user_fn = fn
+        # Important: streaming/decorator.py checks self.fn.__annotations__
+        try:
+            self.fn.__annotations__ = getattr(fn, "__annotations__", {})
+        except AttributeError:
+            pass
         self._is_variable = is_variable
         self._expr_cache_attr = f"_{fn.__name__}_traced_expr"
 
@@ -184,11 +189,10 @@ class traceable(ComputedProperty):
         
         from reactive.traced import _is_tracing
         if _is_tracing():
-            from reactive.traced import TracedFloat
             reactive = object.__getattribute__(instance, '_reactive')
             node = reactive.get(self.name)
             val = float(node.read()) if node is not None else 0.0
-            return TracedFloat(val, self._trace_for_expr(instance))
+            return _TracedCallable(val, instance, self)
             
         return super().__get__(instance, owner)
 
@@ -234,9 +238,7 @@ class traceable(ComputedProperty):
         if isinstance(result, (dict, str, list, tuple, bool)) or hasattr(result, "date") or result is None:
             return result
             
-        from reactive.expr import Expr
-        if isinstance(result, Expr):
-            return result
+
 
         val = float(result) if result is not None else 0.0
         return _TracedCallable(val, instance, self)

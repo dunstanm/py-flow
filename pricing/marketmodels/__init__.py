@@ -18,7 +18,6 @@ from pricing.marketmodels.curve_base import CurveBase
 from pricing.marketmodels.ir_curve_yield import (
     YieldCurvePoint, LinearTermDiscountCurve, CurveJacobianEntry,
 )
-from pricing.marketmodels.ir_curve_integrated_rate import IntegratedRatePoint, IntegratedShortRateCurve
 from pricing.marketmodels.ir_curve_fitter import CurveFitter
 from pricing.marketmodels.ir_curve_swap import SwapQuote, SwapQuoteRisk
 from pricing.marketmodels.symbols import (
@@ -31,8 +30,6 @@ __all__ = [
     "YieldCurvePoint",
     "LinearTermDiscountCurve",
     "CurveJacobianEntry",
-    "IntegratedRatePoint",
-    "IntegratedShortRateCurve",
     "CurveFitter",
     "SwapQuote",
     "SwapQuoteRisk",

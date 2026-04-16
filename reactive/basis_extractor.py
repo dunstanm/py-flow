@@ -21,6 +21,7 @@ class BasisExtractor:
     """
     def __init__(self):
         self.registry: Dict[str, BasisFunction] = {} # signature -> BasisFunction
+        self.registry_by_type: Dict[int, BasisFunction] = {} # type_id -> BasisFunction
         self.next_type_id = 1
         
     def extract_components(self, expr: Expr) -> List[Tuple[BasisFunction, List[str], List[float], float]]:
@@ -86,6 +87,7 @@ class BasisExtractor:
                 num_params=len(self._current_params)
             )
             self.registry[signature] = bf
+            self.registry_by_type[bf.component_type] = bf
             self.next_type_id += 1
             
         # We MUST return the expected number of variables for the registered bf signature,

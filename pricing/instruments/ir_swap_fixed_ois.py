@@ -13,22 +13,18 @@ Supports:
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional
-from dataclasses import dataclass
-from pydantic import ConfigDict
-from dataclasses import field
-
+from dataclasses import dataclass, field
 from store import Storable
 from reactive.traceable import traceable
 from reactive.computed import effect
 from reactive.expr import diff, Expr
 from streaming import ticking
 import pricing.instruments.ir_scheduling as sched
+from pricing.instruments.base import Instrument
 
-
-@ticking(exclude={"discount_curve", "risk", "fixings"})
+@ticking(exclude={"discount_curve", "risk_ladder", "fixings", "pillar_names"})
 @dataclass
-class IRSwapFixedOIS(Storable):
+class IRSwapFixedOIS(Instrument):
     """Multi-Currency Overnight Indexed Swap (OIS).
     
     Attributes
@@ -124,12 +120,6 @@ class IRSwapFixedOIS(Storable):
             end_of_month=True
         )
 
-    @property
-    def pillar_names(self) -> list[str]:
-        if hasattr(self.discount_curve, "pillar_names"):
-            return self.discount_curve.pillar_names
-        return []
-
     def _tenor(self, date: datetime.date) -> float:
         """Helper to get tenor in years from evaluation date."""
         if not self.evaluation_date:
@@ -139,7 +129,6 @@ class IRSwapFixedOIS(Storable):
     @traceable
     def fixed_leg_pv(self) -> Expr:
         """PV of fixed leg = Σ [notional * rate * tau * df_end]"""
-        from reactive.expr import Sum
         if not self.discount_curve or not self.schedule:
             return 0.0
         
@@ -151,12 +140,11 @@ class IRSwapFixedOIS(Storable):
             tau = sched.year_fraction(sch[i], end, dcc)
             df = self.discount_curve.df(self._tenor(end))
             pvs.append(self.notional * self.fixed_rate * tau * df)
-        return Sum(pvs)
+        return sum(pvs)
 
     @traceable
     def float_leg_pv(self) -> Expr:
         """PV of floating leg using OIS compounding (with telescopic approx)."""
-        from reactive.expr import Sum
         if not self.discount_curve or not self.schedule:
             return 0.0
         
@@ -178,29 +166,18 @@ class IRSwapFixedOIS(Storable):
             )
             df_end = self.discount_curve.df(self._tenor(end))
             pvs.append(self.notional * rate * tau * df_end)
-        return Sum(pvs)
+        return sum(pvs)
 
     @traceable
     def npv(self) -> Expr:
         """NPV = Fixed - Float (RECEIVER) or Float - Fixed (PAYER)."""
         if self.side == "PAYER":
-            return self.float_leg_pv() - self.fixed_leg_pv()
-        return self.fixed_leg_pv() - self.float_leg_pv()
-
-    def pillar_context(self) -> dict[str, float]:
-        """Build a context dict from the curve's current pillar rates."""
-        ctx = {}
-        if self.discount_curve:
-            if hasattr(self.discount_curve, "_sorted_points"):
-                pts = self.discount_curve._sorted_points()
-                for p in pts:
-                    ctx[p.name] = getattr(p, "rate", 0.0)
-        return ctx
+            return self.float_leg_pv - self.fixed_leg_pv
+        return self.fixed_leg_pv - self.float_leg_pv
 
     @traceable
     def dv01(self) -> Expr:
         """DV01: Approximation via fixed leg annuity."""
-        from reactive.expr import Sum
         if not self.discount_curve or not self.schedule:
             return 0.0
         
@@ -214,7 +191,7 @@ class IRSwapFixedOIS(Storable):
             df = self.discount_curve.df(self._tenor(end))
             terms.append(self.notional * tau * df * 0.0001)
             
-        return Sum(terms) if terms else 0.0
+        return sum(terms) if terms else 0.0
 
     @traceable
     def par_rate(self) -> Expr:
@@ -231,12 +208,11 @@ class IRSwapFixedOIS(Storable):
             df = self.discount_curve.df(self._tenor(end))
             annuity_terms.append(self.notional * tau * df)
             
-        from reactive.expr import Sum
-        annuity = Sum(annuity_terms)
-        return self.float_leg_pv() / annuity if annuity_terms else 0.0
+        annuity = sum(annuity_terms)
+        return self.float_leg_pv / annuity if annuity_terms else 0.0
 
     @traceable
-    def risk(self) -> dict[str, Expr]:
+    def risk_ladder(self) -> dict[str, Expr]:
         """∂npv/∂pillar_rate."""
         expr = self.npv()
         if expr is None: return {}

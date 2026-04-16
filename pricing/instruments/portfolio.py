@@ -17,47 +17,34 @@ from reactive.expr import (
     _cast_numeric_sql
 )
 from pricing.instruments.ir_swap_fixed_floatapprox import IRSwapFixedFloatApprox
+from pricing.instruments.base import Instrument
 
 
-class Portfolio:
+class Portfolio(Instrument):
     """A collection of named swap Expr trees on a shared curve.
-
-    Because all swaps call the same curve's df(t), and df
-    caches Expr objects, the portfolio's expression graph has maximum
-    sub-expression sharing.  For example, df(5.0) is the same
-    Python object in the 5Y swap's tree and the 10Y swap's tree.
-
-    Provides:
-      .npv_exprs         → {name: Expr}           named NPV expressions
-      .residual_exprs    → {name: Expr}           NPV/notional (for fitter)
-      .risk_exprs        → {name: {pillar: Expr}} per-swap Jacobian rows
-      .jacobian_exprs    → {name: {pillar: Expr}} ∂residual/∂pillar (for fitter)
-      .total_npv_expr    → Expr                   Σ NPV across portfolio
-
-    All return Expr trees — eval(ctx) for Python, to_sql() for SQL.
+    ...
     """
 
     def __init__(self):
-        self._instruments: dict[str, Any] = {}
-        self._all_pillar_names: set[str] = set()
+        # Instrument.__init__ is not called because we have no dataclass fields
+        # but we need to initialize reaktiv manually if we want it to work as storable
+        # For now, stay as a plain object inheriting the interface.
+        self._instruments: dict[str, Instrument] = {}
 
-    def add_instrument(self, name: str, instrument: Any):
+    def add_instrument(self, name: str, instrument: Instrument):
         """Add any pre-constructed instrument (swap, etc.) to the portfolio.
         Must support .npv() and optionally .notional.
         """
         self._instruments[name] = instrument
-        # Update pillar names union
-        if hasattr(instrument, "pillar_names"):
-            self._all_pillar_names.update(instrument.pillar_names)
         return instrument
 
     @property
     def names(self) -> list[str]:
         return list(self._instruments.keys())
 
-    @property
-    def pillar_names(self) -> list[str]:
-        return sorted(list(self._all_pillar_names))
+    def npv(self) -> Expr:
+        """Total NPV of the portfolio as a single expression tree."""
+        return sum(inst.npv() for inst in self._instruments.values())
 
     # ── Named dictionaries of Expr trees ───────────────────────────────
 
@@ -79,49 +66,28 @@ class Portfolio:
     @property
     def total_npv_expr(self) -> Expr:
         """Sum of all NPVs — a single Expr tree."""
-        from reactive.expr import Sum
-        return Sum([inst.npv() for inst in self._instruments.values()])
-
-    @property
-    def risk_exprs(self) -> dict[str, dict[str, Expr]]:
-        """Per-instrument risk: {name: {pillar: ∂npv/∂pillar Expr}}."""
-        memo: dict = {}
-        pillars = self.pillar_names
-        return {
-            name: {
-                pillar_name: diff(inst.npv(), pillar_name, _memo=memo)
-                for pillar_name in pillars
-            }
-            for name, inst in self._instruments.items()
-        }
-
-    @property
-    def jacobian_exprs(self) -> dict[str, dict[str, Expr]]:
-        """Fitter Jacobian: ∂residual_i / ∂pillar_j as Expr trees.
-        Each row is an instrument, each column is a pillar.
-        """
-        result = {}
-        memo: dict = {}
-        pillars = self.pillar_names
-        for name, inst in self._instruments.items():
-            notional = getattr(inst, "notional", 
-                       getattr(inst, "leg1_notional", 1.0))
-            scale = Const(1.0 / notional)
-            result[name] = {
-                pillar_name: diff(inst.npv(), pillar_name, _memo=memo) * scale
-                for pillar_name in pillars
-            }
-        return result
+        return sum(inst.npv() for inst in self._instruments.values())
 
     # ── Convenience evaluators ─────────────────────────────────────────
 
+    def pillar_points(self) -> dict[str, Any]:
+        """Aggregate all pillar point objects from child pricing.instruments."""
+        points = {}
+        for inst in self._instruments.values():
+            points.update(inst.pillar_points())
+        return points
+
+    @property
+    def pillar_names(self) -> list[str]:
+        """Unified list of all pillar names across the portfolio."""
+        names = set()
+        for inst in self._instruments.values():
+            names.update(inst.pillar_names)
+        return sorted(list(names))
+
     def pillar_context(self) -> dict[str, float]:
         """Current pillar rates aggregated from all instruments' curves."""
-        ctx = {}
-        for inst in self._instruments.values():
-            if hasattr(inst, "pillar_context"):
-                ctx.update(inst.pillar_context())
-        return ctx
+        return {name: p.rate for name, p in self.pillar_points().items()}
 
     # ── Sub-expression sharing stats ───────────────────────────────────
 

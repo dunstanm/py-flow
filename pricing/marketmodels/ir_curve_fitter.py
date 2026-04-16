@@ -29,7 +29,6 @@ from reaktiv import batch
 from pricing.marketmodels.curve_base import CurveBase
 from pricing.marketmodels.ir_curve_yield import CurveJacobianEntry
 from pricing.marketmodels.symbols import fit_symbol, jacobian_symbol
-from pricing.engines import PythonEngine
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ class CurveFitter(Storable):
     quotes: list = field(default_factory=list)
     
     # Curve we are fitting (any CurveBase implementation)
-    curve: CurveBase | None = None
+    curve: object = None
     points: list = field(default_factory=list)
 
     _is_solving: bool = False
@@ -98,7 +97,10 @@ class CurveFitter(Storable):
         pricing.marketmodels.ir_curve_fitter.IS_SOLVING = True
         try:
             from pricing.instruments.portfolio import Portfolio
-            engine = PythonEngine()
+            from pricing.engines.python_expr import PythonEngineExpr
+            from pricing.risk.risk_first_order_analytic import FirstOrderAnalyticRisk
+            
+            engine = PythonEngineExpr()
 
             # Build the Portfolio from the target swaps
             portfolio = Portfolio()
@@ -110,7 +112,8 @@ class CurveFitter(Storable):
             pillar_names = portfolio.pillar_names
 
             # Pre-compute the Jacobian Expr trees (done once, reused every iteration)
-            jac_exprs = portfolio.jacobian_exprs  # {name: {label: Expr}}
+            risk_calc = FirstOrderAnalyticRisk(portfolio)
+            jac_exprs = risk_calc.jacobian() # {name: {label: Expr}}
 
             # Initial guess: bootstrap pillar-by-pillar for a tighter starting point.
             # Each pillar is solved in isolation (holding shorter pillars fixed at their

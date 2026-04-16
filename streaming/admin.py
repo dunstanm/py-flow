@@ -134,10 +134,15 @@ class StreamingServer:
         # DH container always listens on 10000 internally
         internal_port = 10000
 
+        # Map the local lib/jars dir so Deephaven can load and save data
+        jars_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib", "jars"))
+        os.makedirs(jars_dir, exist_ok=True)
+        
         cmd = [
             docker, "run", "-d",
             "--name", container_name,
             "-p", f"{self._port}:{internal_port}",
+            "-v", f"{jars_dir}:/apps/libs",
             "-e", f"START_OPTS=-Xmx{self._max_heap} "
                   f"-DAuthHandlers=io.deephaven.auth.AnonymousAuthenticationHandler "
                   f"-Ddeephaven.console.type=python",
